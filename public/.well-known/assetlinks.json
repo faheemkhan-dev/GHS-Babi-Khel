@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.ghsbabikhel.app",
+    "sha256_cert_fingerprints": ["BE:D2:97:5D:9B:98:B9:DC:B6:B9:8C:17:14:77:A4:A9:9C:8E:7B:6F:B5:20:4D:52:72:32:A1:92:D4:74:B3:7D"]
+  }
+}]

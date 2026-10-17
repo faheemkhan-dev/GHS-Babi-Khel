@@ -1,0 +1,90 @@
+{
+  "name": "GHS Babi Khel — Government High School",
+  "short_name": "GHS Babi Khel",
+  "description": "Government High School Babi Khel, District Mohmand, KPK Pakistan. Excellence in Education since 2018.",
+  "id": "https://ghsbabikhel.dpdns.org/",
+  "start_url": "https://ghsbabikhel.dpdns.org/",
+  "scope": "https://ghsbabikhel.dpdns.org/",
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FAFDF7",
+  "theme_color": "#14532D",
+  "lang": "en-PK",
+  "categories": [
+    "education"
+  ],
+  "icons": [
+    {
+      "src": "/favicon-48.png?v=2",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-96.png?v=2",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png?v=2",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png?v=2",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png?v=2",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Notices",
+      "short_name": "Notices",
+      "description": "View latest school notices",
+      "url": "/notices",
+      "icons": [
+        {
+          "src": "/favicon-48.png?v=2",
+          "sizes": "48x48"
+        }
+      ]
+    },
+    {
+      "name": "Results",
+      "short_name": "Results",
+      "description": "Check exam results",
+      "url": "/results",
+      "icons": [
+        {
+          "src": "/favicon-48.png?v=2",
+          "sizes": "48x48"
+        }
+      ]
+    },
+    {
+      "name": "Admission",
+      "short_name": "Admission",
+      "description": "Apply for admission",
+      "url": "/admission",
+      "icons": [
+        {
+          "src": "/favicon-48.png?v=2",
+          "sizes": "48x48"
+        }
+      ]
+    }
+  ]
+}

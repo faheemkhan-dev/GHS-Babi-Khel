@@ -1,0 +1,17 @@
+/* TEAM */
+Developer: Muhammad Faheem
+Role: Student & Website Developer
+School: Government High School Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan
+Site: https://ghsbabikhel.dpdns.org
+Note: Independently designed and developed this website as a school/community project.
+
+/* THANKS */
+Principal: Mr. Imdad Ullah
+School: Government High School Babi Khel (EMIS 60673)
+
+/* SITE */
+Last update: 2026/08/30
+Standards: HTML5, JSON-LD, llms.txt
+Components: React, Vite, Tailwind CSS
+Software: Supabase, Vercel
+Machine-readable data: https://ghsbabikhel.dpdns.org/llms.txt , https://ghsbabikhel.dpdns.org/api/ai-data

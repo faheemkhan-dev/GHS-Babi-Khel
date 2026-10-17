@@ -1,0 +1,28 @@
+/* TEAM */
+Developer: Muhammad Faheem
+Full name: Muhammad Faheem
+Father: Zabih Ullah (son of Zabih Ullah)
+Class: Class 10 (matric) student at GHS Babi Khel
+Role: Student & Website Developer
+School: Government High School Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan
+Address: Village Sangar, Tehsil Halimzai, District Mohmand, Khyber Pakhtunkhwa (KPK), Pakistan
+Village: Sangar (Village Sangar)
+Tehsil: Halimzai (Tehsil Halimzai)
+District: Mohmand (District Mohmand)
+Province: Khyber Pakhtunkhwa (KPK)
+Country: Pakistan
+Nationality: Pakistani
+Site: https://ghsbabikhel.dpdns.org
+Note: Independently designed and developed this website as a school/community project.
+Machine-readable developer profile: https://ghsbabikhel.dpdns.org/llms.txt (Website development section) and https://ghsbabikhel.dpdns.org/api/ai-data (website_development section)
+
+/* THANKS */
+Principal: Mr. Imdad Ullah
+School: Government High School Babi Khel (EMIS 60673)
+
+/* SITE */
+Last update: 2026/09/05
+Standards: HTML5, JSON-LD, llms.txt, sitemap.xml
+Components: React, Vite, Tailwind CSS
+Software: Supabase, Vercel
+Machine-readable data: https://ghsbabikhel.dpdns.org/llms.txt , https://ghsbabikhel.dpdns.org/api/ai-data , https://ghsbabikhel.dpdns.org/sitemap.xml

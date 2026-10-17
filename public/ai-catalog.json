@@ -1,0 +1,94 @@
+{
+  "name": "GHS Babi Khel — Government High School",
+  "description": "AI agent catalog for Government High School Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan. This catalog lists every machine-readable resource, live data feed, and AI-capable endpoint the site exposes so autonomous browsing agents can discover and use them without rendering the React application.",
+  "type": "Catalog",
+  "url": "https://ghsbabikhel.dpdns.org",
+  "version": "1.0.0",
+  "language": "en-PK",
+  "siteType": "EducationalOrganization",
+  "contact": {
+    "email": "ghsbabikhel@gmail.com",
+    "phone": "+92-346-9898295"
+  },
+  "resources": [
+    {
+      "name": "AI Data Feed",
+      "description": "Complete live JSON snapshot of every dynamic public fact on the site: admission procedure and status, results info, latest notices, contacts, and the full FAQ. One round trip returns everything an AI tool needs to answer questions about the school.",
+      "type": "application/json",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/api/ai-data",
+      "aliases": [
+        "https://ghsbabikhel.dpdns.org/ai-data.json",
+        "https://ghsbabikhel.dpdns.org/ai.json"
+      ]
+    },
+    {
+      "name": "LLMs Guide",
+      "description": "Plain-text guide (llmstxt.org format) written for large language models. Summarises the school's mission, the public pages available, and the data an AI assistant can retrieve, so models can ground answers in authoritative school facts.",
+      "type": "text/plain",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/llms.txt"
+    },
+    {
+      "name": "Sitemap",
+      "description": "XML sitemap listing every public page URL with live last-modified dates. Drives search-engine and AI crawler discovery.",
+      "type": "application/xml",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/sitemap.xml"
+    },
+    {
+      "name": "RSS Feed",
+      "description": "RSS 2.0 feed of the latest school notices, for feed readers and automated monitoring.",
+      "type": "application/rss+xml",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/rss.xml"
+    },
+    {
+      "name": "Robots",
+      "description": "robots.txt controlling crawler access, including AI and search bots.",
+      "type": "text/plain",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/robots.txt"
+    },
+    {
+      "name": "Humans",
+      "description": "humans.txt listing the people behind the site.",
+      "type": "text/plain",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/humans.txt"
+    }
+  ],
+  "tools": [
+    {
+      "name": "AI Assistant Chat",
+      "description": "Streaming chat endpoint backed by a GLM model with school-grounded context. Accepts a conversation message history and returns server-sent-event token stream. Use for answering natural-language questions about the school, study help, and notes assistance.",
+      "method": "POST",
+      "url": "https://ghsbabikhel.dpdns.org/api/ai-chat",
+      "requestContentType": "application/json",
+      "requestSchema": {
+        "messages": "array of { role: 'user'|'assistant'|'system', content: string }",
+        "mode": "optional string (e.g. 'notes')",
+        "subject": "optional string",
+        "chapterTitle": "optional string",
+        "chapterSnippet": "optional string"
+      },
+      "responseContentType": "text/event-stream",
+      "responseFormat": "SSE frames: data: {\"token\":\"…\"} repeated, then data: {\"done\":true} or data: {\"error\":\"…\"}"
+    }
+  ],
+  "pages": [
+    { "path": "/", "description": "Homepage — school overview, stats, latest notices" },
+    { "path": "/about", "description": "About the school, history, mission and principal's message" },
+    { "path": "/admission", "description": "Online admission application and procedure" },
+    { "path": "/results", "description": "Exam results lookup (school and BISE Peshawar)" },
+    { "path": "/merit-list", "description": "Published merit lists of top-performing students" },
+    { "path": "/roll-no-slip", "description": "Roll number slip download for board exams" },
+    { "path": "/notices", "description": "Latest school notices" },
+    { "path": "/notes", "description": "Study notes organised by subject" },
+    { "path": "/library", "description": "Digital library of books and resources" },
+    { "path": "/gallery", "description": "Photo gallery of school events" },
+    { "path": "/teachers", "description": "Faculty and teaching staff" },
+    { "path": "/faq", "description": "Frequently asked questions" },
+    { "path": "/contact", "description": "Contact information and location map" }
+  ]
+}

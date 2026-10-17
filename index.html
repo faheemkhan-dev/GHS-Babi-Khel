@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="google-site-verification" content="McVFemt2cqrtqgF1J7OcTlHuOoZv1_qtYMbjSkXf0n0" />
+
+    <!-- SAFETY: explicitly allow indexing of the SPA shell so a crawler that
+         lands on the bare /index.html (the SPA fallback when /api/render
+         times out) does not assume the page is non-indexable. Per-route SEO
+         is overridden by react-helmet-async once React mounts. -->
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+
+    <!-- SEO meta tags are injected by React Helmet via SEO.tsx + SiteSchema.tsx + RouteSEOInjector.tsx -->
+    <title>GHS Babi Khel — Government High School, District Mohmand KPK</title>
+
+    <!-- Static description/OG fallback — React Helmet overwrites these per
+         route once JS runs, so a real visitor never sees this version; it
+         only exists for the first HTML byte that non-JS crawlers read. -->
+    <meta name="description" content="Government High School Babi Khel — a government high school in District Mohmand, Khyber Pakhtunkhwa, Pakistan, established 2018 (EMIS 60673), classes 6–10, affiliated with BISE Peshawar. Admissions, results, notices, notes and more." />
+    <meta property="og:title" content="GHS Babi Khel — Government High School, District Mohmand KPK" />
+    <meta property="og:description" content="Government High School Babi Khel — a government high school in District Mohmand, Khyber Pakhtunkhwa, Pakistan, established 2018, classes 6–10, affiliated with BISE Peshawar." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ghsbabikhel.dpdns.org/" />
+
+    <!-- Machine-readable discovery — read by crawlers/AI fetchers that only
+         read the first HTML byte and never execute JavaScript (many "weak"
+         AI systems: consumer assistants, lightweight scrapers). These tags
+         are invisible in the rendered page; they only point bots at the
+         site's existing machine-readable files (llms.txt, AI JSON feed,
+         ai-catalog.json, humans.txt) so those files actually get discovered
+         and opened. -->
+    <link rel="describedby" href="/llms.txt" type="text/plain" />
+    <link rel="alternate" type="application/json" href="/ai-catalog.json" title="GHS Babi Khel — AI agent catalog" />
+    <link rel="alternate" type="application/json" href="/api/ai-data" title="GHS Babi Khel — live AI data feed" />
+    <link rel="author" href="/humans.txt" />
+    <meta name="author" content="Muhammad Faheem" />
+
+    <!-- Static JSON-LD (@graph) — present in the FIRST HTML response, before
+         any JavaScript runs. React also mounts the same graph client-side
+         (src/components/seo/SiteSchema.tsx, same @id values) for browsers
+         and JS-executing crawlers; this static copy exists purely so
+         non-JS fetchers (many AI/link-preview bots) see identical facts,
+         including the WebSite → Person (developer) relationship, without
+         needing to render the app. This is structured metadata only — it
+         renders no visible text and changes nothing in the UI. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": ["EducationalOrganization", "HighSchool"],
+          "@id": "https://ghsbabikhel.dpdns.org/#organization",
+          "name": "Government High School Babi Khel",
+          "alternateName": "GHS Babi Khel",
+          "url": "https://ghsbabikhel.dpdns.org",
+          "description": "Government High School Babi Khel — quality education and excellence since 2018, District Mohmand, KPK Pakistan.",
+          "foundingDate": "2018",
+          "identifier": "EMIS 60673",
+          "telephone": "+92-346-9898295",
+          "email": "ghsbabikhel@gmail.com",
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Babi Khel",
+            "addressLocality": "Babi Khel",
+            "addressRegion": "Khyber Pakhtunkhwa",
+            "postalCode": "24220",
+            "addressCountry": "PK"
+          },
+          "areaServed": {
+            "@type": "AdministrativeArea",
+            "name": "District Mohmand, Khyber Pakhtunkhwa, Pakistan"
+          },
+          "sameAs": ["https://www.facebook.com/share/1EERTSk1W7/"]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://ghsbabikhel.dpdns.org/#website",
+          "url": "https://ghsbabikhel.dpdns.org",
+          "name": "GHS Babi Khel",
+          "publisher": { "@id": "https://ghsbabikhel.dpdns.org/#organization" },
+          "creator": { "@id": "https://ghsbabikhel.dpdns.org/#website-developer" },
+          "maintainer": { "@id": "https://ghsbabikhel.dpdns.org/#website-developer" }
+        },
+        {
+          "@type": "Person",
+          "@id": "https://ghsbabikhel.dpdns.org/#website-developer",
+          "name": "Muhammad Faheem",
+          "alternateName": "Faheem",
+          "jobTitle": "Student & Website Developer",
+          "description": "Muhammad Faheem, son of Zabih Ullah, is a class-10 (matric) Computer Science student at Government High School Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan. He is a resident of Village Sangar, Tehsil Halimzai, District Mohmand, Khyber Pakhtunkhwa (KPK), Pakistan, and he independently designed and developed the school's official website (ghsbabikhel.dpdns.org) as a school/community project.",
+          "fatherName": "Zabih Ullah",
+          "parent": [
+            {
+              "@type": "Person",
+              "name": "Zabih Ullah",
+              "gender": "Male",
+              "description": "Father of Muhammad Faheem, the developer of the GHS Babi Khel website"
+            }
+          ],
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Village Sangar, Tehsil Halimzai",
+            "addressLocality": "District Mohmand",
+            "addressRegion": "Khyber Pakhtunkhwa",
+            "addressCountry": "PK"
+          },
+          "homeLocation": {
+            "@type": "PostalAddress",
+            "name": "Village Sangar, Tehsil Halimzai, District Mohmand",
+            "streetAddress": "Village Sangar, Tehsil Halimzai",
+            "addressLocality": "District Mohmand",
+            "addressRegion": "Khyber Pakhtunkhwa",
+            "addressCountry": "PK"
+          },
+          "nationality": "Pakistani",
+          "gender": "Male",
+          "affiliation": { "@id": "https://ghsbabikhel.dpdns.org/#organization" },
+          "knowsAbout": ["Computer Science", "Web Development", "React", "JavaScript", "TypeScript", "Tailwind CSS", "Web Design", "Search Engine Optimization"],
+          "url": "https://ghsbabikhel.dpdns.org/"
+        }
+      ]
+    }
+    </script>
+
+    <!-- Favicons -->
+    <!-- Google shows site icons at 48px+ (multiples of 48). Only 16/32px were
+         declared before, so Google enlarged a tiny image and it looked blurry.
+         ?v=3 forces browsers/Google to drop the old cached icon. -->
+    <link rel="icon" href="/favicon.ico?v=3" sizes="48x48 32x32 16x16" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png?v=3" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png?v=3" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png?v=3" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=3" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FAFDF7" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B1F14" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- RSS Feed — discoverable by browsers and feed readers -->
+    <link rel="alternate" type="application/rss+xml" title="GHS Babi Khel — News & Notices" href="/rss.xml" />
+
+    <!-- Self-hosted fonts: preloaded so headings/body paint in the right face immediately -->
+    <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
+
+    <!-- Preconnect -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://supabase.co" />
+    <!-- PERF: Cloudinary serves the school logo/banner/principal photos.
+         Upgrading from dns-prefetch to preconnect establishes TCP+TLS
+         early, saving ~100-200ms on the first image byte — directly
+         improves LCP, which is dominated by the hero image paint. -->
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
+
+    <!-- ─────────────────────────────────────────────────────────────────────
+         WEB FONTS — loaded here, non-render-blocking, NOT from index.css
+         ─────────────────────────────────────────────────────────────────────
+         This request used to be a CSS @import at the top of index.css, which
+         made it a serial, render-blocking step: download CSS → parse → fetch
+         the Google Fonts CSS → THEN paint. On a slow or restricted mobile
+         connection that chain left users staring at a blank page for many
+         seconds, which is the "stuck / hanging" feeling this fixes.
+
+         `media="print"` makes the browser treat this stylesheet as
+         low-priority and non-render-blocking; the onload handler then flips it
+         to `all` once it has actually arrived. The page therefore paints
+         immediately in the system font stack (declared in the critical inline
+         CSS below) and upgrades to the web fonts whenever they load.
+         display=swap means text is NEVER invisible waiting on a font.
+
+         If fonts.googleapis.com is slow or unreachable — common on some
+         Pakistani mobile networks — nothing hangs and nothing breaks: the site
+         simply stays on the system fonts. That is exactly the behaviour we
+         want, and it is impossible with a CSS @import.
+    -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400..900&family=Noto+Nastaliq+Urdu:wght@400..700&display=swap"
+      media="print"
+      onload="this.media='all'; this.onload=null;"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400..900&family=Noto+Nastaliq+Urdu:wght@400..700&display=swap"
+      />
+    </noscript>
+
+    <!-- PLAUSIBLE_INJECT_PLACEHOLDER - Analytics with SRI for integrity -->
+
+    <!-- Fonts are loaded via @import in src/index.css with display=swap -->
+
+    <!-- Inline critical CSS -->
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        margin: 0;
+        background: hsl(90, 60%, 98%);
+      }
+      #root { min-height: 100vh; }
+    </style>
+
+    <!-- Theme bootstrap — prevents flash of wrong theme.
+         The site ships TWO appearances: System (follows device) and Dark.
+         Legacy saved values (light / midnight / forest / violet / lantern)
+         resolve to System, except midnight and lantern which were dark and
+         stay dark. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('ghs-theme');
+          var root = document.documentElement;
+          root.classList.remove('dark','theme-midnight','theme-forest','theme-violet','theme-lantern');
+          if (t === 'dark' || t === 'midnight' || t === 'lantern') {
+            root.classList.add('dark');
+          } else {
+            var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (isDark) root.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- LCP image preload — progressive enhancement.
+         The school logo (the page's Largest Contentful Paint element on most
+         routes) is a Cloudinary URL fetched from Supabase at runtime, so a
+         static <link rel="preload"> can't be hard-coded here. However, the app
+         persists the last-known school settings (including logo_url) to
+         localStorage under 'ghs-school-settings-v1'. Reading that synchronously
+         in the head lets the browser start fetching the logo BEFORE React
+         mounts and before the Supabase round-trip completes — directly
+         improving LCP. If nothing is cached (first visit), this is a no-op
+         and the logo loads normally once React mounts. The Cloudinary delivery
+         transforms (f_auto,q_auto,w_96) match what the Navbar renders so the
+         preloaded bytes are the exact same image the <img> will use. -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('ghs-school-settings-v1');
+          if (!raw) return;
+          var s = JSON.parse(raw);
+          var logo = s && s.logo_url;
+          if (!logo || typeof logo !== 'string') return;
+          if (logo.indexOf('res.cloudinary.com') === -1 || logo.indexOf('/upload/') === -1) return;
+          // Don't double-insert transforms if the URL already has them.
+          if (/\/upload\/(f_auto|q_auto|w_\d+)/i.test(logo)) return;
+          var optimized = logo.replace('/upload/', '/upload/f_auto,q_auto,w_96/');
+          var link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'image';
+          link.href = optimized;
+          link.fetchpriority = 'high';
+          document.head.appendChild(link);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <!-- Static fallback content — read only by crawlers/browsers that do
+           NOT execute JavaScript (many "weak" AI bots, some link-preview
+           tools). Once React mounts, this is removed from the DOM and never
+           seen by a normal visitor. Public school facts only — no developer
+           or personal details are placed here (those stay only in
+           /llms.txt and /api/ai-data, not in visible/UI-reachable markup). -->
+      <noscript>
+        <h1>GHS Babi Khel — Government High School, District Mohmand, KPK</h1>
+        <p>
+          Government High School Babi Khel is a public government high school
+          in Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan,
+          established in 2018 (EMIS code 60673), offering classes 6 to 10 and
+          affiliated with BISE Peshawar for board examinations.
+        </p>
+        <p>Principal: Mr. Imdad Ullah.</p>
+        <p>Phone: +92 346 9898295 &nbsp;|&nbsp; Email: ghsbabikhel@gmail.com</p>
+        <p>
+          <a href="/admission">Admission</a> ·
+          <a href="/results">Results</a> ·
+          <a href="/merit-list">Merit List</a> ·
+          <a href="/roll-no-slip">Roll No. Slip</a> ·
+          <a href="/notices">Notices</a> ·
+          <a href="/calendar">Calendar</a> ·
+          <a href="/notes">Notes</a> ·
+          <a href="/library">Library</a> ·
+          <a href="/gallery">Gallery</a> ·
+          <a href="/teachers">Teachers</a> ·
+          <a href="/faq">FAQ</a> ·
+          <a href="/contact">Contact</a>
+        </p>
+        <p>This page requires JavaScript for the full interactive experience.</p>
+      </noscript>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
