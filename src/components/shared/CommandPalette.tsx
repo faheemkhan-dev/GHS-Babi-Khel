@@ -1,6 +1,6 @@
 // src/components/shared/CommandPalette.tsx
 // ⌘K / Ctrl+K global command palette — the fastest path to any page, quick
-// action, notice or teacher on the site. Opens as a floating
+// action, notice, news item or teacher on the site. Opens as a floating
 // overlay from anywhere (any route, any scroll position), fuzzy-matches as
 // you type via Fuse.js layered on top of the same useSiteSearch index the
 // navbar dropdown already uses (so results always agree), and is fully
@@ -98,6 +98,7 @@ const VOICE_ERRORS: Record<string, string> = {
 const GROUP_LABEL: Record<SearchHit["group"], string> = {
   pages: "Pages",
   notices: "Notices",
+  news: "News",
   teachers: "Teachers",
 };
 
@@ -432,7 +433,7 @@ export default function CommandPalette() {
                 ref={inputRef}
                 value={listening && interim ? interim : query}
                 onChange={(e) => { setQuery(e.target.value); if (voiceError) setVoiceError(""); }}
-                placeholder={listening ? "Listening…" : "Search pages, notices, teachers…"}
+                placeholder={listening ? "Listening…" : "Search pages, notices, news, teachers…"}
                 className="flex-1 bg-transparent border-none outline-none text-sm sm:text-[15px] text-foreground placeholder:text-muted-foreground/70"
                 autoComplete="off"
                 autoCorrect="off"

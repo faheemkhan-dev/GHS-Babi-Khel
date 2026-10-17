@@ -34,6 +34,7 @@ import toast from "react-hot-toast";
 // Reuse the same icon map as NotificationBell (kept in sync).
 const TYPE_META: Record<string, { icon: any; color: string; bg: string; label: string }> = {
   notice:                { icon: Megaphone,    color: "text-red-500",        bg: "bg-red-500/10",        label: "Notice"         },
+  news:                  { icon: Newspaper,    color: "text-blue-500",       bg: "bg-blue-500/10",       label: "News"           },
   result:                { icon: BarChart3,    color: "text-emerald-500",    bg: "bg-emerald-500/10",    label: "Result"         },
   exam_roll:             { icon: Hash,         color: "text-purple-500",     bg: "bg-purple-500/10",     label: "Exam Roll"      },
   fee:                   { icon: Wallet,       color: "text-amber-500",      bg: "bg-amber-500/10",      label: "Fee"            },
@@ -59,7 +60,7 @@ const TYPE_META: Record<string, { icon: any; color: string; bg: string; label: s
 
 // Import the icon components used in the map above.
 import {
-  Megaphone, BarChart3, Hash, Wallet, IdCard,
+  Megaphone, Newspaper, BarChart3, Hash, Wallet, IdCard,
   CalendarDays, BookMarked, Video, MonitorPlay, GraduationCap,
   Trophy, ClipboardList, UserPlus, Upload, BookOpen, MessageSquare,
   Image, FileText, Mail, Flag,

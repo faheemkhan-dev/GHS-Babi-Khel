@@ -519,7 +519,7 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- *  Urdu typography helpers — used by EditorialNoticeCard for proper Nastaliq
+ *  Urdu typography helpers — used by EditorialNewsCard for proper Nastaliq
  *  rendering of Urdu titles and body text.  Without this, browsers fall
  *  back to Latin serifs which render Urdu letters as broken isolated
  *  glyphs (e.g. 'ع' would appear detached from its neighbours).

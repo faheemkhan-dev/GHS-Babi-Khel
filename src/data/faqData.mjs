@@ -122,7 +122,7 @@ export const FAQ_ITEMS = [
     category: "Results & Exams",
     question: "Where can I find exam dates, date sheets and the exam schedule?",
     answer:
-      "Exam schedules and date sheets are published as official notices on the Notices page (ghsbabikhel.dpdns.org/notices). Urgent exam announcements are also highlighted on the homepage.",
+      "Exam schedules and date sheets are published as official notices on the Notices page (ghsbabikhel.dpdns.org/notices) and as events on the academic Calendar page (ghsbabikhel.dpdns.org/calendar). You can subscribe to the calendar on your phone using the ICS feed (ghsbabikhel.dpdns.org/calendar.ics) so exam dates and holidays appear directly in your phone's calendar app. Urgent exam announcements are also highlighted on the homepage news ticker.",
   },
   {
     id: "res-rollnumber",
@@ -173,7 +173,7 @@ export const FAQ_ITEMS = [
     category: "Notes & Library",
     question: "How do I quickly find a specific note, notice or past paper?",
     answer:
-      "Use the search icon in the navigation bar, or go directly to the Search page (ghsbabikhel.dpdns.org/search), and type a subject, chapter name, class or keyword. It searches across notes, notices, library files and other pages at once, so you don't have to browse each section separately.",
+      "Use the search icon in the navigation bar, or go directly to the Search page (ghsbabikhel.dpdns.org/search), and type a subject, chapter name, class or keyword. It searches across notes, notices, news, library files and other pages at once, so you don't have to browse each section separately.",
   },
 
   // ── School Information ────────────────────────────────────────────────────
@@ -189,7 +189,7 @@ export const FAQ_ITEMS = [
     category: "School Information",
     question: "What are the school timings and when is the office open?",
     answer:
-      "The school office is open during the morning shift on working days. Exact daily timings can change with the season and government notifications, so for the current schedule call the school at +92 346 9898295 or check the Notices page, where any timing change is announced officially. Holiday announcements and parent-teacher meeting dates are also published there.",
+      "The school office is open during the morning shift on working days. Exact daily timings can change with the season and government notifications, so for the current schedule call the school at +92 346 9898295 or check the Notices page, where any timing change is announced officially. Holiday announcements and parent-teacher meeting dates are also published there and on the academic Calendar.",
   },
   {
     id: "sch-teachers",
@@ -203,7 +203,7 @@ export const FAQ_ITEMS = [
     category: "School Information",
     question: "What school events and activities take place during the year?",
     answer:
-      "The school holds sports days and tournaments, science fairs and exhibitions, annual prize distributions, national-day programmes such as 14 August and Pakistan Day, tree plantation drives and parent-teacher meetings. Photos of past events are in the Gallery (ghsbabikhel.dpdns.org/gallery), and event reports are published as notices after each event.",
+      "The school holds sports days and tournaments, science fairs and exhibitions, annual prize distributions, national-day programmes such as 14 August and Pakistan Day, tree plantation drives and parent-teacher meetings. Upcoming events are listed on the academic Calendar page with their dates, photos of past events are in the Gallery (ghsbabikhel.dpdns.org/gallery), and reports are published on the News page after each event.",
   },
   {
     id: "sch-gallery",
@@ -219,14 +219,14 @@ export const FAQ_ITEMS = [
     category: "Website & Contact",
     question: "Can I use the website offline or install it as an app?",
     answer:
-      "Yes. The website is a Progressive Web App (PWA). Open it in Chrome on Android (or Safari on iPhone), choose 'Add to Home screen / Install app', and it behaves like a normal app with its own icon. After installation, pages you have visited, notes and downloaded materials remain available without internet, and the site syncs fresh notices and results automatically whenever you are back online.",
+      "Yes. The website is a Progressive Web App (PWA). Open it in Chrome on Android (or Safari on iPhone), choose 'Add to Home screen / Install app', and it behaves like a normal app with its own icon. After installation, pages you have visited, notes and downloaded materials remain available without internet, and the site syncs fresh notices, news and results automatically whenever you are back online.",
   },
   {
     id: "web-cost",
     category: "Website & Contact",
     question: "Is there any cost or account required to use the website?",
     answer:
-      "The website is completely free, and all public sections — notices, results, notes, library and gallery — can be used without any account. You only sign in if you are a student or guardian tracking an admission application or dashboard features, or if you are staff. There are no ads and no charges for any feature of the site.",
+      "The website is completely free, and all public sections — notices, news, results, notes, library, calendar and gallery — can be used without any account. You only sign in if you are a student or guardian tracking an admission application or dashboard features, or if you are staff. There are no ads and no charges for any feature of the site.",
   },
   {
     id: "web-contact",
@@ -240,14 +240,14 @@ export const FAQ_ITEMS = [
     category: "Website & Contact",
     question: "Do I need to create an account, and what does it unlock?",
     answer:
-      "You don't need an account to browse notices, results, notes, library or gallery — those are open to everyone. Creating a free account (Sign Up, ghsbabikhel.dpdns.org/auth/signup) is only useful if you want a personal dashboard to track your admission application status in one place, or if you are a teacher who needs access to staff features. Signing in is never required just to read study material or check a result.",
+      "You don't need an account to browse notices, news, results, notes, library, calendar or gallery — those are open to everyone. Creating a free account (Sign Up, ghsbabikhel.dpdns.org/auth/signup) is only useful if you want a personal dashboard to track your admission application status in one place, or if you are a teacher who needs access to staff features. Signing in is never required just to read study material or check a result.",
   },
   {
     id: "web-notices",
     category: "Website & Contact",
     question: "Where can I see the latest notices and announcements?",
     answer:
-      "All official announcements — holiday notices, exam date sheets, fee or admission updates, and general circulars — are published on the Notices page (ghsbabikhel.dpdns.org/notices) as soon as the school administration posts them. The homepage also shows the most recent notices, and you can enable notifications from the bell icon in the navigation bar so you don't miss an urgent one.",
+      "All official announcements — holiday notices, exam date sheets, fee or admission updates, and general circulars — are published on the Notices page (ghsbabikhel.dpdns.org/notices) as soon as the school administration posts them. The homepage also shows the most recent notices and news in a scrolling ticker, and you can enable notifications from the bell icon in the navigation bar so you don't miss an urgent one.",
   },
   {
     id: "web-official",

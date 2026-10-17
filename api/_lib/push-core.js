@@ -1,7 +1,7 @@
 // api/_lib/push-core.js — shared Web Push logic (underscore folder ⇒ not a Vercel function).
 import webpush from "web-push";
 
-export const TOPICS = ["results", "merit", "rollslip", "admission", "notices", "datesheet"];
+export const TOPICS = ["results", "merit", "rollslip", "admission", "notices", "news", "datesheet", "calendar"];
 const SITE = "https://ghsbabikhel.dpdns.org";
 
 function cfg() {
@@ -196,6 +196,9 @@ async function runDispatch() {
     { key: "notices", topic: "notices", q: "notices?select=id,title&is_published=eq.true&order=created_at.desc&limit=200",
       one: (r) => ({ title: "📢 New Notice", body: r.title, url: `/notices/${r.id}`, tag: `notice-${r.id}` }),
       many: (n) => ({ title: "📢 New Notices", body: `${n} new notices were published.`, url: "/notices", tag: "notices" }) },
+    { key: "news", topic: "news", q: "news?select=id,title&is_published=eq.true&order=created_at.desc&limit=200",
+      one: (r) => ({ title: "📰 School News", body: r.title, url: `/news/${r.id}`, tag: `news-${r.id}` }),
+      many: (n) => ({ title: "📰 School News", body: `${n} new news posts were published.`, url: "/news", tag: "news" }) },
     { key: "merit", topic: "merit", q: "merit_lists?select=id,class,exam_type,year&is_published=eq.true&limit=500",
       one: (r) => ({ title: "🏆 Merit List Published", body: [r.class && `Class ${r.class}`, r.exam_type, r.year].filter(Boolean).join(" · ") + " merit list is now available.", url: "/merit-list", tag: `merit-${r.id}` }),
       many: () => ({ title: "🏆 Merit Lists Published", body: "New merit lists are now available.", url: "/merit-list", tag: "merit" }) },

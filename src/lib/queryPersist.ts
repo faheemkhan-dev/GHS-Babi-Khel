@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Offline data cache — Homepage, About, Contact, Notices,
+// Offline data cache — Homepage, About, Contact, News, Notices, Calendar,
 // Results, Admission, Notes, Merit List, Roll No. Slip
 // ─────────────────────────────────────────────────────────────────────────────
 // Persists the React Query cache for these public pages' data (notices,
-// teachers, achievements, school settings, results,
+// news, teachers, achievements, school settings, school events, results,
 // the homepage's "School Rank #1" toppers section, the homepage's
 // admission-banner settings, and the Notes subject + chapter lists)
 // into IndexedDB, so that when a page loads with no internet, it can paint
@@ -13,11 +13,12 @@
 // "sync" happening.
 //
 // About and Contact only need school-settings (already covered below).
-// Notices list page uses the "notices" key. Individual notice detail
-// pages ("notice-item") are intentionally NOT persisted yet — out of
-// scope so far.
+// News/Notices list pages use the "news"/"notices" keys. Individual
+// news/notice detail pages ("news-item"/"notice-item") are intentionally
+// NOT persisted yet — out of scope so far.
 //
-// Results uses "results" (filtered by class/
+// Calendar uses "school-events" (a specific month range) and
+// "school-events-upcoming". Results uses "results" (filtered by class/
 // exam/year/search) and "result-years". Both are persisted like everything
 // else, EXCEPT one-off text searches on Results — see shouldPersist below
 // — since a search term is rarely repeated and would just fill up storage
@@ -50,9 +51,12 @@ const STORAGE_KEY = "homepage-query-cache";
 // (admin data, auth, dashboards) is left entirely alone.
 const PERSISTED_KEY_PREFIXES = [
   "notices",
+  "news",
   "teachers",
   "achievements",
   "school-settings",
+  "school-events",
+  "school-events-upcoming",
   "results",
   "result-years",
   // Homepage → "Hall of Fame" toppers section (#1 per class, latest exam).

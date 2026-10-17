@@ -35,6 +35,8 @@ const CONTEXTS: Record<string, Ctx> = {
   rollslip:  { topics: ["rollslip", "datesheet"], title: "Roll number slip alerts", text: "Get notified when slips and the date sheet are ready." },
   admission: { topics: ["admission"], title: "Admission updates",            text: "Be notified about admission announcements and your application status." },
   notices:   { topics: ["notices"],   title: "Never miss a notice",          text: "Important school notices, delivered straight to your phone." },
+  news:      { topics: ["news"],      title: "School news alerts",           text: "Stay up to date with news and achievements from GHS Babi Khel." },
+  calendar:  { topics: ["calendar", "datesheet"], title: "Calendar & exam alerts", text: "Reminders for events, holidays and exam schedule changes." },
 };
 const ROUTE_CONTEXT: [RegExp, keyof typeof CONTEXTS][] = [
   [/^\/results|^\/result-card/, "results"],
@@ -42,6 +44,8 @@ const ROUTE_CONTEXT: [RegExp, keyof typeof CONTEXTS][] = [
   [/^\/roll-no-slip/, "rollslip"],
   [/^\/admission/, "admission"],
   [/^\/notices/, "notices"],
+  [/^\/news/, "news"],
+  [/^\/calendar/, "calendar"],
 ];
 
 /* ── Topic manager (shown once enabled) ───────────────────────────────── */

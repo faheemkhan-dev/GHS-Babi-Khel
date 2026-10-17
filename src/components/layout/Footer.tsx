@@ -9,7 +9,7 @@ import { useSchoolSettings, safeMediaUrl, optimizedCloudinaryUrl } from "@/hooks
 // ── SEO / crawlability: every PUBLIC page must have at least one real <a href>
 // that is present in the DOM WITHOUT any click or hover. The Navbar dropdown
 // panels only mount their links while open, so a crawler (Googlebot's renderer
-// never opens menus) saw NO link to /merit-list, /roll-no-slip,
+// never opens menus) saw NO link to /merit-list, /roll-no-slip, /calendar,
 // /contact, /result-card or /duty — they were "orphan" pages Google could only
 // find through the sitemap, which is the slowest way to get indexed. The footer
 // renders on every page, so listing every public route here gives each one a
@@ -20,6 +20,8 @@ const footerLinks = {
     { to: "/admission", label: "Admission" },
     { to: "/teachers",  label: "Our Teachers" },
     { to: "/notices",   label: "Notices" },
+    { to: "/news",      label: "Latest News" },
+    { to: "/calendar",  label: "School Calendar" },
     { to: "/faq",       label: "FAQs" },
     { to: "/contact",   label: "Contact Us" },
   ],

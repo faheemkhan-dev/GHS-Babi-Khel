@@ -4,7 +4,7 @@
 //   ?kind=robots   → /robots.txt   (crawl permissions — AI + search allowed)
 //   ?kind=sitemap  → /sitemap.xml  (all public URLs + live lastmod dates)
 //   ?kind=llms     → /llms.txt     (llmstxt.org guide for AI systems)
-//   ?kind=rss      → /rss.xml + /feed.xml  (RSS 2.0 notices feed)
+//   ?kind=rss      → /rss.xml + /feed.xml  (RSS 2.0 news + notices feed)
 //
 // vercel.json rewrites each clean URL to this function with the matching
 // ?kind=… parameter. The old /api/robots, /api/sitemap, /api/llms and
@@ -28,7 +28,7 @@ import { createClient } from "@supabase/supabase-js";
 const SITE_URL = "https://ghsbabikhel.dpdns.org";
 const FACEBOOK_URL = "https://www.facebook.com/share/1EERTSk1W7/";
 const SITE_NAME = "GHS Babi Khel";
-const SITE_DESC = "Government High School Babi Khel, District Mohmand, KPK Pakistan — latest notices and announcements.";
+const SITE_DESC = "Government High School Babi Khel, District Mohmand, KPK Pakistan — latest news, notices and announcements.";
 
 // ── Shared Supabase client (serverless, no session; used by 3 of 4 kinds) ───
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -196,7 +196,7 @@ function buildLlmsTxt(s, admissionFiles = []) {
     : "";
   return `# ${s.school_name} — Government High School, District Mohmand
 
-> Official website of Government High School (GHS) Babi Khel, District Mohmand, Khyber Pakhtunkhwa (KPK), Pakistan — a government school offering classes 6 to 10 (matriculation), affiliated with BISE Peshawar for board exams. The site provides online admission applications, exam results searchable by roll number, official merit lists of top position holders, downloadable exam roll number slips, official notices, free study notes, past papers, teacher directory and a photo gallery.
+> Official website of Government High School (GHS) Babi Khel, District Mohmand, Khyber Pakhtunkhwa (KPK), Pakistan — a government school offering classes 6 to 10 (matriculation), affiliated with BISE Peshawar for board exams. The site provides online admission applications, exam results searchable by roll number, official merit lists of top position holders, downloadable exam roll number slips, official notices, school news, free study notes, past papers, an academic calendar, teacher directory and a photo gallery.
 
 ## School facts
 
@@ -230,13 +230,15 @@ function buildLlmsTxt(s, admissionFiles = []) {
 
 ## Key pages
 
-- [Home](${SITE_URL}/): School overview with latest notices, result toppers and announcements
+- [Home](${SITE_URL}/): School overview with latest notices, news, result toppers and announcements
 - [Admissions](${SITE_URL}/admission): Online admission application form for classes 6–10, plus an application status tracker (search by reference number, B-Form number or contact number)
 - [Results](${SITE_URL}/results): Search school exam results by roll number; also searches BISE Peshawar board results (SSC 9th/10th) live from the official board portal
 - [Merit List](${SITE_URL}/merit-list): Official exam rankings published by the school office — top position holders per class and school-wide lists with marks, percentages, grades and pass statistics
 - [Result Card](${SITE_URL}/result-card): Detailed result cards with subject-wise marks, grades and class positions
 - [Roll No. Slip](${SITE_URL}/roll-no-slip): Exam roll number slips — a student picks their class and types their full name to view, download (PDF with QR code) or share their own slip; a live countdown shows while a release is scheduled
 - [Notices](${SITE_URL}/notices): Official school notices — holidays, exam schedules, fee deadlines, parent-teacher meetings
+- [News](${SITE_URL}/news): School news articles — events, achievements, sports, announcements
+- [Calendar](${SITE_URL}/calendar): Academic calendar with exam dates, holidays and school events; subscribable on phones
 - [Teachers](${SITE_URL}/teachers): Teaching staff directory with subjects and qualifications
 - [Notes](${SITE_URL}/notes): Free study notes organised by subject with chapter-wise pages — subject pages at /notes/<subject-slug> and individual chapters at /notes/<subject-slug>/<chapter-slug> (Math, Physics, Chemistry, Biology, English, Urdu, Islamiat, Pakistan Studies, Computer) with quizzes and flashcards
 - [Library](${SITE_URL}/library): Downloadable study materials, books, past papers and forms — each item links to its file
@@ -265,11 +267,12 @@ function buildLlmsTxt(s, admissionFiles = []) {
 ${filesSection ? filesSection + "\n" : ""}
 ## Machine-readable data (recommended for AI tools)
 
-- [Live data feed (JSON)](${SITE_URL}/api/ai-data): the COMPLETE current state of this website in one request — school profile with live statistics, admission status and deadlines (live from the school dashboard), full admission procedure and documents, results info and grading scale, published merit lists, roll-number-slip sessions, the 20 latest notices with content, teacher directory, library files, study notes subjects and chapters, photo gallery albums, duty roster and the full FAQ. Updated within a minute of any change; always prefer this over cached page snapshots when precision matters.
-- [RSS feed](${SITE_URL}/rss.xml): Latest notices as they are published
+- [Live data feed (JSON)](${SITE_URL}/api/ai-data): the COMPLETE current state of this website in one request — school profile with live statistics, admission status and deadlines (live from the school dashboard), full admission procedure and documents, results info and grading scale, published merit lists, roll-number-slip sessions, the 20 latest notices and news with content, upcoming calendar events, teacher directory, library files, study notes subjects and chapters, photo gallery albums, duty roster and the full FAQ. Updated within a minute of any change; always prefer this over cached page snapshots when precision matters.
+- [RSS feed](${SITE_URL}/rss.xml): Latest news and notices as they are published
 - [Sitemap](${SITE_URL}/sitemap.xml): XML sitemap of all public pages
+- [Academic calendar (ICS)](${SITE_URL}/calendar.ics): Subscribe to school events on any phone calendar
 
-- Data generated: ${new Date().toISOString().slice(0, 10)} — statistics, admission status, notices above are read live from the school database on each request; when precision matters, prefer ${SITE_URL}/api/ai-data (JSON) over memory or cached snapshots.
+- Data generated: ${new Date().toISOString().slice(0, 10)} — statistics, admission status, notices, news and events above are read live from the school database on each request; when precision matters, prefer ${SITE_URL}/api/ai-data (JSON) over memory or cached snapshots.
 `;
 }
 
@@ -289,11 +292,11 @@ async function llmsHandler(req, res) {
 // KIND: sitemap  (former api/sitemap.js)
 // ═════════════════════════════════════════════════════════════════════════════
 // lastmod accuracy rules ("sitemap lastmod spam" fixes, preserved):
-//   • Correct table name: duty_board (NOT duty_roster).
+//   • Correct table names: school_events / duty_board (NOT events/duty_roster).
 //   • Correct columns: most tables only have created_at (no updated_at).
 //   • /admission does NOT query the admissions table (PII-locked by RLS since
 //     migration 20260825000001_014) — falls back to the deploy date.
-//   • Detail pages for notices (latest 200, published only) included —
+//   • Detail pages for notices/news (latest 200, published only) included —
 //     these carry the school's actual content for AI/search crawlers.
 //   • hreflang alternates removed (all pointed at the same URL — conflicting
 //     signal). /weather removed (route doesn't exist — soft-404 entry).
@@ -315,11 +318,13 @@ const STATIC_PAGES = [
   { path: "/", changefreq: "daily",   priority: "1.0", dbSource: { table: "notices",       column: "created_at" } },
   { path: "/admission", changefreq: "weekly",  priority: "0.9" }, // admissions table is PII-locked now
   { path: "/notices", changefreq: "daily",   priority: "0.9", dbSource: { table: "notices",       column: "created_at" } },
+  { path: "/news", changefreq: "daily",   priority: "0.9", dbSource: { table: "news",          column: "created_at" } },
   // /results is boosted to priority 1.0 + daily changefreq because it is the
   // primary landing page for our highest-intent SEO keywords.
   { path: "/results", changefreq: "daily",   priority: "1.0", dbSource: { table: "results",       column: "created_at" } },
   { path: "/merit-list", changefreq: "daily", priority: "0.9", dbSource: { table: "merit_lists",   column: "created_at" } },
   { path: "/roll-no-slip", changefreq: "daily", priority: "0.9", dbSource: { table: "exam_roll_sessions", column: "created_at" } },
+  { path: "/calendar", changefreq: "daily",   priority: "0.9", dbSource: { table: "school_events", column: "updated_at" } },
   { path: "/contact", changefreq: "monthly", priority: "0.8" },
   { path: "/about", changefreq: "monthly", priority: "0.8" },
   { path: "/teachers", changefreq: "monthly", priority: "0.8", dbSource: { table: "teachers",      column: "created_at" } },
@@ -336,7 +341,7 @@ const SUBJECT_PAGES = [
   "urdu", "islamiat", "pakistan-studies", "computer",
 ];
 
-// How many notice detail URLs to include (most recent first).
+// How many notice/news detail URLs to include (most recent first).
 const DETAIL_PAGE_LIMIT = 200;
 
 // How many note CHAPTER URLs (/notes/<subject>/<chapter>) to include.
@@ -440,7 +445,7 @@ const MACHINE_READABLE_ENTRIES = [];
 /**
  * Fetch recent rows (id + created_at) from a content table and build
  * detail-page <url> entries for them: /<basePath>/<id>.
- * Used for /notices/<id> — the pages that actually carry the
+ * Used for /notices/<id> and /news/<id> — the pages that actually carry the
  * school's content and get shared on social media.
  * Only PUBLISHED rows are included (is_published = true).
  */
@@ -481,14 +486,16 @@ async function sitemapHandler(req, res) {
   const notesLastmodPromise = getLastMod("note_chapters", "created_at");
   const noteSubjectsPromise = getNoteSubjects();
 
-  // Detail pages for notices (in parallel).
+  // Detail pages for notices and news (in parallel).
   const noticeDetailsPromise = getDetailEntries("notices", "/notices");
+  const newsDetailsPromise = getDetailEntries("news", "/news");
 
-  const [pageResults, notesLastmod, noteSubjects, noticeDetails] = await Promise.all([
+  const [pageResults, notesLastmod, noteSubjects, noticeDetails, newsDetails] = await Promise.all([
     Promise.all(lastmodPromises),
     notesLastmodPromise,
     noteSubjectsPromise,
     noticeDetailsPromise,
+    newsDetailsPromise,
   ]);
 
   // Chapter detail pages (/notes/<subject>/<chapter>) — real study content.
@@ -524,6 +531,8 @@ async function sitemapHandler(req, res) {
 
  ${noticeDetails.join("\n")}
 
+ ${newsDetails.join("\n")}
+
  ${machineEntries.join("\n")}
 
 </urlset>`;
@@ -538,7 +547,7 @@ async function sitemapHandler(req, res) {
 // ═════════════════════════════════════════════════════════════════════════════
 // KIND: rss  (former api/rss.js)
 // ═════════════════════════════════════════════════════════════════════════════
-// RSS 2.0 feed for notices — content distribution via RSS readers and
+// RSS 2.0 feed for news & notices — content distribution via RSS readers and
 // improved discoverability. Served at /rss.xml (and /feed.xml).
 
 function escapeXml(str) {
@@ -553,11 +562,24 @@ function escapeXml(str) {
 async function rssHandler(req, res) {
   const sb = getSupabase();
 
+  let newsItems = [];
   let noticeItems = [];
 
   if (sb) {
     try {
-      const noticesRes = await sb.from("notices").select("id, title, content, category, is_urgent, created_at").eq("is_published", true).order("created_at", { ascending: false }).limit(30);
+      const [newsRes, noticesRes] = await Promise.all([
+        sb.from("news").select("id, title, content, image_url, created_at").eq("is_published", true).order("created_at", { ascending: false }).limit(20),
+        sb.from("notices").select("id, title, content, category, is_urgent, created_at").eq("is_published", true).order("created_at", { ascending: false }).limit(20),
+      ]);
+
+      newsItems = (newsRes.data || []).map((n) => ({
+        title: n.title,
+        link: `${SITE_URL}/news/${n.id}`,
+        description: escapeXml((n.content || "").slice(0, 300)),
+        pubDate: new Date(n.created_at).toUTCString(),
+        category: "News",
+        image: n.image_url || "",
+      }));
 
       noticeItems = (noticesRes.data || []).map((n) => ({
         title: `${n.is_urgent ? "[URGENT] " : ""}${n.title}`,
@@ -572,8 +594,8 @@ async function rssHandler(req, res) {
     }
   }
 
-  // Sort by date (newest first)
-  const allItems = noticeItems
+  // Merge and sort by date (newest first)
+  const allItems = [...newsItems, ...noticeItems]
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
     .slice(0, 30);
 

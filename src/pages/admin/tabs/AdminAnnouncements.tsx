@@ -18,7 +18,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 // Tabs replaced with manual state rendering to prevent Android Chrome GPU corruption
-import { Plus, Pencil, Trash2, Loader2, CalendarIcon, Upload, Image as ImageIcon, Trophy, Pin, BarChart3, X, GripVertical, Megaphone } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, CalendarIcon, Upload, Image as ImageIcon, Trophy, Newspaper, Sparkles, Pin, BarChart3, X, GripVertical, Megaphone } from "lucide-react";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import { triggerConfetti } from "@/lib/confetti";
@@ -31,6 +31,10 @@ interface Notice {
   id: string; title: string; content: string | null; category: string;
   is_urgent: boolean; is_published: boolean; is_pinned: boolean; expires_at: string | null; created_at: string;
   is_poll: boolean; poll_options: PollOption[]; poll_closes_at: string | null;
+}
+interface NewsItem {
+  id: string; title: string; content: string | null; image_url: string | null;
+  is_published: boolean; is_pinned: boolean; created_at: string;
 }
 
 const noticeCategories = ["general", "academic", "events", "urgent"];
@@ -427,6 +431,236 @@ const NoticesSection = () => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// NEWS SECTION
+// ═══════════════════════════════════════════════════════════════════════════════
+const NewsSection = () => {
+  const qc = useQueryClient();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<NewsItem | null>(null);
+  const [form, setForm] = useState({ title: "", content: "", image_url: null as string | null, is_published: true, is_pinned: false });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const { data: news = [], isLoading } = useQuery<NewsItem[]>({
+    queryKey: ["admin-news"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("news").select("*")
+        .order("is_pinned", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (error) throw error; return data ?? [];
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from("news").delete().eq("id", id); if (error) throw error; },
+    onSuccess: () => {
+      toast.success("Deleted");
+      // Invalidate BOTH admin and public news caches — otherwise the homepage
+      // would keep serving the stale list and "newly published articles wouldn't
+      // appear" for up to the cache's staleTime window.
+      qc.invalidateQueries({ queryKey: ["admin-news"] });
+      qc.invalidateQueries({ queryKey: ["news"] });
+    },
+  });
+
+  const togglePublish = useMutation({
+    mutationFn: async ({ id, val }: { id: string; val: boolean }) => {
+      const { error } = await supabase.from("news").update({ is_published: val }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-news"] });
+      qc.invalidateQueries({ queryKey: ["news"] });
+    },
+  });
+
+  // Pin/unpin a news article in one click — pinned items appear at the top of the public list.
+  const togglePin = useMutation({
+    mutationFn: async ({ id, val }: { id: string; val: boolean }) => {
+      const { error } = await supabase.from("news").update({ is_pinned: val }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      toast.success(vars.val ? "📌 Pinned to top" : "Unpinned");
+      qc.invalidateQueries({ queryKey: ["admin-news"] });
+      qc.invalidateQueries({ queryKey: ["news"] });
+    },
+  });
+
+  const openAdd = () => { setEditing(null); setForm({ title: "", content: "", image_url: null, is_published: true, is_pinned: false }); setImageFile(null); setModalOpen(true); };
+  const openEdit = (n: NewsItem) => {
+    setEditing(n); setForm({ title: n.title, content: n.content || "", image_url: n.image_url, is_published: n.is_published, is_pinned: n.is_pinned ?? false }); setImageFile(null); setModalOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.title) { toast.error("Title required"); return; }
+    setSaving(true);
+    try {
+      let image_url = form.image_url;
+      if (imageFile) image_url = await uploadToCloudinary(imageFile, "branding");
+      const payload = { ...form, image_url };
+      const { error } = editing
+        ? await supabase.from("news").update(payload).eq("id", editing.id)
+        : await supabase.from("news").insert(payload);
+      if (error) toast.error("Save failed: " + error.message);
+      else {
+        toast.success(editing ? "Updated" : "News published");
+        // Critical: invalidate public news cache so the homepage / /news page
+        // pick up the new article immediately instead of showing stale data.
+        qc.invalidateQueries({ queryKey: ["admin-news"] });
+        qc.invalidateQueries({ queryKey: ["news"] });
+        setModalOpen(false);
+      }
+    } catch (err) { toast.error(err?.message || "Upload failed. Check Cloudinary env vars."); }
+    setSaving(false);
+  };
+
+  const set = (k: string, v: string | boolean | null) => setForm(p => ({ ...p, [k]: v }));
+
+  if (isLoading) return <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-48" />)}</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 text-xs text-muted-foreground sm:text-sm">Manage school news articles</p>
+        <Button onClick={openAdd} className="h-9 min-w-0 shrink-0 gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold shadow-none bg-primary text-primary-foreground hover:bg-primary/90"><Plus className="w-3.5 h-3.5" /> Add News</Button>
+      </div>
+
+      {news.length === 0 && (
+        <Card><CardContent className="py-12 text-center text-muted-foreground">No news articles yet</CardContent></Card>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {news.map(n => (
+          <Card key={n.id} className={`border-border overflow-hidden relative rounded-2xl shadow-sm ${!n.is_published ? "opacity-60" : ""} ${n.is_pinned ? "ring-2 ring-[hsl(43_70%_58%)]/60" : ""}`}>
+            <div className="aspect-video bg-muted relative">
+              {n.image_url
+                ? <img src={n.image_url} alt="" className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-8 h-8 text-muted-foreground/30" /></div>}
+              <Badge className={`absolute top-2 right-2 ${n.is_published ? "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300" : "border border-border bg-muted text-muted-foreground hover:bg-muted"}`}>
+                {n.is_published ? "Published" : "Draft"}
+              </Badge>
+              {n.is_pinned && (
+                <span className="absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-[0.22em] bg-gradient-to-r from-[hsl(43_70%_48%)] to-[hsl(43_80%_55%)] text-[hsl(348_55%_22%)] shadow-sm">
+                  <Pin className="w-2.5 h-2.5" /> Pinned
+                </span>
+              )}
+            </div>
+            <CardContent className="p-4 space-y-2">
+              <h3 className="font-heading font-semibold text-foreground leading-snug line-clamp-2 break-words">{n.title}</h3>
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <CalendarIcon className="w-3 h-3" />
+                {format(new Date(n.created_at), "dd MMM yyyy · h:mm a")}
+              </p>
+              {n.content && <p className="text-sm text-muted-foreground line-clamp-2">{n.content}</p>}
+              <div className="flex items-center gap-x-4 gap-y-2 pt-3 mt-1 border-t border-border/70 flex-wrap">
+                <div className="flex items-center gap-1" title="Pin to top">
+                  <Switch checked={!!n.is_pinned} onCheckedChange={v => togglePin.mutate({ id: n.id, val: v })} />
+                  <span className="text-[11px] text-muted-foreground">Pin</span>
+                </div>
+                <div className="flex items-center gap-1" title="Publish">
+                  <Switch checked={n.is_published} onCheckedChange={v => togglePublish.mutate({ id: n.id, val: v })} />
+                </div>
+                <Button size="icon" variant="ghost" onClick={() => openEdit(n)} className="h-8 w-8 shadow-none text-muted-foreground hover:text-primary ml-auto"><Pencil className="w-3.5 h-3.5" /></Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild><Button size="icon" variant="ghost" className="h-8 w-8 shadow-none text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></Button></AlertDialogTrigger>
+                  <AlertDialogContent className="rounded-2xl">
+                    <AlertDialogHeader><AlertDialogTitle>Delete this news?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                    <AlertDialogFooter><AlertDialogCancel className="h-9 min-w-0 flex-1 rounded-full px-4 text-xs font-semibold shadow-none sm:flex-none">Cancel</AlertDialogCancel><AlertDialogAction onClick={() => deleteMut.mutate(n.id)} className="h-9 min-w-0 flex-1 rounded-full px-4 text-xs font-semibold shadow-none bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:flex-none">Delete</AlertDialogAction></AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="rounded-2xl p-5 gap-3 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Newspaper className="w-5 h-5 text-primary" />
+              {editing ? "Edit News" : "Add News"}
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-gold" />
+              Write in English or Urdu — the homepage will auto-format it as a typeset editorial article.
+            </p>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Label>Title *</Label>
+                {form.title && (
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                    detectTextLanguage(form.title) === "ur"
+                      ? "bg-[hsl(348_55%_28%)]/10 text-[hsl(348_55%_28%)]"
+                      : "bg-[hsl(215_45%_28%)]/10 text-[hsl(215_45%_28%)]"
+                  }`}>
+                    {detectTextLanguage(form.title) === "ur" ? "اردو · RTL" : "English · LTR"}
+                  </span>
+                )}
+              </div>
+              <Input
+                value={form.title}
+                onChange={e => set("title", e.target.value)}
+                dir={form.title && detectTextLanguage(form.title) === "ur" ? "rtl" : "ltr"}
+                placeholder={form.title ? "" : "Enter title in English or Urdu…"}
+              />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Label>Content</Label>
+                {form.content && (
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                    detectTextLanguage(form.content) === "ur"
+                      ? "bg-[hsl(348_55%_28%)]/10 text-[hsl(348_55%_28%)]"
+                      : "bg-[hsl(215_45%_28%)]/10 text-[hsl(215_45%_28%)]"
+                  }`}>
+                    {detectTextLanguage(form.content) === "ur" ? "اردو" : "English"}
+                  </span>
+                )}
+              </div>
+              <Textarea
+                rows={6}
+                value={form.content}
+                onChange={e => set("content", e.target.value)}
+                dir={form.content && detectTextLanguage(form.content) === "ur" ? "rtl" : "ltr"}
+                placeholder="Write the article body… (Urdu or English — auto-detected)"
+                style={form.content && detectTextLanguage(form.content) === "ur"
+                  ? { fontFamily: "'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif" }
+                  : undefined}
+              />
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2"><Switch checked={form.is_published} onCheckedChange={v => set("is_published", v)} /><Label>Published</Label></div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.is_pinned} onCheckedChange={v => set("is_pinned", v)} />
+                <Label className="flex items-center gap-1"><Pin className="w-3 h-3" /> Pin to top</Label>
+              </div>
+            </div>
+            <div>
+              <Label>Image <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <div className="flex items-center gap-3 mt-1">
+                {(form.image_url || imageFile) && <img src={imageFile ? URL.createObjectURL(imageFile) : form.image_url!} alt="" className="w-16 h-10 rounded object-cover" />}
+                <label className="flex items-center gap-1.5 text-sm text-primary cursor-pointer hover:underline">
+                  <Upload className="w-4 h-4" /> Choose Image
+                  <input type="file" accept="image/*" className="hidden" onChange={e => setImageFile(e.target.files?.[0] || null)} />
+                </label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="h-9 min-w-0 flex-1 gap-1.5 whitespace-nowrap rounded-full px-4 text-xs font-semibold shadow-none border-border/60 sm:flex-none" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving} className="h-9 min-w-0 flex-1 gap-1.5 whitespace-nowrap rounded-full px-4 text-xs font-semibold shadow-none bg-primary text-primary-foreground hover:bg-primary/90 sm:flex-none">{saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} {editing ? "Save changes" : "Publish news"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ACHIEVEMENTS SECTION
 // ═══════════════════════════════════════════════════════════════════════════════
 const AchievementsSection = () => {
@@ -577,7 +811,7 @@ const { data: achievements = [], isLoading } = useQuery<Achievement[]>({
 // TAB BAR — manual state, no Radix Tabs (prevents Android Chrome GPU corruption
 // caused by Radix rendering all TabsContent divs simultaneously in the DOM)
 // ═══════════════════════════════════════════════════════════════════════════════
-type AnnTab = "notices" | "achievements";
+type AnnTab = "notices" | "news" | "achievements";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  HD SVG tab icons — hand-crafted, gradient-filled, crisp at 18px.
@@ -585,6 +819,7 @@ type AnnTab = "notices" | "achievements";
  *  they can coexist on the same page without SVG `<defs>` collisions.
  *  Palette per tab matches the previous colored-badge scheme:
  *    • Notices      → amber bell
+ *    • News         → sky-blue folded paper
  *    • Achievements → gold trophy
  * ────────────────────────────────────────────────────────────────────────── */
 const NoticesTabIcon = () => (
@@ -616,6 +851,37 @@ const NoticesTabIcon = () => (
       fill="#7C2D12"
     />
     <circle cx="18.2" cy="5.6" r="1.1" fill="#FBBF24" stroke="#7C2D12" strokeWidth="0.5" />
+  </svg>
+);
+
+const NewsTabIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] shrink-0" aria-hidden="true">
+    <defs>
+      <linearGradient id="tg-paper-body" x1="50%" y1="0%" x2="50%" y2="100%">
+        <stop offset="0%" stopColor="#E0F2FE" />
+        <stop offset="100%" stopColor="#7DD3FC" />
+      </linearGradient>
+      <linearGradient id="tg-paper-edge" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#0EA5E9" />
+        <stop offset="100%" stopColor="#0369A1" />
+      </linearGradient>
+    </defs>
+    <rect
+      x="3.5" y="4" width="14" height="16" rx="1.2"
+      fill="url(#tg-paper-body)" stroke="#0369A1" strokeWidth="0.7"
+    />
+    <rect x="6" y="6.5" width="9" height="1.6" rx="0.4" fill="#0C4A6E" />
+    <rect x="6" y="9.5"  width="9" height="0.7" rx="0.35" fill="#075985" opacity="0.7" />
+    <rect x="6" y="11"   width="9" height="0.7" rx="0.35" fill="#075985" opacity="0.7" />
+    <rect x="6" y="12.5" width="9" height="0.7" rx="0.35" fill="#075985" opacity="0.7" />
+    <rect x="6" y="14"   width="6" height="0.7" rx="0.35" fill="#075985" opacity="0.7" />
+    <path
+      d="M17.5 6v12.5c0 1 .8 1.5 1.7 1.5s1.8-.5 1.8-1.5V8.5z"
+      fill="url(#tg-paper-edge)" stroke="#0C4A6E" strokeWidth="0.6" strokeLinejoin="round"
+    />
+    <rect x="18.5" y="10" width="1.4" height="0.5" rx="0.25" fill="#BAE6FD" />
+    <rect x="18.5" y="12" width="1.4" height="0.5" rx="0.25" fill="#BAE6FD" />
+    <rect x="18.5" y="14" width="1.4" height="0.5" rx="0.25" fill="#BAE6FD" />
   </svg>
 );
 
@@ -663,6 +929,7 @@ const AnnouncementTabs = () => {
   const [active, setActive] = useState<AnnTab>("notices");
   const tabs: { id: AnnTab; label: string; icon: React.ReactNode }[] = [
     { id: "notices",      label: "Notices",      icon: <NoticesTabIcon /> },
+    { id: "news",         label: "News",         icon: <NewsTabIcon /> },
     { id: "achievements", label: "Achievements", icon: <AchievementsTabIcon /> },
   ];
   return (
@@ -689,8 +956,9 @@ const AnnouncementTabs = () => {
           ))}
         </div>
       </div>
-      {/* Only render the active section — prevents all sections loading simultaneously */}
+      {/* Only render the active section — prevents all 3 sections loading simultaneously */}
       {active === "notices"      && <NoticesSection />}
+      {active === "news"         && <NewsSection />}
       {active === "achievements" && <AchievementsSection />}
     </div>
   );
@@ -711,7 +979,7 @@ const AdminAnnouncements = () => {
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="text-[15px] font-heading font-bold leading-tight tracking-tight text-foreground sm:text-xl">Announcements</h2>
-            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground sm:text-sm">Notices & Achievements — all in one place</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground sm:text-sm">Notices, News & Achievements — all in one place</p>
           </div>
         </div>
       </div>

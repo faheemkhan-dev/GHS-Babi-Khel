@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   Bell, Check, CheckCheck, Trash2,
-  Megaphone, BarChart3, Hash, Wallet, IdCard,
+  Newspaper, Megaphone, BarChart3, Hash, Wallet, IdCard,
   CalendarDays, BookMarked, Video, MonitorPlay, GraduationCap,
   Trophy, ClipboardList, FileText, UserPlus, Upload, HelpCircle,
   Mail, MessageSquareText, Flag, LayoutGrid, BellRing, BellOff, Clock, X,
@@ -35,6 +35,7 @@ interface NotificationRow {
 
 const TYPE_META: Record<string, { icon: any; color: string; bg: string }> = {
   notice:                { icon: Megaphone,    color: "text-red-500",        bg: "bg-red-500/10"        },
+  news:                  { icon: Newspaper,    color: "text-blue-500",       bg: "bg-blue-500/10"       },
   result:                { icon: BarChart3,    color: "text-emerald-500",    bg: "bg-emerald-500/10"    },
   exam_roll:             { icon: Hash,         color: "text-purple-500",     bg: "bg-purple-500/10"     },
   fee:                   { icon: Wallet,       color: "text-amber-500",      bg: "bg-amber-500/10"      },

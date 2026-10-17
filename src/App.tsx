@@ -29,9 +29,9 @@ import Deferred from "./components/shared/Deferred";
 
 const PageTracker = () => { usePageTracker(); return null; };
 
-// Restores offline-cached data (notices/teachers/achievements/
-// school-settings/results) from IndexedDB on cold start so
-// Home, About, Contact, Notices, and Results can paint
+// Restores offline-cached data (notices/news/teachers/achievements/
+// school-settings/school-events/results) from IndexedDB on cold start so
+// Home, About, Contact, News, Notices, Calendar, and Results can paint
 // instantly even with no network, then keeps that cache updated in the
 // background whenever fresh data arrives. Scoped to a small allow-list of
 // query keys — see src/lib/queryPersist.ts.
@@ -44,7 +44,7 @@ const OfflineCacheBootstrap = ({ queryClient }: { queryClient: QueryClient }) =>
   return null;
 };
 
-// Quietly pre-loads the JS for About/Contact/Notices/Results
+// Quietly pre-loads the JS for About/Contact/News/Notices/Calendar/Results
 // AND Admission/Notes (list + subject page) once the homepage has finished
 // its own work, so those pages are already cached and work offline even on
 // a person's very first visit — not just after they've manually opened
@@ -92,6 +92,7 @@ const Home             = lazyWithRetry(() => import("./pages/Home"));
 const About            = lazyWithRetry(() => import("./pages/About"));
 const Teachers         = lazyWithRetry(() => import("./pages/Teachers"));
 const Notices          = lazyWithRetry(() => import("./pages/Notices"));
+const News             = lazyWithRetry(() => import("./pages/News"));
 const Results          = lazyWithRetry(() => import("./pages/Results"));
 const Gallery          = lazyWithRetry(() => import("./pages/Gallery"));
 const Library          = lazyWithRetry(() => import("./pages/Library"));
@@ -109,8 +110,10 @@ const NotFound         = lazyWithRetry(() => import("./pages/NotFound"));
 const Admission        = lazyWithRetry(() => import("./pages/Admission"));
 const DutyPage         = lazyWithRetry(() => import("./pages/Duty"));
 const Search           = lazyWithRetry(() => import("./pages/Search"));
+const NewsDetail       = lazyWithRetry(() => import("./pages/NewsDetail"));
 const NoticeDetail     = lazyWithRetry(() => import("./pages/NoticeDetail"));
 const Contact          = lazyWithRetry(() => import("./pages/Contact"));
+const Calendar         = lazyWithRetry(() => import("./pages/Calendar"));
 const FAQ              = lazyWithRetry(() => import("./pages/FAQ"));
 const MeritList        = lazyWithRetry(() => import("./pages/MeritList"));
 
@@ -234,9 +237,12 @@ const App = () => (
                 <Route path="/"                     element={<Home />} />
                 <Route path="/about"                element={<About />} />
                 <Route path="/contact"              element={<Contact />} />
+                <Route path="/calendar"             element={<Calendar />} />
                 <Route path="/teachers"             element={<Teachers />} />
                 <Route path="/notices"              element={<Notices />} />
                 <Route path="/notices/:id"          element={<NoticeDetail />} />
+                <Route path="/news"                 element={<News />} />
+                <Route path="/news/:id"             element={<NewsDetail />} />
                 <Route path="/search"               element={<Search />} />
                 <Route path="/results"              element={<Results />} />
                 <Route path="/merit-list"           element={<MeritList />} />

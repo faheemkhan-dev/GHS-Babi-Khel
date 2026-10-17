@@ -13,7 +13,7 @@
   "resources": [
     {
       "name": "AI Data Feed",
-      "description": "Complete live JSON snapshot of every dynamic public fact on the site: admission procedure and status, results info, latest notices, contacts, and the full FAQ. One round trip returns everything an AI tool needs to answer questions about the school.",
+      "description": "Complete live JSON snapshot of every dynamic public fact on the site: admission procedure and status, results info, latest notices, news, events, contacts, and the full FAQ. One round trip returns everything an AI tool needs to answer questions about the school.",
       "type": "application/json",
       "method": "GET",
       "url": "https://ghsbabikhel.dpdns.org/api/ai-data",
@@ -38,7 +38,7 @@
     },
     {
       "name": "RSS Feed",
-      "description": "RSS 2.0 feed of the latest school notices, for feed readers and automated monitoring.",
+      "description": "RSS 2.0 feed of the latest school notices and news, for feed readers and automated monitoring.",
       "type": "application/rss+xml",
       "method": "GET",
       "url": "https://ghsbabikhel.dpdns.org/rss.xml"
@@ -49,6 +49,13 @@
       "type": "text/plain",
       "method": "GET",
       "url": "https://ghsbabikhel.dpdns.org/robots.txt"
+    },
+    {
+      "name": "Calendar (ICS)",
+      "description": "iCalendar (.ics) feed of school events and exam dates, subscribable in any calendar app.",
+      "type": "text/calendar",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/calendar.ics"
     },
     {
       "name": "Humans",
@@ -77,13 +84,15 @@
     }
   ],
   "pages": [
-    { "path": "/", "description": "Homepage — school overview, stats, latest notices" },
+    { "path": "/", "description": "Homepage — school overview, stats, latest news and notices" },
     { "path": "/about", "description": "About the school, history, mission and principal's message" },
     { "path": "/admission", "description": "Online admission application and procedure" },
     { "path": "/results", "description": "Exam results lookup (school and BISE Peshawar)" },
     { "path": "/merit-list", "description": "Published merit lists of top-performing students" },
     { "path": "/roll-no-slip", "description": "Roll number slip download for board exams" },
     { "path": "/notices", "description": "Latest school notices" },
+    { "path": "/news", "description": "Latest school news articles" },
+    { "path": "/calendar", "description": "School events and exam calendar" },
     { "path": "/notes", "description": "Study notes organised by subject" },
     { "path": "/library", "description": "Digital library of books and resources" },
     { "path": "/gallery", "description": "Photo gallery of school events" },

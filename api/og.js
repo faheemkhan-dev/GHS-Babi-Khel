@@ -424,30 +424,33 @@ function getResultsExtraSchemas(url) {
 }
 
 // Static route metadata — mirrors RouteSEOInjector.tsx's ROUTES table.
-// Dynamic detail pages (/notices/:id, /notes/:subject/:chapter)
+// Dynamic detail pages (/news/:id, /notices/:id, /notes/:subject/:chapter)
 // use a sensible generic description below since this function has no
 // database access; the canonical URL still points at the exact shared
 // link, so the destination is always correct even though the preview
 // text is generic for those specific pages.
 const ROUTES = [
-  { pattern: "/", title: "GHS Babi Khel — Government High School, District Mohmand KPK", description: "Government High School Babi Khel, District Mohmand, KPK Pakistan. Quality education, notices, results, library and admissions." },
+  { pattern: "/", title: "GHS Babi Khel — Government High School, District Mohmand KPK", description: "Government High School Babi Khel, District Mohmand, KPK Pakistan. Quality education, notices, news, results, library and admissions." },
   { pattern: "/about", title: "About GHS Babi Khel — History, Mission & Vision | District Mohmand KPK", description: "Learn about Government High School Babi Khel — our history since 2018, mission, vision, faculty and commitment to quality education in District Mohmand." },
   { pattern: "/teachers", title: "Teachers & Faculty — GHS Babi Khel | District Mohmand KPK", description: "Meet the qualified teachers and faculty of GHS Babi Khel — dedicated educators shaping the future of students in District Mohmand, KPK." },
   { pattern: "/notices", title: "School Notices & Announcements — GHS Babi Khel", description: "Browse the latest school notices, urgent announcements, academic updates and event information from Government High School Babi Khel." },
+  { pattern: "/news", title: "News & Updates — GHS Babi Khel | District Mohmand", description: "Read the latest news, stories and achievements from Government High School Babi Khel — events, sports, academics and student success." },
   { pattern: "/results", title: "BISE Peshawar Result 2026 — SSC Result, BISEP Result, Peshawar Board Result | GHS Babi Khel", description: "Check BISE Peshawar Result 2026 by roll number — SSC Result (9th & 10th class), HSSC Result (11th & 12th class), BISEP Result, Peshawar Board Result, Annual-I & Annual-II exams. Fast, free, mobile-friendly BISE Peshawar board result lookup powered by GHS Babi Khel." },
   { pattern: "/merit-list", title: "Merit List — Official School Exam Rankings | GHS Babi Khel", description: "Official GHS Babi Khel merit list — top position holders of every exam, class-wise and whole-school rankings with marks, percentages and grades." },
   { pattern: "/result-card", title: "Result Card — GHS Babi Khel Student Performance Report", description: "Download or view your detailed student result card from GHS Babi Khel with subject-wise marks, grade and overall performance." },
   { pattern: "/gallery", title: "Photo Gallery — GHS Babi Khel School Events & Activities", description: "Explore the photo and video gallery of Government High School Babi Khel — events, sports, academic activities and celebrations." },
   { pattern: "/library", title: "Digital Library — GHS Babi Khel | Books, Notes & Past Papers", description: "Access the digital library of GHS Babi Khel — books, study notes, past papers and educational resources for all classes." },
   { pattern: "/weather", title: "Weather — District Mohmand KPK | GHS Babi Khel", description: "Live weather forecast for Babi Khel and District Mohmand, KPK — temperature, conditions and outlook for the school community." },
+  { pattern: "/calendar", title: "School Event Calendar — GHS Babi Khel | Exams, Holidays & PTMs", description: "View the official school calendar of GHS Babi Khel — exam dates, holidays, PTMs, sports days, results day and important events. Subscribe via .ics feed for automatic sync to Google Calendar or iPhone." },
   { pattern: "/contact", title: "Contact GHS Babi Khel — Address, Phone & Email | District Mohmand", description: "Contact Government High School Babi Khel, District Mohmand, KPK. Find our address, phone number, email, WhatsApp and location map. Reach out for admissions, queries and feedback." },
   { pattern: "/admission", title: "Admissions Open — GHS Babi Khel | Apply Online District Mohmand", description: "Apply for admission at Government High School Babi Khel — eligibility, fee structure, required documents and online application form." },
   { pattern: "/notes", title: "Study Notes — GHS Babi Khel | Subject-wise Notes & Resources", description: "Access subject-wise study notes, summaries and chapter resources for all classes at GHS Babi Khel — interactive learning made easy." },
   { pattern: "/duty", title: "School Duty Board — GHS Babi Khel | Class Monitors & Proctors", description: "View official duty assignments for GHS Babi Khel — class monitors, proctors, social workers, head boys and nazira for Classes 6 to 10." },
-  { pattern: "/search", title: "Search — GHS Babi Khel", description: "Search across notices, teachers and notes at Government High School Babi Khel." },
+  { pattern: "/search", title: "Search — GHS Babi Khel", description: "Search across notices, news, teachers and notes at Government High School Babi Khel." },
   // Dynamic / nested routes — generic but on-brand previews.
   { pattern: /^\/notes\/[^/]+\/[^/]+$/, title: "Chapter Notes — GHS Babi Khel | Detailed Study Material", description: "Read detailed chapter notes, examples and revision content. Interactive study resources for GHS Babi Khel students.", type: "article" },
   { pattern: /^\/notes\/[^/]+$/, title: "Subject Notes — GHS Babi Khel | Chapter-wise Study Material", description: "Browse chapter-wise notes and lessons for the selected subject. Comprehensive study material curated for GHS Babi Khel students." },
+  { pattern: /^\/news\/.+$/, title: "News Article — GHS Babi Khel", description: "Read the latest news from Government High School Babi Khel.", type: "article" },
   { pattern: /^\/notices\/.+$/, title: "School Notice — GHS Babi Khel", description: "Read the full school notice from Government High School Babi Khel.", type: "article" },
 ];
 

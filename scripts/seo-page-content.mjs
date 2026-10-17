@@ -52,10 +52,12 @@ export const NAV_LINKS = [
   ["Contact", "/contact"],
   ["Admission", "/admission"],
   ["Notices", "/notices"],
+  ["News", "/news"],
   ["Results", "/results"],
   ["Merit List", "/merit-list"],
   ["Result Card", "/result-card"],
   ["Roll No. Slip", "/roll-no-slip"],
+  ["Calendar", "/calendar"],
   ["Teachers", "/teachers"],
   ["Notes", "/notes"],
   ["Library", "/library"],
@@ -83,13 +85,13 @@ const PAGES = {
   "/": {
     title: "GHS Babi Khel — Government High School, District Mohmand KPK",
     description:
-      "Official website of Government High School (GHS) Babi Khel, District Mohmand, KPK, Pakistan. Online admission applications, exam results by roll number, notices, free study notes, past papers, teacher directory and photo gallery for classes 6 to 10.",
+      "Official website of Government High School (GHS) Babi Khel, District Mohmand, KPK, Pakistan. Online admission applications, exam results by roll number, notices, news, free study notes, past papers, academic calendar, teacher directory and photo gallery for classes 6 to 10.",
     h1: "Government High School Babi Khel — District Mohmand, KPK",
     blocks: [
       {
         p: [
           "Government High School (GHS) Babi Khel is a government high school in Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan, established in 2018 (EMIS code 60673). The school offers classes 6 to 10 and is affiliated with BISE Peshawar, the Board of Intermediate and Secondary Education Peshawar, whose examinations our class 9 and 10 students sit every year. Mr. Imdad Ullah is the principal of the school.",
-          "This official website is the school's digital front door. Students and parents can apply for admission online, search exam results by roll number, read official notices, download free study notes and past papers, browse the teacher directory and view photos of school events. The site also works as a Progressive Web App (PWA), so it can be installed on a phone and used offline.",
+          "This official website is the school's digital front door. Students and parents can apply for admission online, search exam results by roll number, read official notices and school news, download free study notes and past papers, check the academic calendar, browse the teacher directory and view photos of school events. The site also works as a Progressive Web App (PWA), so it can be installed on a phone and used offline.",
         ],
       },
       // Filled at build time with the REAL numbers from school_settings —
@@ -104,11 +106,13 @@ const PAGES = {
           "View the official Merit List — top position holders of each class and school-wide rankings with pass statistics",
           "Find, download and share your exam Roll No. Slip with its QR code and the exam date sheet",
           "Read official notices — holidays, exam schedules, fee deadlines and parent-teacher meetings",
+          "Read school news — events, achievements, sports and competitions",
           "Download free study notes for classes 6–10 in nine subjects",
-          "Check the teacher duty roster and staff directory",
+          "Check the academic calendar, teacher duty roster and staff directory",
         ],
       },
       { h2: "Latest notices", links: { source: "notices", empty: "Open the Notices page for the latest official notices." } },
+      { h2: "Latest news", links: { source: "news", empty: "Open the News page for the latest school news." } },
     ],
   },
 
@@ -169,7 +173,7 @@ const PAGES = {
       },
       {
         p: [
-          "For admission questions, please first check the Admission page — it explains eligibility, required documents and the online application process, and lets you track an already-submitted application. For exam dates and holidays, see the Notices page, which is updated by the school administration throughout the year.",
+          "For admission questions, please first check the Admission page — it explains eligibility, required documents and the online application process, and lets you track an already-submitted application. For exam dates and holidays, see the Notices page and the academic Calendar, which are updated by the school administration throughout the year.",
         ],
       },
     ],
@@ -241,6 +245,21 @@ const PAGES = {
     ],
   },
 
+  "/news": {
+    title: "News — GHS Babi Khel, District Mohmand",
+    description:
+      "News from Government High School Babi Khel — school events, student achievements, sports days, science fairs, competitions and announcements from District Mohmand, KPK.",
+    h1: "School News",
+    blocks: [
+      {
+        p: [
+          "Read the latest news from Government High School Babi Khel. We publish reports about school events, student achievements in exams and competitions, sports days, science fairs, guest lectures, cultural days and everything that happens around our campus in District Mohmand. Each article shows its publication date and can be opened for the full story with photos.",
+        ],
+      },
+      { h2: "Recent news", links: { source: "news", empty: "All current news articles are listed on this page." } },
+    ],
+  },
+
   "/results": {
     title: "Results — Search by Roll Number | GHS Babi Khel",
     description:
@@ -284,6 +303,20 @@ const PAGES = {
       {
         p: [
           "The Result Card page shows a complete, detailed result card for any published exam of Government High School Babi Khel. Enter the exam, class and roll number to see the student's name, photo, roll number, class and exam year, together with total and obtained marks, percentage, grade, pass or fail status, class position and a subject-wise marks breakdown. The card can be printed or saved as PDF for admission and record purposes.",
+        ],
+      },
+    ],
+  },
+
+  "/calendar": {
+    title: "Academic Calendar — GHS Babi Khel",
+    description:
+      "Academic calendar of GHS Babi Khel — exam dates, holidays, school events and important dates for classes 6–10. Subscribe on your phone with the ICS calendar feed.",
+    h1: "Academic Calendar",
+    blocks: [
+      {
+        p: [
+          "The academic calendar lists the important dates of Government High School Babi Khel: examination dates and schedules, holidays, school events, parent-teacher meetings and activity days. The calendar is maintained by the school administration and updated during the year. Students and parents can subscribe to the calendar on any phone using the ICS feed (calendar.ics), so school events appear directly in their phone's calendar app.",
         ],
       },
     ],
@@ -504,7 +537,7 @@ function buildContentHtml(route) {
         `<ul>${block.ul.map((li) => `<li>${escapeHtml(li)}</li>`).join("")}</ul>`
       );
     if (block.links) {
-      // Dynamic lists (latest notices) are filled by the prerender lib
+      // Dynamic lists (latest notices/news) are filled by the prerender lib
       // at build time; here we only render the container marker.
       const src = block.links.source;
       parts.push(`<ul data-ghs-list="${src}"></ul>`);
@@ -682,7 +715,7 @@ export function buildFallbackHtml(shellHtml, route, listFiller) {
   const canonical = `${SITE_URL}${route === "/" ? "/" : route}`;
   const contentHtml = buildContentHtml(route);
 
-  // Fill dynamic lists (latest notices) if the build could reach the DB.
+  // Fill dynamic lists (latest notices/news) if the build could reach the DB.
   let html = contentHtml;
   if (listFiller) html = listFiller(html);
 

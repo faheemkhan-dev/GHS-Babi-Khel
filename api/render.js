@@ -31,9 +31,9 @@
 // ──────────────────────
 // The site ships build-time prerendered pages (great for humans and as a
 // crawlable floor), but their content freezes at the last deploy. The admin
-// changes admission status and publishes notices/results in the dashboard
-// daily — AI and search crawlers must see those changes in near-real-time,
-// not next deploy.
+// changes admission status, publishes notices/news/results and edits events
+// in the dashboard daily — AI and search crawlers must see those changes in
+// near-real-time, not next deploy.
 //
 // HOW IT WORKS (classic SaaS "dynamic rendering")
 // ───────────────────────────────────────────────
@@ -42,7 +42,7 @@
 //   2. Those requests are proxied HERE (?path=/admission …).
 //   3. This function fetches the LIVE data from Supabase (same tables the
 //      admin dashboard writes to) and returns a complete, standalone,
-//      semantic HTML document: real headings, lists, full notice text,
+//      semantic HTML document: real headings, lists, full notice/news text,
 //      per-route JSON-LD (FAQPage, ItemList, Article…), canonical + OG tags.
 //   4. Humans are NOT affected — they still get the real React app, identical
 //      design and behaviour. Nothing visual changes for users.
@@ -51,15 +51,15 @@
 //   • Same facts as the React pages (same database, same tables).
 //   • Every page ends with full internal navigation → one fetch lets a
 //     crawler discover every public section of the site.
-//   • Detail routes /notices/<id> render the FULL content of any published
-//     item — not just the latest 20 that are prerendered.
+//   • Detail routes /notices/<id> and /news/<id> render the FULL content of
+//     any published item — not just the latest 20 that are prerendered.
 //
 // ── MODE 2: LIVE MACHINE-READABLE FEED FOR AI TOOLS (?feed=ai) ──────────────
 //
 // One public JSON endpoint that carries the COMPLETE current state of every
 // dynamic thing on the site, straight from the database. An AI tool fetches
 // this single URL and gets the latest admission procedure + status, results
-// info, notices, contacts and the full FAQ — in one round trip.
+// info, notices, news, events, contacts and the full FAQ — in one round trip.
 // Access (all open, GET only — aliases are rewrites in vercel.json):
 //   https://ghsbabikhel.dpdns.org/api/ai-data
 //   https://ghsbabikhel.dpdns.org/ai-data.json
@@ -96,7 +96,7 @@ export const maxDuration = 10;
 //     try/catch and a sensible static fallback. A Supabase hiccup degrades one
 //     section, never the whole endpoint.
 //   • NEVER LEAKS PRIVATE DATA: only genuinely public tables are read
-//     (school_settings, admission_settings, published notices,
+//     (school_settings, admission_settings, published notices/news/events,
 //     active teachers and library files). The
 //     `admissions` and `results` tables contain personal data and are NOT
 //     dumped here — the endpoints only explain how to search them.
@@ -184,7 +184,7 @@ async function fetchSchoolProfile() {
     tagline: s.tagline || "Excellence in Education",
     description:
       s.description ||
-      "Official website of Government High School Babi Khel — online admissions, exam results, notices, free study notes and more for classes 6 to 10.",
+      "Official website of Government High School Babi Khel — online admissions, exam results, notices, news, free study notes and more for classes 6 to 10.",
     // Real statistics from the admin dashboard (shown to AI crawlers so they
     // never read misleading "0+" placeholders — only values the school set).
     total_students: typeof s.total_students === "number" ? s.total_students : null,
@@ -258,6 +258,57 @@ async function fetchNotices(limit = 20) {
     published_at: n.created_at,
     url: `${SITE_URL}/notices/${n.id}`,
   }));
+}
+
+async function fetchNews(limit = 20) {
+  const rows = await safeQuery("news", (sb) =>
+    sb
+      .from("news")
+      .select("id, title, content, image_url, created_at")
+      .eq("is_published", true)
+      .order("created_at", { ascending: false })
+      .limit(limit)
+  );
+  return rows.map((n) => ({
+    id: n.id,
+    title: n.title,
+    content: (n.content || "").slice(0, 2000),
+    image_url: n.image_url || null,
+    published_at: n.created_at,
+    url: `${SITE_URL}/news/${n.id}`,
+  }));
+}
+
+async function fetchEvents(limit = 30) {
+  const today = new Date().toISOString().slice(0, 10);
+  // Upcoming first (soonest → latest), then recent past as context.
+  const upcoming = await safeQuery("school_events_upcoming", (sb) =>
+    sb
+      .from("school_events")
+      .select("id, title, description, event_type, start_date, end_date, updated_at")
+      .eq("is_published", true)
+      .or(`end_date.gte.${today},and(end_date.is.null,start_date.gte.${today})`)
+      .order("start_date", { ascending: true })
+      .limit(limit)
+  );
+  const recent = await safeQuery("school_events_recent", (sb) =>
+    sb
+      .from("school_events")
+      .select("id, title, description, event_type, start_date, end_date, updated_at")
+      .eq("is_published", true)
+      .lt("start_date", today)
+      .order("start_date", { ascending: false })
+      .limit(10)
+  );
+  const shape = (e) => ({
+    id: e.id,
+    title: e.title,
+    description: e.description || null,
+    type: e.event_type || "general",
+    start_date: e.start_date,
+    end_date: e.end_date || null,
+  });
+  return { upcoming: upcoming.map(shape), recent: recent.map(shape) };
 }
 
 async function fetchTeachers(limit = 50) {
@@ -630,6 +681,8 @@ const SECTION_FETCHERS = {
   admission: fetchAdmissionInfo,
   admissionFiles: fetchAdmissionFiles,
   notices: () => fetchNotices(20),
+  news: () => fetchNews(20),
+  events: () => fetchEvents(30),
   teachers: () => fetchTeachers(50),
   library: () => fetchLibraryFiles(20),
   meritLists: () => fetchMeritLists(10),
@@ -646,13 +699,15 @@ const SECTION_FETCHERS = {
 // which is what produced the "crawler timeout" reports on /faq. Now a page
 // only queries the sections it actually renders, so responses are fast.
 const ROUTE_SECTIONS = {
-  "/":                ["school", "admission", "admissionFiles", "notices"],
+  "/":                ["school", "admission", "admissionFiles", "notices", "news", "events"],
   "/admission":       ["school", "admission", "admissionFiles"],
   "/notices":         ["school", "notices"],
+  "/news":            ["school", "news"],
   "/results":         ["school", "exams"],
   "/merit-list":      ["school", "exams", "meritLists"],
   "/roll-no-slip":    ["school", "exams", "rollSlips"],
   "/result-card":     ["school", "exams"],
+  "/calendar":        ["school", "events"],
   "/teachers":        ["school", "teachers"],
   "/gallery":         ["school", "gallery"],
   "/library":         ["school", "library"],
@@ -663,7 +718,7 @@ const ROUTE_SECTIONS = {
   "/contact":         ["school"],
   // every /notes/<subject> and /notes/<subject>/<chapter> route
   __notes:            ["school", "notes"],
-  // notice detail pages
+  // notice/news detail pages
   __detail:           ["school"],
 };
 
@@ -672,7 +727,7 @@ const ROUTE_SECTIONS = {
 function sectionsForRoute(route) {
   if (ROUTE_SECTIONS[route]) return ROUTE_SECTIONS[route];
   if (route.startsWith("/notes/")) return ROUTE_SECTIONS.__notes;
-  return ROUTE_SECTIONS.__detail; // detail pages (notices/<id>)
+  return ROUTE_SECTIONS.__detail; // detail pages (notices/news/<id>)
 }
 
 /**
@@ -717,6 +772,8 @@ async function getLiveSiteData(sections) {
   data.admission = data.admission || { currently_open: null, how_to_apply: [], required_documents: [] };
   data.admissionFiles = data.admissionFiles || [];
   data.notices = data.notices || [];
+  data.news = data.news || [];
+  data.events = data.events || { upcoming: [], recent: [] };
   data.teachers = data.teachers || [];
   data.library = data.library || [];
   data.meritLists = data.meritLists || [];
@@ -781,8 +838,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // Static routes this renderer accepts (mirrors prerender STATIC_ROUTES).
 const STATIC_ROUTES = new Set([
-  "/", "/about", "/contact", "/admission", "/notices", "/results",
-  "/merit-list", "/roll-no-slip", "/result-card", "/teachers", "/gallery", "/library",
+  "/", "/about", "/contact", "/admission", "/notices", "/news", "/results",
+  "/merit-list", "/roll-no-slip", "/result-card", "/calendar", "/teachers", "/gallery", "/library",
   "/duty", "/notes", "/notes/math", "/notes/physics",
   "/notes/chemistry", "/notes/biology", "/notes/english", "/notes/urdu",
   "/notes/islamiat", "/notes/pakistan-studies", "/notes/computer", "/faq",
@@ -836,6 +893,18 @@ async function fetchNoticeDetail(id) {
   );
   return rows[0] || null;
 }
+async function fetchNewsDetail(id) {
+  const rows = await safeQuery(`news:${id}`, (sb) =>
+    sb
+      .from("news")
+      .select("id, title, content, image_url, created_at")
+      .eq("id", id)
+      .eq("is_published", true)
+      .limit(1)
+  );
+  return rows[0] || null;
+}
+
 // ── Small HTML helpers ───────────────────────────────────────────────────────
 const listHtml = (items) =>
   items.length
@@ -888,7 +957,7 @@ function admissionFilesHtml(admissionFiles) {
 /** Route-specific LIVE sections appended after the static blocks. */
 function liveSections(route, data) {
   const parts = [];
-  const { admission, admissionFiles, notices, exams, teachers, library, meritLists, rollSlips, gallery, notes, duty, school } = data;
+  const { admission, admissionFiles, notices, news, events, exams, teachers, library, meritLists, rollSlips, gallery, notes, duty, school } = data;
 
   // Notes subject / chapter pages are handled by their own builders below.
   const isNotesSubject = route.startsWith("/notes/") && route.split("/").filter(Boolean).length === 2;
@@ -914,6 +983,27 @@ function liveSections(route, data) {
           "Open the Notices page for the latest official notices."
         )
       );
+      parts.push("<h2>Latest news (live)</h2>");
+      parts.push(
+        linkList(
+          news.slice(0, 10).map((n) => [n.title, `/news/${n.id}`, prettyDate(n.published_at)]),
+          "Open the News page for the latest school news."
+        )
+      );
+      if (events.upcoming.length) {
+        parts.push("<h2>Upcoming events (live)</h2>");
+        parts.push(
+          `<table><tr><th>Date</th><th>Event</th></tr>${events.upcoming
+            .slice(0, 10)
+            .map(
+              (e) =>
+                `<tr><td>${esc(prettyDate(e.start_date))}</td><td>${esc(e.title)}${
+                  e.end_date && e.end_date !== e.start_date ? ` – ${esc(prettyDate(e.end_date))}` : ""
+                }</td></tr>`
+            )
+            .join("")}</table>`
+        );
+      }
       break;
     }
     case route === "/admission": {
@@ -948,6 +1038,19 @@ function liveSections(route, data) {
 <p>${esc((n.content || "").slice(0, 600))}${(n.content || "").length > 600 ? "…" : ""}</p></article>`
           )
           .join("") || `<p class="meta">No notices published yet.</p>`
+      );
+      break;
+    }
+    case route === "/news": {
+      parts.push("<h2>All recent news (live, newest first)</h2>");
+      parts.push(
+        news
+          .map(
+            (n) => `<article><h3><a href="/news/${esc(n.id)}">${esc(n.title)}</a></h3>
+<p class="meta">${esc(prettyDate(n.published_at))}</p>
+<p>${esc((n.content || "").slice(0, 600))}${(n.content || "").length > 600 ? "…" : ""}</p></article>`
+          )
+          .join("") || `<p class="meta">No news published yet.</p>`
       );
       break;
     }
@@ -1049,6 +1152,29 @@ function liveSections(route, data) {
       } else {
         parts.push(`<p class="meta">No roll number slips are published or scheduled right now. When the school administration releases exam roll numbers, students find and download their own slip on the Roll No. Slip page by picking their class and typing their full name.</p>`);
       }
+      break;
+    }
+    case route === "/calendar": {
+      parts.push("<h2>School events (live)</h2>");
+      if (events.upcoming.length) {
+        parts.push("<h3>Upcoming</h3>");
+        parts.push(
+          `<table><tr><th>Date</th><th>Event</th><th>Type</th></tr>${events.upcoming
+            .map(
+              (e) =>
+                `<tr><td>${esc(prettyDate(e.start_date))}${e.end_date && e.end_date !== e.start_date ? ` – ${esc(prettyDate(e.end_date))}` : ""}</td><td>${esc(e.title)}${e.description ? `<br><span class="meta">${esc(e.description)}</span>` : ""}</td><td>${esc(e.type)}</td></tr>`
+            )
+            .join("")}</table>`
+        );
+      }
+      if (events.recent.length) {
+        parts.push("<h3>Recent past</h3>");
+        parts.push(
+          `<ul>${events.recent.slice(0, 8).map((e) => `<li>${esc(e.title)} — ${esc(prettyDate(e.start_date))}</li>`).join("")}</ul>`
+        );
+      }
+      if (!events.upcoming.length && !events.recent.length)
+        parts.push(`<p class="meta">No events published yet.</p>`);
       break;
     }
     case route === "/teachers": {
@@ -1385,16 +1511,18 @@ function jsonLdFor(route, data, detail, pageName) {
   //    can show breadcrumb rich results in SERPs (the "Home > Section > Page"
   //    trail that replaces the bare URL in the search snippet). Maps each
   //    route to its section + page name; detail routes use the item's title.
-  //    Drives BreadcrumbList schema for /about, /contact, /notices,
-  //    /results, /merit-list, /roll-no-slip, /teachers, /library,
+  //    Drives BreadcrumbList schema for /about, /contact, /news, /notices,
+  //    /results, /merit-list, /roll-no-slip, /calendar, /teachers, /library,
   //    /gallery, /faq, /duty, /admission, /result-card, /notes, /notes/<subj>,
-  //    /notes/<subj>/<chapter>, /notices/<id>.
+  //    /notes/<subj>/<chapter>, /notices/<id>, /news/<id>.
   const BREADCRUMB_MAP = {
     "/about":        ["Our School",      "About"],
     "/contact":      ["Our School",      "Contact"],
     "/faq":          ["Our School",      "FAQ"],
     "/gallery":      ["Our School",      "Gallery"],
-    "/notices":      ["Announcements", "Notices"],
+    "/news":         ["News & Events",   "News"],
+    "/notices":      ["News & Events",   "Notices"],
+    "/calendar":     ["News & Events",   "Calendar"],
     "/results":      ["Results",         "Exam Results"],
     "/merit-list":   ["Results",         "Merit List"],
     "/roll-no-slip": ["Results",         "Roll No. Slip"],
@@ -1437,6 +1565,12 @@ function jsonLdFor(route, data, detail, pageName) {
     breadcrumbItems = [
       { name: "Home", url: SITE_URL },
       { name: "Notices", url: `${SITE_URL}/notices` },
+      { name: detail.title, url: `${SITE_URL}${route}` },
+    ];
+  } else if (route.startsWith("/news/") && detail) {
+    breadcrumbItems = [
+      { name: "Home", url: SITE_URL },
+      { name: "News", url: `${SITE_URL}/news` },
       { name: detail.title, url: `${SITE_URL}${route}` },
     ];
   }
@@ -1525,9 +1659,31 @@ function jsonLdFor(route, data, detail, pageName) {
       })),
     });
   }
+  if (route === "/news" && data.news.length) {
+    graph.push({
+      "@type": "ItemList",
+      name: "Recent news — GHS Babi Khel",
+      itemListElement: data.news.slice(0, 20).map((n, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        name: n.title,
+        url: n.url,
+      })),
+    });
+  }
   if (route.startsWith("/notices/") && detail) {
     graph.push({
       "@type": "Article",
+      headline: detail.title,
+      datePublished: detail.created_at,
+      author: { "@type": "Organization", name: "GHS Babi Khel" },
+      publisher: { "@type": "Organization", name: "GHS Babi Khel" },
+      mainEntityOfPage: `${SITE_URL}${route}`,
+    });
+  }
+  if (route.startsWith("/news/") && detail) {
+    graph.push({
+      "@type": "NewsArticle",
       headline: detail.title,
       datePublished: detail.created_at,
       author: { "@type": "Organization", name: "GHS Babi Khel" },
@@ -1542,13 +1698,15 @@ function jsonLdFor(route, data, detail, pageName) {
 
 // Static, timeless navigation + procedures that belong in every snapshot.
 const PAGES_GUIDE = [
-  { path: "/", purpose: "School overview, latest notices and highlights" },
+  { path: "/", purpose: "School overview, latest notices, news and highlights" },
   { path: "/admission", purpose: "Online admission application form + application status tracker (classes 6–10)" },
   { path: "/results", purpose: "Search school exam results by roll number; BISE Peshawar SSC results live from the board portal" },
   { path: "/merit-list", purpose: "Official merit list — top position holders and class/whole-school exam rankings published by the school office, with pass statistics and a live countdown while a list is scheduled" },
   { path: "/roll-no-slip", purpose: "Exam roll number slips — a student picks their class and types their full name to view, download (PDF with QR code) or share their own slip; a live countdown shows while a release is scheduled" },
   { path: "/result-card", purpose: "Detailed result cards with subject-wise marks, grades and class position" },
   { path: "/notices", purpose: "Official notices — exams, holidays, fee deadlines, parent-teacher meetings" },
+  { path: "/news", purpose: "School news — events, achievements, sports" },
+  { path: "/calendar", purpose: "Academic calendar — exam dates, holidays, events (ICS feed: /calendar.ics)" },
   { path: "/teachers", purpose: "Teaching staff directory" },
   { path: "/notes", purpose: "Free study notes for 9 subjects, classes 6–10, with quizzes and flashcards. Subject pages at /notes/<subject-slug> and individual chapters at /notes/<subject-slug>/<chapter-slug>" },
   { path: "/library", purpose: "Downloadable books, notes and past papers (each item links to its file)" },
@@ -1604,7 +1762,7 @@ async function aiDataHandler(req, res) {
     meta: {
       name: "GHS Babi Khel — AI data feed",
       description:
-        "Live, machine-readable snapshot of Government High School Babi Khel (District Mohmand, KPK, Pakistan): school profile with real statistics, admission status and procedure, results info, published merit lists, roll-number-slip sessions, latest notices, teachers, library files, study notes subjects and chapters, photo gallery albums, duty roster, and the full FAQ. Generated on request from the school's own database — safe to quote.",
+        "Live, machine-readable snapshot of Government High School Babi Khel (District Mohmand, KPK, Pakistan): school profile with real statistics, admission status and procedure, results info, published merit lists, roll-number-slip sessions, latest notices, news, events, teachers, library files, study notes subjects and chapters, photo gallery albums, duty roster, and the full FAQ. Generated on request from the school's own database — safe to quote.",
       generated_at: new Date().toISOString(),
       generated_at_display: `${nowInSchoolTz()} (PKT)`,
       timezone: "Asia/Karachi",
@@ -1699,6 +1857,12 @@ async function aiDataHandler(req, res) {
 
     // ── Latest content (live, newest first) ─────────────────────────────────
     latest_notices: data.notices,
+    latest_news: data.news,
+    calendar: {
+      upcoming_events: data.events.upcoming,
+      recent_events: data.events.recent,
+      subscribe_ics: "https://ghsbabikhel.dpdns.org/calendar.ics",
+    },
     teachers: data.teachers,
     library: data.library,
 
@@ -1773,10 +1937,10 @@ async function renderHandler(req, res) {
   if (route.length > 1 && route.endsWith("/")) route = route.slice(0, -1);
   if (!route.startsWith("/")) route = "/" + route;
 
-  // Detail routes: /notices/<uuid>
-  const detailMatch = route.match(/^\/notices\/([^/]+)$/);
+  // Detail routes: /notices/<uuid>, /news/<uuid>
+  const detailMatch = route.match(/^\/(notices|news)\/([^/]+)$/);
   let detail = null;
-  const detailKind = "notices";
+  let detailKind = null;
 
   // Notes routes: /notes/<subject> and /notes/<subject>/<chapter>
   const notesMatch = route.match(/^\/notes\/([^/]+)(?:\/([^/]+))?$/);
@@ -1786,11 +1950,12 @@ async function renderHandler(req, res) {
   let notesEarlyData = null; // snapshot fetched during notes resolution
 
   if (detailMatch) {
-    const id = detailMatch[1];
+    detailKind = detailMatch[1];
+    const id = detailMatch[2];
     if (!UUID_RE.test(id)) {
       return res.status(404).setHeader("Content-Type", "text/html; charset=utf-8").send(notFoundHtml(route));
     }
-    detail = await fetchNoticeDetail(id);
+    detail = detailKind === "notices" ? await fetchNoticeDetail(id) : await fetchNewsDetail(id);
     if (!detail) {
       return res.status(404).setHeader("Content-Type", "text/html; charset=utf-8").send(notFoundHtml(route));
     }
@@ -1867,10 +2032,10 @@ async function renderHandler(req, res) {
   // ── Title / description ────────────────────────────────────────────────────
   let title, description, h1;
   if (detail) {
-    title = `${detail.title} — Notice | GHS Babi Khel`;
+    title = `${detail.title} — ${detailKind === "notices" ? "Notice" : "News"} | GHS Babi Khel`;
     description =
       (detail.content || "").replace(/\s+/g, " ").trim().slice(0, 155) ||
-      `Official notice from Government High School Babi Khel, District Mohmand.`;
+      `${detailKind === "notices" ? "Official notice" : "News article"} from Government High School Babi Khel, District Mohmand.`;
     h1 = detail.title;
   } else if (notesSubject && notesChapter) {
     title = `${notesChapter.title} — ${notesSubject.name} Notes | GHS Babi Khel`;
@@ -1914,7 +2079,7 @@ async function renderHandler(req, res) {
       detail.category ? ` · ${esc(detail.category)}` : ""
     }${detail.is_urgent ? " · <strong>URGENT</strong>" : ""}</p>
 ${detail.content ? detail.content.split(/\n{2,}|\n/).map((p) => `<p>${esc(p)}</p>`).join("") : "<p class=\"meta\">(No further text — see the page for details or contact the school.)</p>"}
-<p><a href="/notices">← All notices</a></p>`;
+<p><a href="/${detailKind}">← All ${detailKind}</a></p>`;
   } else if (notesSubject && notesChapter) {
     // Chapter page — full study notes as text excerpt + context.
     const excerpt = chapterTextExcerpt(notesChapter.content, 4000);
@@ -1996,7 +2161,7 @@ ${notesChapter.audio_enabled ? `<p class="meta">Audio narration is available for
 <link rel="canonical" href="${esc(canonical)}" />
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
 <meta name="generator" content="GHS Babi Khel live renderer — dynamic rendering for AI/search crawlers; humans receive the full interactive site" />
-<meta property="og:type" content="website" />
+<meta property="og:type" content="${detail && detailKind === "news" ? "article" : "website"}" />
 <meta property="og:site_name" content="${esc(SITE_NAME)}" />
 <meta property="og:title" content="${esc(title)}" />
 <meta property="og:description" content="${esc(description)}" />
@@ -2019,7 +2184,7 @@ ${notesChapter.audio_enabled ? `<p class="meta">Audio narration is available for
 ${contentHtml}
 <h2>Website sections</h2>
 ${nav ? `<nav>${nav}</nav>` : ""}
-<p>Machine-readable data: <a href="/api/ai-data">/api/ai-data</a> (live JSON — school profile, admission status, notices, FAQ) · <a href="/llms.txt">/llms.txt</a> · <a href="/sitemap.xml">/sitemap.xml</a> · <a href="/rss.xml">/rss.xml</a></p>
+<p>Machine-readable data: <a href="/api/ai-data">/api/ai-data</a> (live JSON — school profile, admission status, notices, news, events, FAQ) · <a href="/llms.txt">/llms.txt</a> · <a href="/sitemap.xml">/sitemap.xml</a> · <a href="/rss.xml">/rss.xml</a></p>
 </main>
 <footer>
   <div class="wrap" style="padding:0">

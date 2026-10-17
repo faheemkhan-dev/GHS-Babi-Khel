@@ -24,7 +24,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //   1. writeAssetManifestAndPatchSW() — PWA offline manifest + per-build SW
 //      version stamp. Runs on EVERY call, before anything else.
-//   2. Chromium phase — renders every public route (plus latest notices
+//   2. Chromium phase — renders every public route (plus latest notices/news
 //      detail pages) with headless Chromium and writes dist/<route>/index.html
 //      with the FULL rendered DOM. Skipped when PRERENDER=false.
 //   3. Static fallback phase — for any public route the Chromium phase did
@@ -92,10 +92,12 @@ export const STATIC_ROUTES = [
   "/contact",
   "/admission",
   "/notices",
+  "/news",
   "/results",
   "/merit-list",
   "/roll-no-slip",   // ← was missing — root cause of Googlebot index failures
   "/result-card",
+  "/calendar",
   "/teachers",
   "/gallery",
   "/library",
@@ -221,10 +223,10 @@ async function fetchIds(table, limit) {
 
 /**
  * Latest published items for the static fallback lists. Returns
- * { notices, library, gallery, notes, stats } — empty values when the
+ * { notices, news, library, gallery, notes, stats } — empty values when the
  * env vars are missing or a fetch fails (fallback stays fully functional).
  *
- * EXTENDED (2026-08): previously only notices were injected at build
+ * EXTENDED (2026-08): previously only notices + news were injected at build
  * time, so the STATIC fallback pages for /library, /gallery and /notes were
  * almost content-free for any crawler that does not receive the live render
  * (weak AI tools with browser-like user-agents, offline archives, …). Now
@@ -236,6 +238,7 @@ async function fetchLatestLists(limit = 10) {
   const { url, key } = supabaseEnv();
   const out = {
     notices: [],
+    news: [],
     library: [],
     gallery: [],
     notes: [],
@@ -269,9 +272,10 @@ async function fetchLatestLists(limit = 10) {
       )
     );
 
-  const [notices, libraryRows, galleryRows, subjectRows, chapterRows, settingsRow, admissionFileRows] =
+  const [notices, news, libraryRows, galleryRows, subjectRows, chapterRows, settingsRow, admissionFileRows] =
     await Promise.all([
       grab("notices"),
+      grab("news"),
       withTimeout("library_files", (signal) =>
         fetch(
           `${url}/rest/v1/library_files?select=id,title,category,class,file_url,created_at&order=created_at.desc&limit=12`,
@@ -314,6 +318,7 @@ async function fetchLatestLists(limit = 10) {
     ]);
 
   out.notices = Array.isArray(notices) ? notices.filter((r) => r && r.id && r.title) : [];
+  out.news = Array.isArray(news) ? news.filter((r) => r && r.id && r.title) : [];
   out.library = Array.isArray(libraryRows) ? libraryRows.filter((r) => r && r.title) : [];
   out.admissionFiles = Array.isArray(admissionFileRows)
     ? admissionFileRows.filter((r) => r && r.title && r.file_url)
@@ -486,7 +491,7 @@ async function renderPage(context, route, outPath, originalPreloads) {
 /**
  * Fill dynamic lists inside a fallback page with build-time public data.
  * Handles:
- *   • <ul data-ghs-list="notices"></ul>   — latest published items
+ *   • <ul data-ghs-list="notices|news"></ul>   — latest published items
  *   • <ul data-ghs-list="library"></ul>        — latest library downloads
  *   • <ul data-ghs-list="gallery"></ul>        — photo albums with counts
  *   • <ul data-ghs-list="notes"></ul>          — note subjects + chapters
@@ -527,13 +532,13 @@ function makeListFiller(lists) {
       );
     }
 
-    for (const source of ["notices", "library", "gallery", "notes", "admission-files"]) {
+    for (const source of ["notices", "news", "library", "gallery", "notes", "admission-files"]) {
       const items = source === "admission-files" ? (lists && lists.admissionFiles) || [] : (lists && lists[source]) || [];
       const ulRe = new RegExp(`<ul data-ghs-list="${source}"></ul>`);
       const pRe = new RegExp(`\\s*<p data-ghs-empty="${source}">[\\s\\S]*?</p>`);
       if (items.length > 0) {
         let lis = "";
-        if (source === "notices") {
+        if (source === "notices" || source === "news") {
           lis = items
             .map((it) => {
               const date = it.created_at ? new Date(it.created_at) : null;
@@ -628,9 +633,9 @@ async function fillMissingRoutesWithStaticContent() {
   if (!existsSync(shellPath)) return { filled: [], skipped: "dist/index.html missing" };
 
   const shellHtml = await readFile(shellPath, "utf8");
-  let lists = { notices: [], library: [], gallery: [], notes: [], stats: null, subjectSlugs: [] };
+  let lists = { notices: [], news: [], library: [], gallery: [], notes: [], stats: null, subjectSlugs: [] };
   // Always fetch build-time data now — /library, /gallery, /notes and the
-  // stats blocks need it (previously only notices lists were fetched).
+  // stats blocks need it (previously only notices/news lists were fetched).
   lists = await fetchLatestLists(10);
 
   // Real DB subject slugs (e.g. "mathematics", "chemistry6") get their own
@@ -761,7 +766,10 @@ export async function runPrerender(source = "cli") {
         return route.continue();
       });
 
-      const noticeIds = await fetchIds("notices", DETAIL_LIMIT);
+      const [noticeIds, newsIds] = await Promise.all([
+        fetchIds("notices", DETAIL_LIMIT),
+        fetchIds("news", DETAIL_LIMIT),
+      ]);
       // Real DB subject slugs — prerender them with Chromium as well.
       const buildLists = await fetchLatestLists(10).catch(() => null);
       const subjectRoutes = ((buildLists && buildLists.subjectSlugs) || [])
@@ -771,10 +779,11 @@ export async function runPrerender(source = "cli") {
         ...STATIC_ROUTES,
         ...subjectRoutes,
         ...noticeIds.map((id) => `/notices/${id}`),
+        ...newsIds.map((id) => `/news/${id}`),
       ];
 
       console.log(
-        `\nPrerender: rendering ${routes.length} routes (${STATIC_ROUTES.length} static + ${subjectRoutes.length} note subjects + ${noticeIds.length} notices)…`
+        `\nPrerender: rendering ${routes.length} routes (${STATIC_ROUTES.length} static + ${subjectRoutes.length} note subjects + ${noticeIds.length} notices + ${newsIds.length} news)…`
       );
 
       for (const route of routes) {

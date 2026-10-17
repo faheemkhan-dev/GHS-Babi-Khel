@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Menu, X, GraduationCap, LogIn, UserPlus, ArrowRight,
   LayoutDashboard, LogOut, Shield, Search, ChevronDown, ChevronRight,
-  Home, Landmark, Mail, Megaphone,
+  Home, Landmark, Mail, Newspaper, Megaphone, CalendarDays,
   Trophy, Medal, BookOpen, Library, Images, ClipboardList, HelpCircle,
   Hash, Timer, Command as CommandIcon,
   Bell, FileSignature, type LucideIcon,
@@ -92,13 +92,15 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    id: "notices",
-    label: "Notices",
-    icon: Megaphone,
-    tagline: "Official announcements",
+    id: "news",
+    label: "News & Events",
+    icon: Newspaper,
+    tagline: "Latest updates & important dates",
     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light",
     links: [
+      { to: "/news",     label: "News",     icon: Newspaper,   desc: "Stories & latest updates",     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
       { to: "/notices",  label: "Notices",  icon: Megaphone,   desc: "Official announcements",       tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
+      { to: "/calendar", label: "Calendar", icon: CalendarDays, desc: "Events & academic dates",     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
     ],
   },
   {
@@ -379,12 +381,8 @@ const navIntentPrefetch = intentPrefetchHandlers();
 /* ── Desktop panel link row — clean, roomy list item: tinted icon chip,
       bold label + one-line description, gold active bar and an arrow that
       appears on hover. Plain element (no per-row JS animation) so panels
-      open instantly even on modest laptops.
-      PERF: wrapped in memo() so a scroll-direction flip (which sets
-      `scrolled`/`navHidden` on the parent <nav>) does NOT re-render every
-      desktop mega-row. The mega-row's props are stable references so the
-      memo boundary holds. ─────────────────────────────────────────────── */
-const MegaRow = memo(function MegaRow({ link, active, onNavigate }: {
+      open instantly even on modest laptops. ─────────────────────────── */
+function MegaRow({ link, active, onNavigate }: {
   link: NavLinkItem;
   active: boolean;
   onNavigate: () => void;
@@ -424,8 +422,7 @@ const MegaRow = memo(function MegaRow({ link, active, onNavigate }: {
       />
     </Link>
   );
-});
-MegaRow.displayName = "MegaRow";
+}
 
 /* ── Mobile menu rows — clean, professional list (same language as the
       GHSS Ghallanai mobile sheet): plain bold labels, hairline dividers,
@@ -864,25 +861,12 @@ const Navbar = () => {
 
   useEffect(() => { setLogoFailed(false); }, [settings?.logo_url]);
 
-  // Lock page scroll behind the open mobile menu (menu itself still scrolls).
-  // PERF: lock on documentElement (the <html> element) instead of body —
-  // toggling `overflow: hidden` on <body> triggers a synchronous layout
-  // reflow because the scrollbar width is restored/removed on <body>, which
-  // visibly stutters the open/close animation on low-end Android.
-  // <html>-level locking avoids that reflow in modern browsers because the
-  // scrollbar is part of the viewport, not the documentElement's content box.
+  // Lock page scroll behind the open mobile menu (menu itself still scrolls)
   useEffect(() => {
     if (!open) return;
-    const html = document.documentElement;
-    const body = document.body;
-    const prevHtml = html.style.overflow;
-    const prevBody = body.style.overflow;
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-    return () => {
-      html.style.overflow = prevHtml;
-      body.style.overflow = prevBody;
-    };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
   const prevPathnameRef = useRef(location.pathname);
   useEffect(() => {

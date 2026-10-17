@@ -5,7 +5,7 @@ import { useSchoolSettings } from "@/hooks/useSchoolSettings";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Users, GraduationCap, Bell, BookOpen, Image as ImageIcon,
+  Users, GraduationCap, Bell, Newspaper, BookOpen, Image as ImageIcon,
   Trophy, UserCog, TrendingUp, ClipboardList, Calendar,
   CheckCircle, AlertCircle, Activity, ArrowUpRight,
   FileText, BookMarked, MapPin, Landmark, Phone, Mail, Hash,
@@ -18,13 +18,14 @@ const useAdminStats = () =>
     queryKey: ["admin-stats-v2"],
     queryFn: async () => {
       const [
-        students, teachers, notices, library, albums,
+        students, teachers, notices, news, library, albums,
         users, achievements, results, pendingUsers,
         admissions, pendingAdmissions, notes,
       ] = await Promise.all([
         supabase.from("students").select("id", { count: "exact", head: true }),
         supabase.from("teachers").select("id", { count: "exact", head: true }),
         supabase.from("notices").select("id", { count: "exact", head: true }),
+        supabase.from("news").select("id", { count: "exact", head: true }),
         supabase.from("library_files").select("id", { count: "exact", head: true }),
         supabase.from("gallery_albums").select("id", { count: "exact", head: true }),
         supabase.from("profiles").select("id", { count: "exact", head: true }),
@@ -39,6 +40,7 @@ const useAdminStats = () =>
         students: students.count ?? 0,
         teachers: teachers.count ?? 0,
         notices: notices.count ?? 0,
+        news: news.count ?? 0,
         library: library.count ?? 0,
         albums: albums.count ?? 0,
         users: users.count ?? 0,
@@ -57,8 +59,9 @@ const useRecentActivity = () =>
   useQuery({
     queryKey: ["admin-recent-activity"],
     queryFn: async () => {
-      const [notices, admissions, users] = await Promise.all([
+      const [notices, news, admissions, users] = await Promise.all([
         supabase.from("notices").select("id, title, created_at").order("created_at", { ascending: false }).limit(3),
+        supabase.from("news").select("id, title, created_at").order("created_at", { ascending: false }).limit(3),
         supabase.from("admissions").select("id, full_name, created_at, status").order("created_at", { ascending: false }).limit(3),
         supabase.from("profiles").select("id, full_name, created_at, status").order("created_at", { ascending: false }).limit(3),
       ]);
@@ -68,6 +71,7 @@ const useRecentActivity = () =>
       type ActivityItem = { id: string; label: string; time: string; type: string; status?: string };
       const items: ActivityItem[] = [
         ...(notices.data ?? []).map((n: any) => ({ id: n.id, label: n.title || "Untitled notice", time: n.created_at, type: "notice" })),
+        ...(news.data ?? []).map((n: any) => ({ id: n.id, label: n.title || "Untitled article", time: n.created_at, type: "news" })),
         ...(admissions.data ?? []).map((a: any) => ({ id: a.id, label: a.full_name || "Unknown applicant", time: a.created_at, type: "admission", status: a.status })),
         ...(users.data ?? []).map((u: any) => ({ id: u.id, label: u.full_name || "Unknown user", time: u.created_at, type: "user", status: u.status })),
       ];
@@ -227,6 +231,7 @@ const PassRateRing = ({ value }: { value: number }) => {
 /* ─── Activity meta ─────────────────────────────────────────── */
 const ACTIVITY_META: Record<string, { Icon: React.ElementType; chip: string; kicker: string }> = {
   notice:    { Icon: Bell,          chip: "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400",   kicker: "Notice" },
+  news:      { Icon: Newspaper,     chip: "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400",       kicker: "News" },
   admission: { Icon: GraduationCap, chip: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400", kicker: "Admission" },
   user:      { Icon: UserCog,       chip: "bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400", kicker: "User" },
 };
@@ -254,10 +259,11 @@ const AdminOverview = () => {
       badge: stats?.pendingAdmissions ? { text: `${n(stats.pendingAdmissions)} pending`, urgent: true } : undefined },
   ];
 
-  /* Split the remaining into separate rows so every row closes cleanly —
-     a single block always leaves a half-width orphan. */
+  /* Split the remaining 7 into 3 + 4 so every row closes cleanly —
+     a single 7-tile block always leaves a half-width orphan. */
   const publishingStats = [
     { key: "notices" as const, label: "Notices",       icon: Bell,       tone: TONES.amber },
+    { key: "news" as const,    label: "News Articles", icon: Newspaper,  tone: TONES.sky },
     { key: "notes" as const,   label: "Study Notes",   icon: BookMarked, tone: TONES.teal },
   ];
 
@@ -277,7 +283,7 @@ const AdminOverview = () => {
     { tab: "settings",    label: "Settings",    icon: Settings },
   ];
 
-  const totalContent = (stats?.notices ?? 0) + (stats?.notes ?? 0) + (stats?.library ?? 0);
+  const totalContent = (stats?.notices ?? 0) + (stats?.news ?? 0) + (stats?.notes ?? 0) + (stats?.library ?? 0);
   const urgentCount = (stats?.pendingUsers ?? 0) + (stats?.pendingAdmissions ?? 0);
 
   const vitals = [
@@ -473,7 +479,7 @@ const AdminOverview = () => {
           card solves both: cells stack with rules on mobile, sit side by side
           from sm, and the compact icon+label+number row fills the width. */}
       <div>
-        <SectionHeader icon={Bell} title="Publishing" subtitle="Notices and study material" />
+        <SectionHeader icon={Newspaper} title="Publishing" subtitle="Notices, news and study material" />
         <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-card">
           <div className="grid divide-y divide-border/70 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             {publishingStats.map((s) => (
@@ -529,7 +535,7 @@ const AdminOverview = () => {
 
       {/* ── Recent Activity ── */}
       <div>
-        <SectionHeader icon={Activity} title="Recent Activity" subtitle="Latest across notices, admissions and users" />
+        <SectionHeader icon={Activity} title="Recent Activity" subtitle="Latest across notices, news, admissions and users" />
         <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-card">
           {actLoading ? (
             <div className="space-y-3 p-4">
@@ -550,7 +556,7 @@ const AdminOverview = () => {
               </span>
               <p className="text-sm font-semibold text-foreground">No recent activity yet</p>
               <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
-                New notices, admissions and sign-ups will appear here as they come in.
+                New notices, news, admissions and sign-ups will appear here as they come in.
               </p>
             </div>
           ) : (

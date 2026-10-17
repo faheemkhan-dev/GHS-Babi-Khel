@@ -1025,3 +1025,145 @@ export function useAddCustomFee() {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Bulk Absence Fee — auto-calculate absence fee for ALL students in
+// a class based on their absence count × rate per absence.
+// Admin can review and adjust individual amounts before submitting.
+// ═══════════════════════════════════════════════════════════════
+
+export interface BulkAbsenceFeeEntry {
+  studentId: string;
+  studentName: string;
+  rollNumber: string;
+  absenceCount: number;
+  amount: number;            // absenceCount × rate (admin can override)
+}
+
+export interface BulkAbsenceFeeParams {
+  className: string;
+  month: number;             // 1-12 (which month's absences to count)
+  year: number;
+  ratePerAbsence: number;
+  feeLabel: string;          // "Absence Fee - June 2026"
+  dueDate: string;
+  entries: BulkAbsenceFeeEntry[];   // pre-calculated, admin-adjusted
+  notes?: string;
+}
+
+export function useBulkAbsenceFee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: BulkAbsenceFeeParams) => {
+      // Build voucher rows — skip students with 0 absences or 0 amount
+      const now = new Date();
+      const vouchersToInsert = params.entries
+        .filter((e) => e.absenceCount > 0 && e.amount > 0)
+        .map((e) => {
+          const random = Math.floor(Math.random() * 9000) + 1000;
+          return {
+            voucher_number: `AF-${params.year}-${String(params.month).padStart(2, "0")}-${random}-${e.studentId.slice(-4)}`,
+            student_id: e.studentId,
+            class: params.className,
+            month: params.month,
+            year: params.year,
+            fee_period: "one_off",
+            fee_items: [
+              {
+                fee_type: "absence",
+                label: params.feeLabel,
+                amount: e.amount,
+                absence_count: e.absenceCount,
+              },
+            ],
+            total_amount: e.amount,
+            due_date: params.dueDate,
+            status: "unpaid",
+            paid_amount: 0,
+            late_fee: 0,
+            notes: params.notes || `Absence count: ${e.absenceCount} days`,
+            bank_details: {},
+          };
+        });
+
+      if (vouchersToInsert.length === 0) {
+        throw new Error("No students with absences to charge. Check that the selected month has attendance records.");
+      }
+
+      const { data, error } = await supabase
+        .from("fee_vouchers")
+        .insert(vouchersToInsert)
+        .select();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["fee-vouchers"] });
+      qc.invalidateQueries({ queryKey: ["student-vouchers"] });
+      qc.invalidateQueries({ queryKey: ["all-student-vouchers"] });
+      qc.invalidateQueries({ queryKey: ["fee-dashboard"] });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Fetch absence count per student for a given class + month
+// (used by the BulkAbsenceFeeModal to pre-fill the rate calculator)
+// ═══════════════════════════════════════════════════════════════
+
+export function useClassAbsenceCounts(classLevel: string, month: number, year: number) {
+  return useQuery<{
+    student_id: string;
+    student_name: string;
+    roll_number: string;
+    absence_count: number;
+  }[]>({
+    queryKey: ["class-absence-counts", classLevel, month, year],
+    queryFn: async () => {
+      if (!classLevel || !month || !year) return [];
+
+      // Step 1: Get all active students in this class
+      const { data: students, error: studentsErr } = await supabase
+        .from("students")
+        .select("id, full_name, roll_number")
+        .eq("class", classLevel)
+        .eq("is_active", true);
+      if (studentsErr) throw studentsErr;
+      if (!students || students.length === 0) return [];
+
+      const studentIds = students.map(s => s.id);
+
+      // Step 2: Fetch all 'absent' records for these students in the given month
+      const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+      const endDay = new Date(year, month, 0).getDate();
+      const endDate = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+
+      const { data: attendance, error: attErr } = await supabase
+        .from("attendance")
+        .select("student_id, status")
+        .in("student_id", studentIds)
+        .eq("status", "absent")
+        .gte("date", startDate)
+        .lte("date", endDate);
+      if (attErr) throw attErr;
+
+      // Step 3: Aggregate absence counts per student
+      const counts = new Map<string, number>();
+      for (const row of attendance || []) {
+        counts.set(row.student_id, (counts.get(row.student_id) || 0) + 1);
+      }
+
+      // Step 4: Return all students who have at least 1 absence, sorted by count desc
+      return students
+        .map(s => ({
+          student_id: s.id,
+          student_name: s.full_name,
+          roll_number: s.roll_number,
+          absence_count: counts.get(s.id) || 0,
+        }))
+        .filter(s => s.absence_count > 0)
+        .sort((a, b) => b.absence_count - a.absence_count);
+    },
+    enabled: !!classLevel && !!month && !!year,
+    staleTime: 60 * 1000,
+  });
+}
