@@ -13,16 +13,11 @@ import {
 import PageLayout from "@/components/layout/PageLayout";
 import { useSchoolSettings, safeMediaUrl, optimizedCloudinaryUrl } from "@/hooks/useSchoolSettings";
 import { useNotices } from "@/hooks/useNotices";
-import { useNews } from "@/hooks/useNews";
-import type { NewsItem } from "@/hooks/useNews";
 import { useTeachers } from "@/hooks/useTeachers";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useCountUp } from "@/hooks/useCountUp";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
-import NewsTicker from "@/components/shared/NewsTicker";
-import { estimateReadingTime, detectTextLanguage } from "@/lib/newsUtils";
-import EditorialNewsCard from "@/components/shared/EditorialNewsCard";
 import EditorialNoticeCard from "@/components/shared/EditorialNoticeCard";
 import NoticePollCard from "@/components/shared/NoticePollCard";
 import TextToSpeechPlayer from "@/components/shared/TextToSpeechPlayer";
@@ -1081,7 +1076,6 @@ const Home = () => {
 
   const { data: settings,          isLoading: settingsLoading }      = useSchoolSettings();
   const { data: notices = [],      isLoading: noticesLoading }        = useNotices(4);
-  const { data: news = [],         isLoading: newsLoading }           = useNews(3);
   const { data: teachers = [],     isLoading: teachersLoading }       = useTeachers(4);
   const { data: achievements = [], isLoading: achievementsLoading }   = useAchievements(3);
   const { data: admSettings, isLoading: admLoading }                   = useAdmissionSettings();
@@ -1109,11 +1103,9 @@ const Home = () => {
     setPrincipalFailed(false);
   }, [settings?.principal_photo_url]);
 
-  // News TTS player state — when set, the bottom TTS bar renders & auto-plays
+  // TTS player state — when set, the bottom TTS bar renders & auto-plays.
+  // Wired up by the notices' onListen handlers (EditorialNoticeCard / poll cards).
   const [ttsItem, setTtsItem] = useState<{ title: string; content: string } | null>(null);
-  const openNewsListen = useCallback((it: NewsItem) => {
-    setTtsItem({ title: it.title, content: it.content || it.title });
-  }, []);
 
   const hasBannerPhoto = !!(settings?.banner_url && !bannerFailed);
   // The banner photo now renders inside a hexagon badge instead of as a
@@ -1131,9 +1123,6 @@ const Home = () => {
   return (
     <>
     <PageLayout>
-
-      {/* ══ 1. NEWS TICKER ══ */}
-      <NewsTicker />
 
       {/* Invisible — keeps the auto-publish watcher alive on the homepage.
           The visible countdown banner now lives only on /results. */}
@@ -1399,61 +1388,6 @@ const Home = () => {
         </div>
       </m.section>
 
-      {/* ══ 10. EDITORIAL DISPATCH (LATEST NEWS) ══
-          PhD-level research-paper-styled news section. All latest stories
-          render as uniform compact journal cards in a responsive 1/2/3-col
-          grid — no special "featured" treatment, so every dispatch carries
-          the same editorial weight. Each card supports an audio "Listen"
-          pill that opens the auto-playing TTS bar. Urdu items auto-flip to
-          RTL and use the Urdu narration voice. */}
-      <m.section initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }} variants={sectionFadeUp} className="section-y cv-auto bg-background">
-        <div className="container mx-auto px-4">
-
-          {/* ── Premium section header ── */}
-          <div className="mb-8 md:mb-12 flex items-end justify-between gap-4">
-            <div className="min-w-0">
-              <span className="inline-flex items-center gap-2 rounded-full border border-gold/40 bg-gold/10 px-3.5 py-1 eyebrow">
-                <Sparkles className="w-3 h-3" /> From the Editorial Desk
-              </span>
-              <h2 className="section-title">Latest News</h2>
-              <p className="mt-2 text-sm text-muted-foreground max-w-md">
-                Stories from GHS Babi Khel — read on screen or listen, in English or Urdu.
-              </p>
-            </div>
-            <Link to="/news" className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border/80 bg-card px-4 h-8 text-xs font-semibold text-foreground hover:border-gold/60 hover:text-primary transition-colors">
-              Archive <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {/* ── Body: uniform grid of latest stories (no featured) ── */}
-          <ScrollStage>
-          {newsLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-[22rem] rounded-2xl" />
-              ))}
-            </div>
-          ) : news.length === 0 ? (
-            <div className="text-center py-16 bg-card rounded-2xl border border-border">
-              <Bell className="w-10 h-10 text-muted-foreground/50 mx-auto mb-3" />
-              <p className="text-muted-foreground">No dispatches yet — the first article you publish will appear here.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {news.map((item, i) => (
-                <EditorialNewsCard
-                  key={item.id}
-                  item={item}
-                  index={i}
-                  onListen={openNewsListen}
-                />
-              ))}
-            </div>
-          )}
-          </ScrollStage>
-        </div>
-      </m.section>
-
       {/* ══ 11. TEACHERS ══ */}
       <m.section initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }} variants={sectionFadeUp} className="section-y bg-background cv-auto">
         <div className="container mx-auto px-4">
@@ -1691,7 +1625,7 @@ const Home = () => {
     <Deferred><GlobalDefinitionPopup /></Deferred>
     <Deferred><AIAssistantWidget /></Deferred>
 
-    {/* News TTS bar — auto-plays the moment a "Listen" pill is clicked.
+    {/* TTS bar — auto-plays the moment a "Listen" pill is clicked on a notice card.
         Language (Urdu / English) is auto-detected from the article text. */}
     {ttsItem && (
       <TextToSpeechPlayer

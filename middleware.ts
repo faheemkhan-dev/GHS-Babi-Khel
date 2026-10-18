@@ -443,7 +443,7 @@ function getLimitTypeFromPath(pathname: string): LimitType {
   }
   // Auth pages (/auth/signin, /auth/signup, …) keep their own moderate tier.
   if (pathname.startsWith("/auth/")) return "auth";
-  // ── All other paths are PAGE ROUTES (/, /about, /contact, /news, …) and use
+  // ── All other paths are PAGE ROUTES (/, /about, /contact, /notices, …) and use
   // the default tier. Previously this function matched page paths too — e.g.
   // the /contact PAGE was limited to 2 requests/min with a 2-minute hard
   // block, and /auth/signup to 3 requests/HOUR — so legitimate AI/search

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Menu, X, GraduationCap, LogIn, UserPlus, ArrowRight,
   LayoutDashboard, LogOut, Shield, Search, ChevronDown, ChevronRight,
-  Home, Landmark, Mail, Newspaper, Megaphone, CalendarDays,
+  Home, Landmark, Mail, Megaphone,
   Trophy, Medal, BookOpen, Library, Images, ClipboardList, HelpCircle,
   Hash, Timer, Command as CommandIcon,
   Bell, FileSignature, type LucideIcon,
@@ -92,15 +92,13 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    id: "news",
-    label: "News & Events",
-    icon: Newspaper,
-    tagline: "Latest updates & important dates",
+    id: "notices",
+    label: "Notices",
+    icon: Megaphone,
+    tagline: "Official announcements & updates",
     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light",
     links: [
-      { to: "/news",     label: "News",     icon: Newspaper,   desc: "Stories & latest updates",     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
       { to: "/notices",  label: "Notices",  icon: Megaphone,   desc: "Official announcements",       tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
-      { to: "/calendar", label: "Calendar", icon: CalendarDays, desc: "Events & academic dates",     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
     ],
   },
   {

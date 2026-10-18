@@ -7,11 +7,10 @@
 
 import { useMemo } from "react";
 import {
-  Bell, Newspaper, Users, Home, Info, Phone, Calendar,
+  Bell, Users, Home, Info, Phone,
   BarChart3, BookOpen, Image, GraduationCap, Medal, Hash,
 } from "lucide-react";
 import { useNotices } from "@/hooks/useNotices";
-import { useNews } from "@/hooks/useNews";
 import { useTeachers } from "@/hooks/useTeachers";
 
 export interface SearchHit {
@@ -19,7 +18,7 @@ export interface SearchHit {
   title: string;
   snippet?: string;
   href: string;
-  group: "pages" | "notices" | "news" | "teachers";
+  group: "pages" | "notices" | "teachers";
   icon: any;
 }
 
@@ -28,9 +27,7 @@ export const PAGE_INDEX: { to: string; label: string; icon: any; keywords: strin
   { to: "/",          label: "Home",       icon: Home,          keywords: ["home", "main", "landing", "homepage", "start"] },
   { to: "/about",     label: "About",      icon: Info,          keywords: ["about", "school", "history", "info", "information"] },
   { to: "/contact",   label: "Contact",    icon: Phone,         keywords: ["contact", "phone", "email", "reach", "address", "location"] },
-  { to: "/news",      label: "News",       icon: Newspaper,     keywords: ["news", "updates", "articles", "stories", "blog"] },
   { to: "/notices",   label: "Notices",    icon: Bell,          keywords: ["notice", "notices", "announcements", "alerts", "circular"] },
-  { to: "/calendar",  label: "Calendar",   icon: Calendar,      keywords: ["calendar", "events", "dates", "schedule", "holidays", "exams"] },
   { to: "/results",   label: "Results",    icon: BarChart3,     keywords: ["results", "exams", "grades", "marks", "report", "scorecard"] },
   { to: "/merit-list", label: "Merit List", icon: Medal,         keywords: ["merit", "merit list", "toppers", "position holders", "rank", "ranking", "champions"] },
   { to: "/roll-no-slip", label: "Roll No. Slip", icon: Hash,     keywords: ["roll", "roll no", "roll number", "exam roll numbers", "admit card", "slip"] },
@@ -53,7 +50,6 @@ const match = (text: string | null | undefined, needle: string) =>
  */
 export function useSiteSearch(query: string, limitPerGroup = 4) {
   const { data: notices = [] } = useNotices();
-  const { data: news = [] } = useNews();
   const { data: teachers = [] } = useTeachers();
 
   return useMemo(() => {
@@ -89,18 +85,6 @@ export function useSiteSearch(query: string, limitPerGroup = 4) {
         icon: Bell,
       }));
 
-    const newsHits: SearchHit[] = news
-      .filter((n) => match(n.title, needle) || match(n.content, needle))
-      .slice(0, limitPerGroup)
-      .map((n) => ({
-        id: n.id,
-        title: n.title,
-        snippet: (n.content || "").slice(0, 90),
-        href: `/news/${n.id}`,
-        group: "news" as const,
-        icon: Newspaper,
-      }));
-
     const teacherHits: SearchHit[] = teachers
       .filter((t) => match(t.full_name, needle) || match(t.subject, needle))
       .slice(0, limitPerGroup)
@@ -113,7 +97,7 @@ export function useSiteSearch(query: string, limitPerGroup = 4) {
         icon: Users,
       }));
 
-    const hits = [...pageHits, ...noticeHits, ...newsHits, ...teacherHits];
+    const hits = [...pageHits, ...noticeHits, ...teacherHits];
     return { hits, total: hits.length };
-  }, [query, notices, news, teachers, limitPerGroup]);
+  }, [query, notices, teachers, limitPerGroup]);
 }

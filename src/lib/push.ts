@@ -2,9 +2,9 @@
 // Server contract: /api/push (see api/push.js). The VAPID public key is served
 // by the server, so no VITE_ env var is needed.
 
-export type PushTopic = "results" | "merit" | "rollslip" | "admission" | "notices" | "news" | "datesheet" | "calendar";
+export type PushTopic = "results" | "merit" | "rollslip" | "admission" | "notices" | "datesheet";
 
-export const ALL_TOPICS: PushTopic[] = ["results", "merit", "rollslip", "admission", "notices", "news", "datesheet", "calendar"];
+export const ALL_TOPICS: PushTopic[] = ["results", "merit", "rollslip", "admission", "notices", "datesheet"];
 
 export const TOPIC_LABELS: Record<PushTopic, string> = {
   results: "Results",
@@ -12,9 +12,7 @@ export const TOPIC_LABELS: Record<PushTopic, string> = {
   rollslip: "Roll number slips",
   admission: "Admission",
   notices: "Notices",
-  news: "News",
   datesheet: "Date sheet",
-  calendar: "Calendar",
 };
 
 export type PushStatus = "unsupported" | "ios-install" | "denied" | "off" | "on";

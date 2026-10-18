@@ -1,27 +1,25 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Offline data cache — Homepage, About, Contact, News, Notices, Calendar,
+// Offline data cache — Homepage, About, Contact, Notices,
 // Results, Admission, Notes, Merit List, Roll No. Slip
 // ─────────────────────────────────────────────────────────────────────────────
 // Persists the React Query cache for these public pages' data (notices,
-// news, teachers, achievements, school settings, school events, results,
-// the homepage's "School Rank #1" toppers section, the homepage's
-// admission-banner settings, and the Notes subject + chapter lists)
-// into IndexedDB, so that when a page loads with no internet, it can paint
-// instantly from the last-seen data instead of showing empty/loading
-// states. When the network is back, React Query's normal background
-// refetch (staleTime) updates it silently — the user never notices a
-// "sync" happening.
+// teachers, achievements, school settings, results, the homepage's
+// "School Rank #1" toppers section, the homepage's admission-banner
+// settings, and the Notes subject + chapter lists) into IndexedDB, so
+// that when a page loads with no internet, it can paint instantly from
+// the last-seen data instead of showing empty/loading states. When the
+// network is back, React Query's normal background refetch (staleTime)
+// updates it silently — the user never notices a "sync" happening.
 //
 // About and Contact only need school-settings (already covered below).
-// News/Notices list pages use the "news"/"notices" keys. Individual
-// news/notice detail pages ("news-item"/"notice-item") are intentionally
-// NOT persisted yet — out of scope so far.
+// Notices list pages use the "notices" key. Individual notice detail
+// pages ("notice-item") are intentionally NOT persisted yet — out of
+// scope so far.
 //
-// Calendar uses "school-events" (a specific month range) and
-// "school-events-upcoming". Results uses "results" (filtered by class/
-// exam/year/search) and "result-years". Both are persisted like everything
-// else, EXCEPT one-off text searches on Results — see shouldPersist below
-// — since a search term is rarely repeated and would just fill up storage
+// Results uses "results" (filtered by class/exam/year/search) and
+// "result-years". Both are persisted like everything else, EXCEPT
+// one-off text searches on Results — see shouldPersist below — since
+// a search term is rarely repeated and would just fill up storage
 // with entries nobody will hit from cache again.
 //
 // The homepage's "Hall of Fame" toppers section uses the
@@ -51,12 +49,9 @@ const STORAGE_KEY = "homepage-query-cache";
 // (admin data, auth, dashboards) is left entirely alone.
 const PERSISTED_KEY_PREFIXES = [
   "notices",
-  "news",
   "teachers",
   "achievements",
   "school-settings",
-  "school-events",
-  "school-events-upcoming",
   "results",
   "result-years",
   // Homepage → "Hall of Fame" toppers section (#1 per class, latest exam).

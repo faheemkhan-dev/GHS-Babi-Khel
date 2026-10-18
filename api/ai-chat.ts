@@ -120,13 +120,13 @@ FACTS
 - Mission: "To provide accessible, quality education that empowers students with knowledge, skills, and values to become responsible citizens and future leaders of Pakistan." Vision: "To be a model government school that sets the standard for academic excellence and character development in District Mohmand." (Both are on the About page /about.)
 - Results (/results): search any result by exam roll number. If the school published internal results (classes 6–8: 1st/2nd semester; 9–10: Mid-Term/Final-Term), it searches the school's own table; otherwise it falls back to BISE Peshawar board result search (SSC) automatically. A countdown appears on /results when a result is scheduled but unpublished; at zero it auto-publishes instantly. BISE students can also use https://cloud.bisep.edu.pk → "Show Result by Roll Number". Result cards show: name, photo, roll number, class, exam type, year, total/obtained marks, percentage, grade (A+ 90%+, A 80–89, B 60–79, C 45–59, D 33–44, Fail <33), PASS/FAIL, class position, whole-school rank (Trophy badge), subject-wise bars. An AI Summary card gives personalized study advice beside each result.
 - Admissions (/admission): online application form for classes 6–10 at the start of the academic year; track status there by application ID; interview slot may be booked once shortlisted. Documents: student B-form/CNIC copy, previous school leaving certificate (class 7+), 2 passport photos, parent/guardian CNIC copy. Office contact via /contact.
-- Notices (/notices): official notices (holidays, exam schedules, fee deadlines, PTMs, dress code) with detail pages. News (/news): events, achievements, sports, trips. Homepage has a News Ticker + Latest Notices.
+- Notices (/notices): official notices (holidays, exam schedules, fee deadlines, PTMs, dress code) with detail pages. Homepage has the Latest Notices section.
 - Student portal (/auth/signin): email + password created by the school admin/office. Dashboard (/dashboard) tabs: Overview, Result Card, Attendance, Timetable, Tests, Fees, Notes, Library, Achievements, Gallery, Profile. Forgot password → /auth/forgot-password (email reset). Teachers/admins sign in on the same form (role-routed). No credentials? Contact the school office.
 - Roll No. Slip (/roll-no-slip): find, download and share exam roll number slips. Merit List (/merit-list): toppers and position holders. Notes (/notes): study notes by class and subject. Library (/library): books and reading resources. FAQs (/faq).
 - Timetable: in the portal's Timetable tab; exam timetables also go out as notices.
 - Fees: portal Fees tab (tuition, exam fee, balance, history); deadlines posted as notices.
 - Gallery (/gallery): event photos. Achievements: homepage section + portal tab.
-- Contact (/contact): phone, email, address, map. Calendar (/calendar): academic calendar with exam dates, holidays, events, ICS subscribe. About (/about): history, mission, staff; /teachers: teaching staff.
+- Contact (/contact): phone, email, address, map. About (/about): history, mission, staff; /teachers: teaching staff.
 
 RULES
 - Answer with REAL, specific information from the facts above, not just "go to the X page". Mention the page path as the next step.
@@ -216,7 +216,7 @@ const IDENTITY_PATTERNS: RegExp[] = [
 ];
 const IDENTITY_REPLY =
   "I'm the **GHS Babi Khel AI Assistant**, built by the **GHS Babi Khel Administration** to serve our students, parents and visitors.\n" +
-  "- I can help with results, admissions, notices, news, the student portal and more.\n" +
+  "- I can help with results, admissions, notices, the student portal and more.\n" +
   "- For anything beyond that, the school office is always available via the Contact page (/contact).";
 // "Who built GHS Babi Khel / this website?" — the visitor means the school's
 // website; the answer is always the school administration.
@@ -227,7 +227,7 @@ const WEBSITE_BUILDER_PATTERNS: RegExp[] = [
 ];
 const WEBSITE_BUILDER_REPLY =
   "The **GHS Babi Khel website** and this AI Assistant were built by the **GHS Babi Khel Administration**.\n" +
-  "- The site brings results, admissions, notices, news and the student portal into one place.\n" +
+  "- The site brings results, admissions, notices and the student portal into one place.\n" +
   "- To learn about the school itself, see the About page (/about) or reach the office via /contact.";
 function identityReply(text: string): string | null {
   const t = text.slice(0, 300);

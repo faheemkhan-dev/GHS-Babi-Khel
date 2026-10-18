@@ -1,11 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { computeAttendancePercentage, fetchReportCardAttendance, type ReportCardAttendance } from "@/hooks/useAttendanceAnalytics";
-
-// Re-export for convenience
-export type { ReportCardAttendance };
-export { fetchReportCardAttendance };
-
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface ResultWithStudent {
@@ -270,29 +264,3 @@ export function useDeleteGradingScheme() {
   });
 }
 
-// ─── Attendance summary for report cards (Enhanced - Feature 4.6) ───────────
-
-export interface AttendanceSummary {
-  present: number;
-  absent: number;
-  late: number;
-  leave: number;
-  halfday: number;
-  total: number;
-  percentage: number;
-  isEligible: boolean;
-  warningLevel: "none" | "caution" | "warning" | "critical";
-  award: string | null;
-}
-
-export function useAttendanceSummary(studentId: string, year: number) {
-  return useQuery<AttendanceSummary>({
-    queryKey: ["attendance-summary", studentId, year],
-    queryFn: async () => {
-      const data = await fetchReportCardAttendance(studentId, year);
-      return data;
-    },
-    enabled: !!studentId,
-    staleTime: 30 * 60 * 1000,
-  });
-}

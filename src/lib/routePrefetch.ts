@@ -37,10 +37,8 @@ export const ROUTE_LOADERS: Record<string, Loader> = {
   "/contact":        () => import("@/pages/Contact"),
   "/faq":            () => import("@/pages/FAQ"),
   "/teachers":       () => import("@/pages/Teachers"),
-  // News & dates
-  "/news":           () => import("@/pages/News"),
+  // Notices
   "/notices":        () => import("@/pages/Notices"),
-  "/calendar":       () => import("@/pages/Calendar"),
   // Academics
   "/notes":          () => import("@/pages/notes/NotesPage"),
   "/library":        () => import("@/pages/Library"),
@@ -62,7 +60,7 @@ export const ROUTE_LOADERS: Record<string, Loader> = {
    and the heavy ones follow once the browser has spare capacity. */
 const BACKGROUND_ORDER = [
   // light (a few KB each)
-  "/about", "/contact", "/faq", "/notices", "/news", "/calendar",
+  "/about", "/contact", "/faq", "/notices",
   "/teachers", "/duty", "/library", "/gallery", "/search", "/admission",
   "/notes",
   // heavy (charts / pdf / excel dependency graphs) — warmed last

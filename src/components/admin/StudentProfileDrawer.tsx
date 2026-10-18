@@ -1,9 +1,9 @@
 /**
  * StudentProfileDrawer.tsx — GHS Babi Khel
  * -----------------------------------------------------------------------------
- * One-drawer 360° student view: attendance %, results trend (mini chart),
+ * One-drawer 360° student view: results trend (mini chart),
  * fee status, credential/ID card, and exam roll numbers — all joined from
- * tables that already exist (students / attendance / results / fee_vouchers /
+ * tables that already exist (students / results / fee_vouchers /
  * generated_id_cards / exam_roll_numbers).
  *
  * Mobile-first: full-width slide-in on phones, wide side panel on desktop.
@@ -22,7 +22,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
-  CalendarCheck,
   TrendingUp,
   Wallet,
   CreditCard,
@@ -81,45 +80,6 @@ const initials = (name: string) =>
     .slice(0, 2)
     .map((s) => s[0]?.toUpperCase() ?? "")
     .join("");
-
-// ─── Attendance query ────────────────────────────────────────────────────────
-
-interface AttendanceAgg {
-  total: number;
-  present: number;
-  absent: number;
-  late: number;
-  leave: number;
-  halfday: number;
-  percentage: number; // weighted: present=1, late=1, halfday=0.5
-}
-
-function useStudentAttendance(studentId: string | null) {
-  return useQuery<AttendanceAgg>({
-    queryKey: ["student-profile-attendance", studentId],
-    queryFn: async () => {
-      if (!studentId)
-        return { total: 0, present: 0, absent: 0, late: 0, leave: 0, halfday: 0, percentage: 0 };
-      const { data, error } = await supabase
-        .from("attendance")
-        .select("status")
-        .eq("student_id", studentId);
-      if (error) throw error;
-      const records = (data ?? []) as { status: string }[];
-      const present = records.filter((r) => r.status === "present").length;
-      const absent = records.filter((r) => r.status === "absent").length;
-      const late = records.filter((r) => r.status === "late").length;
-      const leave = records.filter((r) => r.status === "leave").length;
-      const halfday = records.filter((r) => r.status === "halfday").length;
-      const total = records.length;
-      const weighted = present + late + halfday * 0.5;
-      const percentage = total === 0 ? 0 : Math.round((weighted / total) * 100 * 10) / 10;
-      return { total, present, absent, late, leave, halfday, percentage };
-    },
-    enabled: !!studentId,
-    staleTime: 60 * 1000,
-  });
-}
 
 // ─── Results query ───────────────────────────────────────────────────────────
 
@@ -309,22 +269,6 @@ function useStudentExamRolls(studentId: string | null) {
   });
 }
 
-// ─── Attendance status color ─────────────────────────────────────────────────
-
-function attendanceStatus(pct: number): {
-  label: string;
-  color: string;
-  barColor: string;
-} {
-  if (pct >= 80)
-    return { label: "Good", color: "text-emerald-600", barColor: "#10b981" };
-  if (pct >= 75)
-    return { label: "On Limit", color: "text-amber-600", barColor: "#f59e0b" };
-  if (pct > 0)
-    return { label: "Critical", color: "text-red-600", barColor: "#ef4444" };
-  return { label: "No data", color: "text-muted-foreground", barColor: "hsl(var(--muted))" };
-}
-
 // ─── Fee status badge ────────────────────────────────────────────────────────
 
 function FeeStatusBadge({ status }: { status: string }) {
@@ -358,7 +302,6 @@ export function StudentProfileDrawer({ student, open, onOpenChange }: Props) {
     setIdCardImgError(false);
   }, [student?.id]);
 
-  const attendanceQ = useStudentAttendance(id);
   const resultsQ = useStudentResults(id);
   const feesQ = useStudentFees(id);
   const idCardQ = useStudentIDCard(id);
@@ -375,9 +318,6 @@ export function StudentProfileDrawer({ student, open, onOpenChange }: Props) {
     }));
   }, [resultsQ.data]);
 
-  const att = attendanceQ.data;
-  const attStatus = att ? attendanceStatus(att.percentage) : null;
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -388,7 +328,7 @@ export function StudentProfileDrawer({ student, open, onOpenChange }: Props) {
         <SheetHeader className="sr-only">
           <SheetTitle>Student profile</SheetTitle>
           <SheetDescription>
-            Attendance, results, fees, ID card, and exam roll numbers for{" "}
+            Results, fees, ID card, and exam roll numbers for{" "}
             {student?.full_name ?? "the selected student"}.
           </SheetDescription>
         </SheetHeader>
@@ -475,82 +415,8 @@ export function StudentProfileDrawer({ student, open, onOpenChange }: Props) {
             </div>
           )}
 
-          {/* ── 1. Attendance ──────────────────────────────────────────── */}
-          <Card className="rounded-2xl border-border/60 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <CalendarCheck className="w-4 h-4 text-primary" />
-                <h3 className="text-sm font-semibold">Attendance</h3>
-              </div>
 
-              {attendanceQ.isLoading ? (
-                <Skeleton className="h-20 rounded-lg" />
-              ) : !att || att.total === 0 ? (
-                <div className="text-center py-4 text-xs text-muted-foreground">
-                  <CalendarCheck className="w-6 h-6 mx-auto mb-1.5 opacity-40" />
-                  No attendance records yet.
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-end gap-3 mb-2.5">
-                    <div>
-                      <p className={`text-3xl font-bold leading-none ${attStatus?.color}`}>
-                        {att.percentage}%
-                      </p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide mt-1">
-                        {attStatus?.label} · {att.total} days
-                      </p>
-                    </div>
-                  </div>
-                  {/* Colored progress bar — color follows attendance tier */}
-                  <div
-                    className="h-2 w-full rounded-full bg-secondary overflow-hidden"
-                    role="progressbar"
-                    aria-valuenow={att.percentage}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  >
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${Math.min(100, Math.max(0, att.percentage))}%`,
-                        backgroundColor: attStatus?.barColor,
-                      }}
-                    />
-                  </div>
-                  {/* Breakdown grid — 2 cols on mobile, 4 on sm */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-center">
-                    <div className="rounded-xl border border-emerald-200/60 bg-emerald-50 p-1.5 dark:border-emerald-800/40 dark:bg-emerald-900/20">
-                      <p className="text-base font-bold text-emerald-700 dark:text-emerald-300">
-                        {att.present}
-                      </p>
-                      <p className="text-[9px] uppercase text-muted-foreground">Present</p>
-                    </div>
-                    <div className="rounded-xl border border-amber-200/60 bg-amber-50 p-1.5 dark:border-amber-800/40 dark:bg-amber-900/20">
-                      <p className="text-base font-bold text-amber-700 dark:text-amber-300">
-                        {att.late}
-                      </p>
-                      <p className="text-[9px] uppercase text-muted-foreground">Late</p>
-                    </div>
-                    <div className="rounded-xl border border-sky-200/60 bg-sky-50 p-1.5 dark:border-sky-800/40 dark:bg-sky-900/20">
-                      <p className="text-base font-bold text-sky-700 dark:text-sky-300">
-                        {att.halfday}
-                      </p>
-                      <p className="text-[9px] uppercase text-muted-foreground">Half Day</p>
-                    </div>
-                    <div className="rounded-xl border border-red-200/60 bg-red-50 p-1.5 dark:border-red-800/40 dark:bg-red-900/20">
-                      <p className="text-base font-bold text-red-700 dark:text-red-300">
-                        {att.absent}
-                      </p>
-                      <p className="text-[9px] uppercase text-muted-foreground">Absent</p>
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* ── 2. Results trend (mini chart) ──────────────────────────── */}
+          {/* ── 1. Results trend (mini chart) ──────────────────────────── */}
           <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
@@ -705,7 +571,7 @@ export function StudentProfileDrawer({ student, open, onOpenChange }: Props) {
             </CardContent>
           </Card>
 
-          {/* ── 3. Fee status ──────────────────────────────────────────── */}
+          {/* ── 2. Fee status ──────────────────────────────────────────── */}
           <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -808,7 +674,7 @@ export function StudentProfileDrawer({ student, open, onOpenChange }: Props) {
             </CardContent>
           </Card>
 
-          {/* ── 4. Credential / ID card ────────────────────────────────── */}
+          {/* ── 3. Credential / ID card ────────────────────────────────── */}
           <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -938,7 +804,7 @@ export function StudentProfileDrawer({ student, open, onOpenChange }: Props) {
             </CardContent>
           </Card>
 
-          {/* ── 5. Exam roll numbers ───────────────────────────────────── */}
+          {/* ── 4. Exam roll numbers ───────────────────────────────────── */}
           <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">

@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  Search as SearchIcon, Bell, Newspaper, Users, FileText, Compass,
-  Home, Info, Phone, Calendar, BarChart3, BookOpen, Image, GraduationCap,
+  Search as SearchIcon, Bell, Users, FileText, Compass,
+  Home, Info, Phone, BarChart3, BookOpen, Image, GraduationCap,
   Hash,
 } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 import PageBanner from "@/components/shared/PageBanner";
 import { useNotices } from "@/hooks/useNotices";
-import { useNews } from "@/hooks/useNews";
 import { useTeachers } from "@/hooks/useTeachers";
 import { useDebounce } from "@/hooks/useDebounce";
 
@@ -21,16 +20,14 @@ interface Hit {
 
 // ─── Static navigation/page index ─────────────────────────────────────────
 // These mirror the navbar links (src/components/layout/Navbar.tsx). When a
-// user types "News", "Calendar", "Library", etc., they almost certainly mean
-// the page, not a piece of content that happens to contain that word. We
+// user types "Notices", "Library", etc., they almost certainly mean the
+// page, not a piece of content that happens to contain that word. We
 // surface page matches at the top of the results, ahead of content hits.
 const PAGE_INDEX: { to: string; label: string; icon: any; keywords: string[] }[] = [
   { to: "/",          label: "Home",                icon: Home,         keywords: ["home", "main", "landing", "homepage", "start"] },
   { to: "/about",     label: "About",               icon: Info,         keywords: ["about", "school", "history", "info", "information"] },
   { to: "/contact",   label: "Contact",             icon: Phone,        keywords: ["contact", "phone", "email", "reach", "address", "location"] },
-  { to: "/news",      label: "News",                icon: Newspaper,    keywords: ["news", "updates", "articles", "stories", "blog"] },
   { to: "/notices",   label: "Notices",             icon: Bell,         keywords: ["notice", "notices", "announcements", "alerts", "circular"] },
-  { to: "/calendar",  label: "Calendar",            icon: Calendar,     keywords: ["calendar", "events", "dates", "schedule", "holidays", "exams"] },
   { to: "/results",   label: "Results",             icon: BarChart3,    keywords: ["results", "exams", "grades", "marks", "report", "scorecard"] },
   { to: "/roll-no-slip", label: "Roll No. Slip",    icon: Hash,         keywords: ["roll", "roll no", "roll number", "exam roll numbers", "admit card", "slip"] },
   { to: "/notes",     label: "Notes",               icon: BookOpen,     keywords: ["notes", "study", "material", "chapters", "lessons", "subjects"] },
@@ -68,7 +65,6 @@ const SearchPage = () => {
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: notices = [] } = useNotices();
-  const { data: news = [] } = useNews();
   const { data: teachers = [] } = useTeachers();
 
   const match = (text: string | null | undefined, needle: string) =>
@@ -76,12 +72,11 @@ const SearchPage = () => {
 
   const results = useMemo(() => {
     const needle = q.trim();
-    if (!needle) return { pages: [], notices: [], news: [], teachers: [] } as Record<string, Hit[]>;
+    if (!needle) return { pages: [], notices: [], teachers: [] } as Record<string, Hit[]>;
 
     // ─── 1. Page / navigation matches (top priority) ─────────────────────
     // A page matches if the needle is contained in the label OR in any
-    // keyword. Example: typing "news" → matches the News page (label+keyword).
-    // Typing "events" → matches the Calendar page (keyword).
+    // keyword. Example: typing "notices" → matches the Notices page.
     const needleLower = needle.toLowerCase();
     const pageHits: Hit[] = PAGE_INDEX
       .filter((p) => {
@@ -95,21 +90,13 @@ const SearchPage = () => {
         href: p.to,
       }));
 
-    // ─── 2. Content matches (notices / news / teachers) ──────────────────
+    // ─── 2. Content matches (notices / teachers) ──────────────────────────
     const noticeHits: Hit[] = notices
       .filter((n) => match(n.title, needle) || match(n.content, needle))
       .map((n) => ({
         id: n.id, title: n.title,
         snippet: (n.content || "").slice(0, 140),
         href: `/notices/${n.id}`,
-      }));
-
-    const newsHits: Hit[] = news
-      .filter((n) => match(n.title, needle) || match(n.content, needle))
-      .map((n) => ({
-        id: n.id, title: n.title,
-        snippet: (n.content || "").slice(0, 140),
-        href: `/news/${n.id}`,
       }));
 
     const teacherHits: Hit[] = teachers
@@ -120,11 +107,11 @@ const SearchPage = () => {
         href: `/teachers`,
       }));
 
-    return { pages: pageHits, notices: noticeHits, news: newsHits, teachers: teacherHits };
-  }, [q, notices, news, teachers]);
+    return { pages: pageHits, notices: noticeHits, teachers: teacherHits };
+  }, [q, notices, teachers]);
 
   const totalCount =
-    results.pages.length + results.notices.length + results.news.length + results.teachers.length;
+    results.pages.length + results.notices.length + results.teachers.length;
 
   // Look up the icon for each matched page (so we can render it in the result row)
   const pageIconFor = (to: string) =>
@@ -133,13 +120,12 @@ const SearchPage = () => {
   const groups = [
     { key: "pages",    label: "Pages",    icon: Compass,    items: results.pages,    color: "text-primary"        },
     { key: "notices",  label: "Notices",  icon: Bell,       items: results.notices,  color: "text-red-500"        },
-    { key: "news",     label: "News",     icon: Newspaper,  items: results.news,     color: "text-blue-500"       },
     { key: "teachers", label: "Teachers", icon: Users,      items: results.teachers, color: "text-emerald-500"    },
   ];
 
   return (
     <PageLayout>
-      <PageBanner title="Search" subtitle="Find pages, notices, news, teachers and more" />
+      <PageBanner title="Search" subtitle="Find pages, notices, teachers and more" />
 
       <section className="container mx-auto px-4 py-8 max-w-3xl">
         <div className="relative mb-6">
@@ -148,7 +134,7 @@ const SearchPage = () => {
             autoFocus
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Search pages, notices, news, teachers…"
+            placeholder="Search pages, notices, teachers…"
             className="w-full pl-11 pr-4 py-3 rounded-2xl bg-card border border-border text-base text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/40"
           />
         </div>
@@ -180,9 +166,8 @@ const SearchPage = () => {
             <p className="text-base font-semibold text-foreground">No results for "{q}"</p>
             <p className="text-sm text-muted-foreground mt-1">
               Try a different keyword or browse{" "}
-              <Link to="/notices" className="text-primary underline">notices</Link>,{" "}
-              <Link to="/news" className="text-primary underline">news</Link>, or{" "}
-              <Link to="/calendar" className="text-primary underline">events</Link>.
+              <Link to="/notices" className="text-primary underline">notices</Link> or{" "}
+              <Link to="/teachers" className="text-primary underline">teachers</Link>.
             </p>
           </div>
         ) : (

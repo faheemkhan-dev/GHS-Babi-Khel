@@ -9,9 +9,7 @@ const AdminSchoolSettings    = lazy(() => import("./tabs/AdminSchoolSettings"));
 const AdminTeachers          = lazy(() => import("./tabs/AdminTeachers"));
 const AdminStudents          = lazy(() => import("./tabs/AdminStudents"));
 const AdminResults           = lazy(() => import("./tabs/AdminResults"));
-const AdminAttendance        = lazy(() => import("./tabs/AdminAttendance"));
 const AdminTimetables        = lazy(() => import("./tabs/AdminTimetables"));
-const AdminEvents            = lazy(() => import("./tabs/AdminEvents"));
 const AdminAnnouncements     = lazy(() => import("./tabs/AdminAnnouncements"));
 const AdminLibrary           = lazy(() => import("./tabs/AdminLibrary"));
 // ── Exams section: three separate pages, no shared wrapper ──
@@ -36,9 +34,7 @@ const tabMap: Record<string, React.LazyExoticComponent<React.ComponentType<any>>
   teachers:           AdminTeachers,
   students:           AdminStudents,
   results:            AdminResults,
-  attendance:         AdminAttendance,
   timetables:         AdminTimetables,
-  events:             AdminEvents,
   announcements:      AdminAnnouncements,
   library:            AdminLibrary,
   // ── Exams section: each item is its own separate page ──

@@ -54,7 +54,7 @@ const SHELL_URL = "/";   // Homepage shell — precached so offline PWA launch w
 // page is served IMMEDIATELY while the fresh copy keeps downloading in the
 // background and refreshes the cache for the next visit.
 const NAV_TIMEOUT_MS = 3000;
-// Per-route HTML cache cap (LRU). Detail pages (/news/:id, /notices/:id …)
+// Per-route HTML cache cap (LRU). Detail pages (/notices/:id …)
 // are unbounded, so an index tracks insertion order and evicts the oldest.
 const ROUTE_HTML_INDEX = "/__route-html-index__";
 const ROUTE_HTML_MAX = 25;
@@ -398,7 +398,7 @@ async function networkFirstNavigation(request, event) {
 // ── Per-route HTML cache bookkeeping (LRU, capped at ROUTE_HTML_MAX) ──────
 // An index entry (ROUTE_HTML_INDEX) stores the insertion order of cached
 // route URLs. Re-visiting a route moves it to the back; evictions delete the
-// oldest entry's HTML. This keeps unbounded detail-page URLs (/news/:id …)
+// oldest entry's HTML. This keeps unbounded detail-page URLs (/notices/:id …)
 // from growing the cache forever.
 async function recordRouteHtml(pathname) {
   try {

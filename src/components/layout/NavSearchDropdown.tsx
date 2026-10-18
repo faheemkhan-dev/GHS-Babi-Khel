@@ -12,7 +12,6 @@ import { Search as SearchIcon } from "lucide-react";
 const GROUP_LABEL: Record<SearchHit["group"], string> = {
   pages: "Pages",
   notices: "Notices",
-  news: "News",
   teachers: "Teachers",
 };
 

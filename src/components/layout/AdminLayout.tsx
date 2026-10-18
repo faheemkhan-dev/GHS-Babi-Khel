@@ -44,7 +44,6 @@ const navSections: NavSection[] = [
       { id: "students",     label: "Manage Students",     emoji: "🎓" },
       { id: "admissions",   label: "Admissions",          emoji: "📋" },
       { id: "results",      label: "Manage Results",      emoji: "📝" },
-      { id: "attendance",   label: "Attendance",          emoji: "✅" },
       { id: "fees",          label: "Fee Management",       emoji: "💰" },
       { id: "student-records", label: "Student Records",   emoji: "🗂️" },
     ],
@@ -63,7 +62,6 @@ const navSections: NavSection[] = [
     items: [
       { id: "teachers",      label: "Manage Teachers",   emoji: "👨‍🏫" },
       { id: "timetables",    label: "Timetables",        emoji: "📅" },
-      { id: "events",        label: "Event Calendar",    emoji: "🗓️" },
       { id: "announcements", label: "Announcements",     emoji: "📢" },
       { id: "library",       label: "Library",           emoji: "📚" },
     ],
@@ -96,12 +94,6 @@ const searchIndex: { label: string; sublabel?: string; tabId: string }[] = [
   { label: "Page Views",        sublabel: "Site Analytics",          tabId: "site-analytics" },
   { label: "Visitors",         sublabel: "Site Analytics",          tabId: "site-analytics" },
   { label: "Notices",          sublabel: "Announcements",        tabId: "announcements" },
-  { label: "Exam Dates",       sublabel: "Event Calendar",       tabId: "events" },
-  { label: "Holidays",         sublabel: "Event Calendar",       tabId: "events" },
-  { label: "PTM",              sublabel: "Event Calendar",       tabId: "events" },
-  { label: "Sports Day",       sublabel: "Event Calendar",       tabId: "events" },
-  { label: "Results Day",      sublabel: "Event Calendar",       tabId: "events" },
-  { label: "News",             sublabel: "Announcements",        tabId: "announcements" },
   { label: "Achievements",     sublabel: "Announcements",        tabId: "announcements" },
   { label: "Merit List",       sublabel: "Announcements",        tabId: "announcements" },
   { label: "Videos",           sublabel: "Library",              tabId: "library" },
@@ -114,8 +106,6 @@ const searchIndex: { label: string; sublabel?: string; tabId: string }[] = [
   { label: "Exam Date Sheet",  sublabel: "Exams · Date Sheet",    tabId: "exam-date-sheet" },
   { label: "Exam Roll Numbers",sublabel: "Exams · Roll Numbers",  tabId: "exam-rolls" },
   { label: "Admit Card",       sublabel: "Exams · Roll Numbers",  tabId: "exam-rolls" },
-  { label: "Mark Attendance",  sublabel: "Attendance",           tabId: "attendance" },
-  { label: "Monthly Report",   sublabel: "Attendance",           tabId: "attendance" },
   { label: "Upload Results",   sublabel: "Manage Results",       tabId: "results" },
   { label: "Marksheet",        sublabel: "Manage Results",       tabId: "results" },
   { label: "Class Timetable",  sublabel: "Timetables",           tabId: "timetables" },
@@ -345,7 +335,7 @@ interface AdminLayoutProps {
 const AdminLayout = ({ activeTab, onTabChange, children }: AdminLayoutProps) => {
   const { profile, signOut } = useAuth();
 
-  // Web Push: whenever any admin action (publish notice/news/results/merit list/
+  // Web Push: whenever any admin action (publish notice/results/merit list/
   // roll slips/date sheet, change an application status…) succeeds, ask the
   // server to announce whatever is newly public. Debounced; the server is
   // idempotent so repeated pings never double-notify.

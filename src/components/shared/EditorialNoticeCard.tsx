@@ -22,13 +22,13 @@ import type { Notice } from "@/hooks/useNotices";
 /* ────────────────────────────────────────────────────────────────────────────
  *  EditorialNoticeCard  —  v1 (advanced)
  *  ─────────────────────────────────────────────────────────────────────────
- *  PhD-level research-paper-styled notice card. Companion to EditorialNewsCard
- *  — shares the same restrained palette (ivory ground, ink text, antique
+ *  PhD-level research-paper-styled notice card. Restrained palette
+ *  (ivory ground, ink text, antique
  *  gold, deep crimson #7a1f2b, slate-blue #1e3a5f) and the same decorative
  *  vocabulary (paper grain, corner ticks, dual-tone gold rules, diamond
  *  ornaments, circular school seal, language-aware masthead).
  *
- *  Differences from EditorialNewsCard:
+ *  Layout highlights:
  *    • No image support (the notices table has no image_url column) — the
  *      MastheadEmblem is always shown.
  *    • Top-right badge stack reads Pinned / Urgent / Category, language-aware.
@@ -75,8 +75,7 @@ const CornerTicks = () => (
 );
 
 /* ── Hexagonal school seal (logo image inside a gold-ringed frame) ──
- *  Same pointy-top hexagon + gold gradient ring as EditorialNewsCard's
- *  SchoolSeal — both card families share the same heraldic crest look.
+ *  Pointy-top hexagon + gold gradient ring, heraldic crest look.
  *  Adds "xs" (48px) for use in compact masthead. */
 const HEXAGON_CLIP =
   "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";

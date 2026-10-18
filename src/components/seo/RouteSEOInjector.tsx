@@ -126,7 +126,7 @@ const ROUTES: RouteSEO[] = [
     pattern: "/",
     title: "GHS Babi Khel — Government High School, District Mohmand KPK",
     description:
-      "Government High School Babi Khel, District Mohmand, KPK Pakistan. Quality education, notices, news, results, library and admissions.",
+      "Government High School Babi Khel, District Mohmand, KPK Pakistan. Quality education, notices, results, library and admissions.",
     keywords:
       "GHS Babi Khel, Government High School Babi Khel, Mohmand school, KPK school, school admission, school notices, school results Pakistan",
     hasUrdu: true,
@@ -161,14 +161,6 @@ const ROUTES: RouteSEO[] = [
       "Browse the latest school notices, urgent announcements, academic updates and event information from Government High School Babi Khel.",
     keywords: "school notices, announcements, urgent notices, academic updates, GHS Babi Khel notices",
     breadcrumbs: () => [baseBreadcrumb, { name: "Notices", path: "/notices" }],
-  },
-  {
-    pattern: "/news",
-    title: "News & Updates — GHS Babi Khel | District Mohmand",
-    description:
-      "Read the latest news, stories and achievements from Government High School Babi Khel — events, sports, academics and student success.",
-    keywords: "school news, GHS Babi Khel news, school events, school stories, student achievements",
-    breadcrumbs: () => [baseBreadcrumb, { name: "News", path: "/news" }],
   },
   {
     pattern: "/results",
@@ -400,25 +392,6 @@ const ROUTES: RouteSEO[] = [
     jsonLd: () => librarySchema,
   },
   {
-    pattern: "/calendar",
-    title: "School Event Calendar — GHS Babi Khel | Exams, Holidays & PTMs",
-    description:
-      "View the official school calendar of GHS Babi Khel — exam dates, holidays, PTMs, sports days, results day and important events. Subscribe via .ics feed for automatic sync to Google Calendar or iPhone.",
-    keywords: "school calendar, exam dates, holidays, PTM, sports day, school events, GHS Babi Khel calendar, .ics feed",
-    breadcrumbs: () => [baseBreadcrumb, { name: "Calendar", path: "/calendar" }],
-    // ✅ Event schema — helps Google show upcoming events as rich results
-    jsonLd: () => ({
-      "@context": "https://schema.org",
-      "@type": "EventSchedule",
-      name: "GHS Babi Khel School Calendar",
-      description: "Official calendar of Government High School Babi Khel — exams, holidays, parent-teacher meetings, sports days and school events.",
-      url: `${SITE_URL}/calendar`,
-      startDate: new Date(new Date().getFullYear(), 0, 1).toISOString(),
-      endDate: new Date(new Date().getFullYear(), 11, 31).toISOString(),
-      organizer: { "@id": `${SITE_URL}#organization` },
-    }),
-  },
-  {
     pattern: "/contact",
     title: "Contact GHS Babi Khel — Address, Phone & Email | District Mohmand",
     description:
@@ -584,7 +557,7 @@ const ROUTES: RouteSEO[] = [
       {
     pattern: "/search",
     title: "Search — GHS Babi Khel",
-    description: "Search across notices, news, teachers and notes at Government High School Babi Khel.",
+    description: "Search across notices, teachers and notes at Government High School Babi Khel.",
     noIndex: true,  // ← ADDED: prevents thin-content search page from being indexed
     breadcrumbs: () => [baseBreadcrumb, { name: "Search", path: "/search" }],
   },
@@ -596,13 +569,6 @@ const ROUTES: RouteSEO[] = [
     breadcrumbs: () => [baseBreadcrumb, { name: "Duty Board", path: "/duty" }],
   },
   
-  {
-    pattern: "/news/:id",
-    title: "News Article — GHS Babi Khel",
-    description: "Read the latest news from Government High School Babi Khel.",
-    type: "article",
-    breadcrumbs: () => [baseBreadcrumb, { name: "News", path: "/news" }],
-  },
   {
     pattern: "/notices/:id",
     title: "School Notice — GHS Babi Khel",

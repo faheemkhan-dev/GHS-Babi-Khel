@@ -22,7 +22,7 @@
 //     parse it cleanly.
 //   • Every paragraph is real, human-readable content — no keyword stuffing,
 //     no hidden text. Google penalises both, and rightly so.
-//   • Internal links to /result-card, /admission, /notes, /calendar help
+//   • Internal links to /result-card, /admission, /notes help
 //     Google understand the site's content graph and pass PageRank to the
 //     result-related pages.
 //
@@ -360,21 +360,6 @@ const ResultsSeoContent = () => {
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                   Download your subject-wise detailed marks certificate with school rank and class
                   position for GHS Babi Khel school-internal exams.
-                </p>
-              </div>
-            </Link>
-            <Link
-              to="/calendar"
-              className="group bg-card border border-border rounded-2xl p-4 shadow-card hover:shadow-elevated transition-shadow flex items-start gap-3"
-            >
-              <GraduationCap className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-heading font-semibold text-foreground group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug">
-                  Exam Schedule &amp; Calendar
-                </h3>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Upcoming exam dates, result declaration dates, holidays and parent-teacher meetings
-                  for the current academic year. Subscribe via .ics for Google Calendar / iPhone sync.
                 </p>
               </div>
             </Link>
