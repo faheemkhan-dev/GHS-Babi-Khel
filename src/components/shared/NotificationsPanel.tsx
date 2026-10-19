@@ -45,7 +45,6 @@ const TYPE_META: Record<string, { icon: any; color: string; bg: string; label: s
   video:                 { icon: Video,        color: "text-rose-500",       bg: "bg-rose-500/10",       label: "Video"          },
   online_class:          { icon: MonitorPlay,  color: "text-teal-500",       bg: "bg-teal-500/10",       label: "Online Class"   },
   admission_open:        { icon: GraduationCap,color: "text-green-500",      bg: "bg-green-500/10",      label: "Admissions"     },
-  achievement:           { icon: Trophy,       color: "text-yellow-500",     bg: "bg-yellow-500/10",     label: "Achievement"    },
   homework:              { icon: ClipboardList,color: "text-sky-500",        bg: "bg-sky-500/10",        label: "Homework"       },
   admission_application: { icon: UserPlus,     color: "text-violet-500",     bg: "bg-violet-500/10",     label: "Application"    },
   admission_doc:         { icon: Upload,       color: "text-fuchsia-500",    bg: "bg-fuchsia-500/10",    label: "Document"       },
@@ -62,7 +61,7 @@ const TYPE_META: Record<string, { icon: any; color: string; bg: string; label: s
 import {
   Megaphone, Newspaper, BarChart3, Hash, Wallet, IdCard,
   CalendarDays, BookMarked, Video, MonitorPlay, GraduationCap,
-  Trophy, ClipboardList, UserPlus, Upload, BookOpen, MessageSquare,
+  ClipboardList, UserPlus, Upload, BookOpen, MessageSquare,
   Image, FileText, Mail, Flag,
 } from "lucide-react";
 

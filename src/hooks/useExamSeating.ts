@@ -11,7 +11,7 @@
 // QR format (this hook is the single source of truth):
 //   {"t":"seat","pid":planId,"rid":roomId,"sl":seatLabel,"stid":studentId,"rn":examRollNo}
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, supabasePublic } from "@/lib/supabase";
 import toast from "react-hot-toast";
@@ -1810,6 +1810,25 @@ export function useUpdatePaperTimes() {
  *      "present". Deduping at the query layer collapses these so the
  *      tally always sees exactly ONE row per (student, subject, date).
  */
+/** One exam_attendance row as fetched/patched by useLiveAttendance. */
+interface LiveAttendanceRow {
+  id: string;
+  student_id: string;
+  student_name: string;
+  class: string;
+  class_roll_no: string;
+  exam_roll_no: string;
+  subject: string;
+  exam_date: string;
+  status: "present" | "absent" | "leave";
+  scanned_at: string | null;
+  scanned_by: string | null;
+  seat_id: string | null;
+  room_id: string | null;
+  seat_label: string | null;
+  created_at?: string;
+}
+
 export function useLiveAttendance(
   examDate: string | null | undefined,
   sessionId?: string | null,
@@ -1899,9 +1918,11 @@ export function useLiveAttendance(
       }
       const dedupedRows = Array.from(dedupMap.values());
 
-      console.log("[useLiveAttendance] ── DIAGNOSTIC ──");
-      console.log("[useLiveAttendance] examDate:", examDate, "plan sessionId:", sessionId, "plan paperSubject:", paperSubject);
-      console.log("[useLiveAttendance] Total rows for this date:", allRows.length, "→ after dedupe:", dedupedRows.length);
+      // PERF: the per-poll DIAGNOSTIC logs ran in production on every fetch
+      // (5 s × hours of exam day). Now dev-only.
+      if (import.meta.env.DEV) {
+        console.log("[useLiveAttendance] examDate:", examDate, "rows:", allRows.length, "→ deduped:", dedupedRows.length);
+      }
 
       // ── Subject filter (client-side, loose match with fallback). ──
       if (paperSubject) {
@@ -1911,7 +1932,9 @@ export function useLiveAttendance(
           if (!row || !target) return false;
           return target.includes(row) || row.includes(target);
         });
-        console.log("[useLiveAttendance] After subject filter:", subjectMatched.length, "of", dedupedRows.length);
+        if (import.meta.env.DEV) {
+          console.log("[useLiveAttendance] after subject filter:", subjectMatched.length, "of", dedupedRows.length);
+        }
 
         // FALLBACK: if subject filter returns 0 rows but there ARE rows for
         // this date, use ALL rows. This handles the case where the plan's
@@ -1928,35 +1951,98 @@ export function useLiveAttendance(
     },
     enabled: !!examDate,
     staleTime: 5 * 1000,
-    // ── POLLING FALLBACK (rev. 8) ──
-    // Refetch every 5 seconds as a safety net. Realtime should deliver
-    // updates instantly, but if a websocket event is dropped (network
-    // blip, channel teardown race, browser tab throttling, etc.) the
-    // console would otherwise stay on stale data indefinitely. 5s polling
-    // caps the staleness window so the admin never sees "old attendance"
-    // for more than 5 seconds after an update.
-    refetchInterval: 5 * 1000,
+    // ── POLLING FALLBACK (rev. 9 — realtime now applies deltas directly) ──
+    // Realtime events update the cache INSTANTLY (see the channel below),
+    // so polling is only a safety net for dropped websocket events — 15 s
+    // (was 5 s) still bounds staleness while cutting the full-table refetch
+    // load on the wall screen by 3× over a multi-hour exam day.
+    refetchInterval: 15 * 1000,
   });
 
-  // Realtime: invalidate on any change to exam_attendance. We can't filter
-  // the realtime channel by exam_date, so we listen to all rows and let the
-  // query refetch handle the filtering. The invalidation is cheap because
-  // the query is already staleTime=5s.
+  // Realtime (rev. 9 — burst-proof):
+  //   • INSERT/UPDATE events are applied DIRECTLY to the cached rows
+  //     (same dedupe rule as the fetch: latest scanned_at wins per
+  //     student+subject+date) — a burst of 30 scans in 10 s paints every
+  //     scan the moment it happens instead of triggering 30 full refetches.
+  //   • A THROTTLED invalidation (≤ 1 refetch per 2.5 s, with a trailing
+  //     catch-up) then converges the cache with the server's dedupe /
+  //     filter rules in case a delta was ambiguous.
+  //   • DELETE events remove the row by id from the cache.
+  // Delta application is only done when paperSubject is null (the console's
+  // mode, where the cache = all rows for the date); with a subject filter
+  // the delta can't know whether the fetch used the filter or its fallback,
+  // so that path uses the throttled invalidation alone (still burst-proof).
   //
-  // queryKey is now MEMOIZED (rev. 8) so this effect only re-runs when
+  // queryKey is MEMOIZED so this effect only re-runs when
   // examDate/sessionId/paperSubject actually change — NOT on every render.
   // This keeps the Supabase channel stable and prevents event loss.
+  const lastInvalidateRef = useRef(0);
+  const trailTimerRef = useRef<number | null>(null);
   useEffect(() => {
+    const invalidateThrottled = () => {
+      const now = Date.now();
+      if (now - lastInvalidateRef.current >= 2500) {
+        lastInvalidateRef.current = now;
+        qc.invalidateQueries({ queryKey });
+      } else if (trailTimerRef.current === null) {
+        // Trailing catch-up: once the burst quietens, one final refetch
+        // converges everything the fast-path deltas may have mis-ordered.
+        trailTimerRef.current = window.setTimeout(() => {
+          trailTimerRef.current = null;
+          lastInvalidateRef.current = Date.now();
+          qc.invalidateQueries({ queryKey });
+        }, 2500 - (now - lastInvalidateRef.current));
+      }
+    };
+
+    const normDate = (raw: string | null | undefined): string => {
+      const s = String(raw ?? "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      return s.slice(0, 10);
+    };
+
     const channel = supabase
       .channel(`live-att-${examDate ?? "none"}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "exam_attendance" },
-        () => qc.invalidateQueries({ queryKey })
+        (payload: any) => {
+          try {
+            if (payload.eventType === "DELETE") {
+              const gone = payload.old?.id;
+              if (gone) {
+                qc.setQueryData<LiveAttendanceRow[]>(queryKey, (prev) =>
+                  prev ? prev.filter((r: any) => r.id !== gone) : prev
+                );
+              }
+              invalidateThrottled();
+              return;
+            }
+            const row = payload.new;
+            if (row && !paperSubject && examDate && String(row.exam_date || "").slice(0, 10) === examDate.slice(0, 10)) {
+              qc.setQueryData<LiveAttendanceRow[]>(queryKey, (prev) => {
+                if (!prev) return prev;
+                const key = `${row.student_id}|${row.subject}|${normDate(row.exam_date)}`;
+                const next = prev.filter((r: any) => r.id !== row.id && `${r.student_id}|${r.subject}|${normDate(r.exam_date)}` !== key);
+                next.push(row as LiveAttendanceRow);
+                return next;
+              });
+            }
+          } catch {
+            /* a malformed delta must never break the channel */
+          }
+          invalidateThrottled();
+        }
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [examDate, qc, queryKey]);
+    return () => {
+      if (trailTimerRef.current !== null) {
+        window.clearTimeout(trailTimerRef.current);
+        trailTimerRef.current = null;
+      }
+      supabase.removeChannel(channel);
+    };
+  }, [examDate, paperSubject, qc, queryKey]);
 
   return query;
 }

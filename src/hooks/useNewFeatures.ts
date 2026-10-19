@@ -60,7 +60,14 @@ export function useExamSchedule(cls?: string, examType?: string, year?: number) 
   });
 }
 
-export function useAllExamSchedule() {
+/**
+ * Whole exam date sheet. `options.enabled` lets callers gate the fetch —
+ * the public /roll-no-slip page only needs the sheet in LIVE mode (the
+ * countdown panel never prints a date sheet), so it passes
+ * { enabled: !showCountdown } and saves one whole-table request during
+ * countdown visits. All other callers keep the default (always on).
+ */
+export function useAllExamSchedule(options?: { enabled?: boolean }) {
   return useQuery<ExamScheduleEntry[]>({
     queryKey: ["all-exam-schedule"],
     queryFn: async () => {
@@ -71,6 +78,8 @@ export function useAllExamSchedule() {
       if (error) throw error;
       return data ?? [];
     },
+    enabled: options?.enabled ?? true,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

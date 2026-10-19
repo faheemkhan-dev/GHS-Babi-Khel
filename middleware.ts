@@ -268,6 +268,22 @@ function shouldLiveRender(pathname: string): boolean {
 const RENDER_PROXY_TIMEOUT_MS = 6000;
 
 async function proxyToLiveRender(request: Request, pathname: string): Promise<Response> {
+  // NOTE: a renderer 404 is a DELIBERATE answer ("this route does not exist"),
+  // not a failure. It MUST be passed through to the crawler — previously any
+  // non-200 (including 404) threw and fell through to the static pipeline,
+  // whose SPA-fallback shell answers 200 "index, follow" with the homepage
+  // title. Googlebot crawling a dead /notices/<uuid>, a wrong-case /FAQ or
+  // any other unknown path therefore saw a soft-404 instead of a clean 404 —
+  // the exact "duplicate/soft-404" signal Search Console reports. Only
+  // 5xx / timeouts / non-HTML bodies are treated as renderer failures and
+  // fall back to the (prerendered) static page.
+  const sanitize = (h: Headers) => {
+    const safe = new Headers(h);
+    for (const k of ["content-encoding", "content-length", "transfer-encoding", "connection", "keep-alive"]) {
+      safe.delete(k);
+    }
+    return safe;
+  };
   const renderUrl = new URL("/api/render", request.url);
   renderUrl.searchParams.set("path", pathname);
   const resp = await fetch(renderUrl.toString(), {
@@ -283,13 +299,25 @@ async function proxyToLiveRender(request: Request, pathname: string): Promise<Re
     signal: AbortSignal.timeout(RENDER_PROXY_TIMEOUT_MS),
   });
   const contentType = resp.headers.get("content-type") || "";
+  // Deliberate 404 from the renderer's strict route allow-list → pass it
+  // straight through (noindex 404 page) so crawlers get a real 404.
+  if (resp.status === 404 && contentType.includes("text/html")) {
+    return new Response(resp.body, { status: 404, statusText: "Not Found", headers: sanitize(resp.headers) });
+  }
   if (!resp.ok || !contentType.includes("text/html")) {
     // Renderer failed (cold-start 504, Supabase outage 5xx, rate limit, …).
     // Throw so the caller serves the prerendered page instead of piping the
     // error body to the crawler.
     throw new Error(`render hop returned ${resp.status} ${contentType || "(no content-type)"}`);
   }
-  const out = new Response(resp.body, resp);
+  // HEADER SANITISING (indexing fix): `fetch()` in the Edge runtime hands us an
+  // already-DECODED body, but the upstream headers still say
+  // "Content-Encoding: gzip/br" and carry the old Content-Length. Re-sending
+  // those headers with a decoded body makes the response undecodable for
+  // some clients — a crawler then reports "page fetch failed / couldn't be
+  // rendered". Copy only safe headers and let the platform re-compress.
+  const safeHeaders = sanitize(resp.headers);
+  const out = new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: safeHeaders });
   // SEO NOTE: "Vary: User-Agent" is intentionally NOT set.
   //
   // Google explicitly recommends against `Vary: User-Agent` for dynamic
@@ -476,6 +504,25 @@ export default async function middleware(request: Request) {
   const ua = request.headers.get("user-agent") || "";
   const { ip, fingerprint } = getClientInfo(request);
 
+  // ── /index.html canonicalisation (indexing fix) ──
+  // vercel.json rewrites "/faq" → "/faq/index.html" INTERNALLY (server-side,
+  // never re-enters the middleware), but a CLIENT that directly requests
+  // "/faq/index.html" or "/index.html" used to receive the SPA fallback shell
+  // with HTTP 200, the homepage title and no per-page canonical — a duplicate
+  // URL variant for every route of the site. A permanent 308 to the clean
+  // path consolidates all signals (links, canonical, rankings) on one URL
+  // for crawlers and users alike, mirroring the existing trailing-slash
+  // behaviour ("trailingSlash": false in vercel.json).
+  if (pathname === "/index.html" || pathname.endsWith("/index.html")) {
+    const clean = pathname.replace(/(?:^|\/)index\.html$/, "") || "/";
+    const target = new URL(clean, url.origin);
+    target.search = url.search; // preserve query strings
+    return new Response(null, {
+      status: 308,
+      headers: { Location: target.toString() },
+    });
+  }
+
   // ── Security Check 1: Blocked attack-tool UAs ──
   // (Googlebot, Bingbot, GPTBot, ClaudeBot, PerplexityBot etc. NEVER match
   //  this list — they are legitimate crawlers and must be served the site.)
@@ -507,7 +554,15 @@ export default async function middleware(request: Request) {
   // users. These must NEVER be hard-blocked — only throttled if a single
   // fingerprint becomes abusive.
   const limitType = getLimitTypeFromPath(pathname);
-  const rateLimitResult = checkRateLimit(fingerprint, limitType);
+  // Major SEARCH-ENGINE crawlers are never throttled on PAGE routes: a 429 to
+  // Googlebot is reported in Search Console as a server error and slows the
+  // domain-migration re-crawl. (API routes keep their limits; page routes
+  // are static/CDN-cached so there is nothing to protect.)
+  const isTrustedSearchBot =
+    !pathname.startsWith("/api/") && /\b(Googlebot|Google-InspectionTool|GoogleOther|Storebot-Google|Bingbot|AdIdxBot)\b/i.test(ua);
+  const rateLimitResult = isTrustedSearchBot
+    ? { allowed: true, remaining: 999 }
+    : checkRateLimit(fingerprint, limitType);
 
   if (!rateLimitResult.allowed) {
     return new Response(

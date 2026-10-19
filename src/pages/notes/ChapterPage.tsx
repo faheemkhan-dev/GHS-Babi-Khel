@@ -1465,6 +1465,26 @@ const ChapterPage = () => {
   }, [completed, user, chapter]);
 
   useEffect(() => { window.addEventListener("scroll", onScroll); return () => window.removeEventListener("scroll", onScroll); }, [onScroll]);
+
+  // Bottom action dock: slides away while scrolling DOWN, returns on scroll UP
+  // (and whenever the page is near the top). One passive listener, 1 pass/frame.
+  const [dockHidden, setDockHidden] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY, raf = 0, hidden = false;
+    const pass = () => {
+      raf = 0;
+      const y = window.scrollY, d = y - last;
+      let next = hidden;
+      if (y < 80) next = false;
+      else if (d > 6) next = true;
+      else if (d < -6) next = false;
+      last = y;
+      if (next !== hidden) { hidden = next; setDockHidden(next); }
+    };
+    const onS = () => { if (!raf) raf = requestAnimationFrame(pass); };
+    window.addEventListener("scroll", onS, { passive: true });
+    return () => { window.removeEventListener("scroll", onS); if (raf) cancelAnimationFrame(raf); };
+  }, []);
   useEffect(() => { try { localStorage.setItem("lite-mode", JSON.stringify(liteMode)); } catch { /* intentional */ } }, [liteMode]);
 
 
@@ -1570,17 +1590,17 @@ const ChapterPage = () => {
           bar (which is h-14 ≈ 56px), so this row is pinned at bottom-14. */}
 
       {/* ── Mobile: horizontal bottom row (X-style) ── */}
-      <div className={`lg:hidden fixed left-0 right-0 z-40 bg-card/95 backdrop-blur-sm border-t border-border flex items-stretch ${
+      <div className={`lg:hidden fixed left-0 right-0 z-40 bg-card/95 backdrop-blur-sm border-t border-border flex items-stretch transition-transform duration-300 ease-out ${
         (prevChapter || nextChapter) ? "bottom-14" : "bottom-0"
-      }`}>
+      } ${dockHidden ? "translate-y-[260%]" : "translate-y-0"}`}>
         <button onClick={() => setShowAiAssistant(true)} aria-label="AI Study Buddy"
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 relative">
-          <AiSparkleIcon size={20} className="text-orange-600" />
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 relative">
+          <AiSparkleIcon size={26} className="text-orange-600" />
         </button>
 
         <button onClick={()=>setShowPomodoro(v=>!v)} aria-label="Study Timer"
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2">
-          <span className="text-lg leading-none">🍅</span>
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5">
+          <span className="text-[26px] leading-none">🍅</span>
         </button>
 
         {(chapter as any).audio_url ? (
@@ -1602,31 +1622,31 @@ const ChapterPage = () => {
         ) : (
           chapter.audio_enabled !== false && (
             <button onClick={()=>setShowAudio(v=>!v)} aria-label="Read Aloud"
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2">
-              <Volume2 className={`w-5 h-5 ${showAudio ? "text-blue-700" : "text-blue-600"}`} />
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5">
+              <Volume2 className={`w-6 h-6 ${showAudio ? "text-blue-700" : "text-blue-600"}`} />
             </button>
           )
         )}
 
         {flashcards.length > 0 && (
           <button onClick={()=>setShowFlashcards(true)} aria-label="Flashcards"
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2">
-            <span className="text-lg leading-none">📇</span>
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5">
+            <span className="text-[26px] leading-none">📇</span>
           </button>
         )}
 
         {user && (
           <button onClick={() => setShowAnnotationPanel(v => !v)} aria-label="View annotations"
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2">
-            <MessageSquare className={`w-5 h-5 ${showAnnotationPanel ? "text-indigo-700" : "text-indigo-500"}`} />
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5">
+            <MessageSquare className={`w-6 h-6 ${showAnnotationPanel ? "text-indigo-700" : "text-indigo-500"}`} />
           </button>
         )}
 
         {/* Leaderboard — Trophy button in bottom dock */}
         {user && (
           <button onClick={() => setShowLeaderboard(true)} aria-label="Leaderboard"
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2">
-            <Trophy className="w-5 h-5 text-yellow-500" />
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5">
+            <Trophy className="w-6 h-6 text-yellow-500" />
           </button>
         )}
       </div>
@@ -1780,14 +1800,14 @@ const ChapterPage = () => {
         )}
 
         <main className="flex-1 min-w-0">
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4 flex-wrap">
-            <Link to="/notes" className="hover:text-foreground">Notes</Link>
-            <ChevronRight className="w-3 h-3" />
-            <Link to={`/notes/${subjectSlug}`} className="hover:text-foreground">{subject.name}</Link>
-            <ChevronRight className="w-3 h-3" />
-            <span className="text-foreground font-medium truncate max-w-[150px]">{chapter.title}</span>
-          </div>
+          {/* Breadcrumb — compact pill trail */}
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-[11px] text-muted-foreground mb-3 overflow-x-auto scrollbar-hide whitespace-nowrap">
+            <Link to="/notes" className="hover:text-foreground font-medium">Notes</Link>
+            <ChevronRight className="w-3 h-3 shrink-0 opacity-60" />
+            <Link to={`/notes/${subjectSlug}`} className="hover:text-foreground font-medium">{subject.name}</Link>
+            <ChevronRight className="w-3 h-3 shrink-0 opacity-60" />
+            <span className="text-foreground font-semibold truncate max-w-[180px]">{chapter.title}</span>
+          </nav>
 
           {/* Leaderboard access moved into the Rank panel itself */}
           {user && completed && !isStaff && (
@@ -1825,62 +1845,65 @@ const ChapterPage = () => {
             )}
           </AnimatePresence>
 
-          {/* Chapter header — refined gradient, always readable (no muddy overlay) */}
-          <div className="relative overflow-hidden rounded-2xl md:rounded-3xl p-3.5 sm:p-6 md:p-8 mb-4 md:mb-8 text-white"
+          {/* Chapter header — premium hero card */}
+          <div className="relative overflow-hidden rounded-2xl mb-3 md:mb-5 text-white shadow-card"
             style={{background:getSubjectGradient(subject.color)}}>
-            {/* Ambient glow + fine texture */}
-            <div className="absolute inset-0 pointer-events-none" style={{background:"radial-gradient(circle at 88% 8%, rgba(255,255,255,0.16), transparent 50%)"}} />
-            <div className="absolute inset-0 opacity-30" style={{backgroundImage:"radial-gradient(rgba(255,255,255,0.09) 1px, transparent 1px)",backgroundSize:"22px 22px"}} />
-            <div className="absolute top-0 right-0 text-5xl sm:text-7xl md:text-8xl opacity-10 select-none">{subject.emoji}</div>
-            <div className="relative">
-              <div className="flex items-center gap-1.5 mb-2 md:mb-3 flex-wrap">
-                <span className="bg-white/15 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[10px] md:text-xs font-bold" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.22)"}}>Chapter {chapter.chapter_number}</span>
-                <span className="bg-white/15 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[10px] md:text-xs font-bold capitalize" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.22)"}}>{chapter.difficulty}</span>
+            <div className="absolute inset-0 pointer-events-none" style={{background:"radial-gradient(circle at 90% 0%, rgba(255,255,255,0.20), transparent 55%)"}} />
+            <div className="absolute inset-0 opacity-30 pointer-events-none" style={{backgroundImage:"radial-gradient(rgba(255,255,255,0.09) 1px, transparent 1px)",backgroundSize:"22px 22px"}} />
+            {/^\d+$/.test(String(chapter.chapter_number)) && <span aria-hidden className="absolute right-2 -bottom-3 text-[4.5rem] sm:text-[6rem] font-black leading-none text-white/10 select-none">{chapter.chapter_number}</span>}
+            <div className="relative p-3 sm:p-5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center text-base shrink-0" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.25)"}}>{subject.emoji}</span>
+                <span className="bg-white/15 px-2 h-5 inline-flex items-center rounded-full text-[10px] font-bold tracking-wide" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.25)"}}>{/^\d+$/.test(String(chapter.chapter_number)) ? `Chapter ${chapter.chapter_number}` : "Notes"}</span>
+                <span className="bg-white/15 px-2 h-5 inline-flex items-center rounded-full text-[10px] font-bold capitalize" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.25)"}}>{chapter.difficulty}</span>
                 {(chapter as any).bise_important && (
-                  <span className="bg-red-500/90 px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[10px] md:text-xs font-bold shadow-sm">🎯 BISE Topic — {(chapter as any).bise_years} past papers</span>
+                  <span className="bg-red-500/90 px-2.5 h-6 inline-flex items-center rounded-full text-[10px] sm:text-xs font-bold shadow-sm">🎯 BISE · {(chapter as any).bise_years} past papers</span>
                 )}
                 <CompletionStamp subjectColor={subject.color} show={completed} />
               </div>
-              <h1 className="text-base sm:text-xl md:text-3xl font-heading font-black leading-tight mb-1.5 md:mb-3">{chapter.title}</h1>
-              {chapter.description && <p className="text-white/80 text-xs sm:text-sm">{chapter.description}</p>}
-              <div className="flex flex-wrap items-center gap-1.5 md:gap-4 mt-2.5 md:mt-4">
-                <div className="flex items-center gap-1 text-[11px] sm:text-sm text-white/85"><Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> {chapter.read_time_mins} min</div>
-                {chapter.animation_code && <div className="flex items-center gap-1 text-[11px] sm:text-sm text-white/85"><Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Interactive</div>}
-                {(chapter as any).audio_url && <div className="flex items-center gap-1 text-[11px] sm:text-sm text-white/85"><Headphones className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Audio Notes</div>}
-                {flashcards.length>0 && <div className="flex items-center gap-1 text-[11px] sm:text-sm text-white/85"><Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> {flashcards.length} cards</div>}
-                <div className="ml-auto flex flex-wrap items-center gap-1.5 md:gap-2">
-                  <button onClick={toggleBookmark}
-                    className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white px-2 py-1 md:px-3 md:py-1.5 rounded-lg md:rounded-xl text-[11px] sm:text-sm font-medium transition-colors" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.22)"}}>
-                    {bookmarked?<BookmarkCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4"/>:<Bookmark className="w-3.5 h-3.5 sm:w-4 sm:h-4"/>}
-                    <span className="hidden sm:inline">{bookmarked?"Saved":"Save"}</span>
-                  </button>
-                  <button onClick={()=>setShowPrint(true)}
-                    className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white px-2 py-1 md:px-3 md:py-1.5 rounded-lg md:rounded-xl text-[11px] sm:text-sm font-medium transition-colors" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.22)"}}>
-                    <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" /><span className="hidden sm:inline">Print</span>
-                  </button>
-                  {chapter.pdf_url && (
-                    <a href={chapter.pdf_url} target="_blank" rel="noreferrer"
-                      className="flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white px-2 py-1 md:px-3 md:py-1.5 rounded-lg md:rounded-xl text-[11px] sm:text-sm font-medium transition-colors" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.22)"}}>
-                      <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" /><span className="hidden sm:inline">PDF</span>
-                    </a>
-                  )}
-                  <button onClick={()=>{ const next=!liteMode; setLiteMode(next); toast.success(next?"Lite Mode on — images, animations & charts hidden for faster loading":"Lite Mode off — full content restored", { icon: next?"📡":"🔆", duration: 2500 }); }} title={liteMode?"Disable Lite Mode":"Lite Mode (hides images/animations for faster loading)"}
-                    className={`flex items-center gap-1 px-2 py-1 md:px-3 md:py-1.5 rounded-lg md:rounded-xl text-[11px] sm:text-sm font-medium transition-colors ${liteMode?"bg-white/30":"bg-white/15 hover:bg-white/25"} text-white`}>
-                    {liteMode?"🔆":"📡"}
-                  </button>
-                  <button onClick={()=>setSidebarOpen(true)}
-                    className="lg:hidden flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white px-2 py-1 md:px-3 md:py-1.5 rounded-lg md:rounded-xl text-[11px] sm:text-sm font-medium transition-colors" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.22)"}}>
-                    <Menu className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </button>
-                </div>
+
+              <h1 className="mt-2 text-lg sm:text-2xl font-heading font-black leading-tight tracking-tight">{chapter.title}</h1>
+              {chapter.description && <p className="mt-1 text-white/80 text-xs max-w-2xl leading-snug line-clamp-1">{chapter.description}</p>}
+
+              <div className="mt-2 flex flex-wrap items-center gap-1">
+                <span className="inline-flex items-center gap-1 h-5 px-2.5 rounded-full bg-black/15 text-[11px] font-medium"><Clock className="w-3 h-3" /> {chapter.read_time_mins} min read</span>
+                {chapter.animation_code && <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-black/15 text-[10px] font-medium"><Zap className="w-3 h-3" /> Interactive</span>}
+                {(chapter as any).audio_url && <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-black/15 text-[10px] font-medium"><Headphones className="w-3 h-3" /> Audio</span>}
+                {flashcards.length>0 && <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-black/15 text-[10px] font-medium"><Layers className="w-3 h-3" /> {flashcards.length} cards</span>}
               </div>
+
+              <div className="mt-2.5 pt-2.5 border-t border-white/20 flex flex-wrap items-center gap-1.5">
+                <button onClick={toggleBookmark} className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 text-white text-[11px] font-semibold transition" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.25)"}}>
+                  {bookmarked?<BookmarkCheck className="w-3.5 h-3.5"/>:<Bookmark className="w-3.5 h-3.5"/>}
+                  {bookmarked?"Saved":"Save"}
+                </button>
+                <button onClick={()=>setShowPrint(true)} className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 text-white text-[11px] font-semibold transition" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.25)"}}>
+                  <Download className="w-3.5 h-3.5" /> Print
+                </button>
+                {chapter.pdf_url && (
+                  <a href={chapter.pdf_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 text-white text-[11px] font-semibold transition" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.25)"}}>
+                    <Download className="w-3.5 h-3.5" /> PDF
+                  </a>
+                )}
+                <button onClick={()=>{ const next=!liteMode; setLiteMode(next); toast.success(next?"Lite Mode on — images, animations & charts hidden for faster loading":"Lite Mode off — full content restored", { icon: next?"📡":"🔆", duration: 2500 }); }} title={liteMode?"Disable Lite Mode":"Lite Mode (hides images/animations for faster loading)"}
+                  className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full active:scale-95 text-white text-[11px] font-semibold transition ${liteMode?"bg-white/35":"bg-white/15 hover:bg-white/25"}`} style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.25)"}}>
+                  {liteMode?"🔆":"📡"} <span>{liteMode?"Lite on":"Lite"}</span>
+                </button>
+                <button onClick={()=>setSidebarOpen(true)} className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 text-white text-[11px] font-semibold transition lg:hidden ml-auto" style={{boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.25)"}}>
+                  <Menu className="w-3.5 h-3.5" /> Chapters
+                </button>
+              </div>
+            </div>
+            {/* thin live reading progress along the card's bottom edge */}
+            <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-black/15">
+              <div className="h-full bg-white/90 transition-[width] duration-300" style={{width:`${readProgress}%`}} />
             </div>
           </div>
 
           {/* Chapter Content — rendered with RTL support */}
           <div ref={contentRef}
             style={{fontSize:"17px",lineHeight:"1.85","--sc":getSubjectSolid(subject.color)} as React.CSSProperties}
-            className={`notes-content prose prose-base md:prose-lg max-w-none dark:prose-invert
+            className={`notes-content rounded-2xl border border-border bg-card shadow-card px-3.5 py-4 sm:px-6 sm:py-6 md:px-9 md:py-8 prose prose-base md:prose-lg max-w-none dark:prose-invert
               prose-h2:text-[color:var(--sc)] dark:prose-h2:text-gold-soft prose-h2:font-black prose-h2:tracking-tight
               prose-h3:text-foreground prose-h3:font-bold
               prose-strong:text-foreground
@@ -1972,7 +1995,7 @@ const ChapterPage = () => {
               exists; otherwise it would just be an empty bordered strip
               between the action row above and the screen edge. */}
           {(prevChapter || nextChapter) && (
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-card/95 backdrop-blur-sm border-t border-border flex">
+            <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-card/95 backdrop-blur-sm border-t border-border flex transition-transform duration-300 ease-out ${dockHidden ? "translate-y-full" : "translate-y-0"}`}>
               {prevChapter
                 ? <Link to={`/notes/${subjectSlug}/${prevChapter.slug}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-semibold text-muted-foreground hover:text-foreground border-r border-border">
                     <ArrowLeft className="w-4 h-4" /> Prev

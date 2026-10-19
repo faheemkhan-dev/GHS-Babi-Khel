@@ -1,6 +1,14 @@
 {
   "regions": ["bom1"],
   "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/((?!sitemap\\.xml|robots\\.txt).*)",
+      "has": [{ "type": "host", "value": "(.*\\.)?indevs\\.in" }],
+      "destination": "https://ghsbabikhel.dpdns.org/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/llms.txt", "destination": "/api/seo?kind=llms" },
     { "source": "/ai-data.json", "destination": "/api/render?feed=ai" },

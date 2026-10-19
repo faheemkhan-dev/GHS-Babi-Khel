@@ -43,8 +43,11 @@ import {
   Play, Square, RotateCcw, ChevronDown,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+// PERF (chunk size): jspdf + jspdf-autotable load ONLY when the Absentee
+// PDF button is clicked — the console wall screen never pays for them.
+// (The countdown ticking is isolated per-PaperCard / per-MCQ-timer below —
+// previously ONE 1 s interval re-rendered the whole console tree.)
+import { useNowTick, useBoundaryNow } from "@/hooks/useRollSlipCountdown";
 import {
   useAllSeatingPlans, useSeatingPlan, useLiveAttendance,
   listPlanPaperTimes, resolveClassPaperTime,
@@ -161,8 +164,19 @@ function writeMcqTimer(state: McqTimerState | null): void {
  * 3D Hall. The auto-flip is written to localStorage so the other tab
  * picks it up too.
  */
-function useMcqTimer(now: number) {
+function useMcqTimer() {
   const [state, setState] = useState<McqTimerState | null>(() => readMcqTimer());
+
+  // PERF: the timer now ticks ITSELF — and only while a timer actually
+  // exists. Previously the whole ConsoleView re-rendered every second just
+  // to feed this hook a `now` prop; now the 1 s tick lives inside the
+  // McqTimerButton subtree (idle console = zero per-second renders).
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!state) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [state !== null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-read on every tick (1s) so the derived remaining time updates
   // smoothly. We don't setState unless something actually changed, to
@@ -236,10 +250,13 @@ function useMcqTimer(now: number) {
   // Derived remaining milliseconds (clamped to ≥ 0).
   const remainingMs = useMemo(() => {
     if (!state) return 0;
-    if (state.status === "stopped") return Math.max(0, state.endTime - Date.now());
+    // Uses the ticking `now` (not Date.now()) so the memo recomputes each
+    // second the internal tick fires — with Date.now() the value would
+    // freeze because `state` only changes on start/stop/reset.
+    if (state.status === "stopped") return Math.max(0, state.endTime - now);
     if (state.status === "finished") return 0;
     // running
-    return Math.max(0, state.endTime - Date.now());
+    return Math.max(0, state.endTime - now);
   }, [state, now]);
 
   const start = useCallback((minutes: number) => {
@@ -556,14 +573,18 @@ const ConsoleView = ({ planId, onBack }: { planId: string; onBack: () => void })
   const queryClient = useQueryClient();
   const { data: plan, isLoading: loadingPlan } = useSeatingPlan(planId);
   const [threshold, setThreshold] = useState(20);
-  const [now, setNow] = useState(Date.now());
   const [openAbsent, setOpenAbsent] = useState<Record<string, boolean>>({});
 
-  // Tick every second for countdowns.
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
+  /* PERF: the wall console no longer re-renders every second.
+     Stage 1 — `dayNow` advances only at midnight (keeps todayStr correct
+     across the date flip). Stage 2 — `now` (below, after the groups are
+     built) advances only when a paper phase actually flips (a startMs /
+     endMs boundary passes). PaperCard and the MCQ timer tick themselves
+     internally, so the rest of the console renders on data changes and
+     phase flips only. */
+  const dayNow = useBoundaryNow([
+    (() => { const m = new Date(); m.setHours(24, 0, 0, 0); return m.getTime(); })(),
+  ]);
 
   // Keep the Date Sheet fresh (edits made in another tab/device show up
   // within a minute without a manual refresh).
@@ -572,12 +593,9 @@ const ConsoleView = ({ planId, onBack }: { planId: string; onBack: () => void })
     return () => clearInterval(t);
   }, [queryClient]);
 
-  // MCQ Timer (shared with 3D Hall via localStorage) — unchanged.
-  const mcqTimer = useMcqTimer(now);
-
-  // TODAY, derived from the ticking clock → the moment the local date flips
+  // TODAY, derived from the boundary clock → the moment the local date flips
   // at midnight, every query/memo below re-keys and all counters read 0.
-  const todayStr = dateStrOf(new Date(now));
+  const todayStr = dateStrOf(new Date(dayNow));
 
   const { data: dateSheetEntries = [] } = useAllExamSchedule();
   const { data: examSessions = [] } = useExamSessions();
@@ -605,6 +623,14 @@ const ConsoleView = ({ planId, onBack }: { planId: string; onBack: () => void })
     () => (plan && nextDate ? buildGroups(plan, examSession, dateSheetEntries as DateSheetRow[], nextDate) : []),
     [plan, examSession, dateSheetEntries, nextDate]
   );
+
+  // Stage 2 of the boundary clock: `now` re-renders the console ONLY when a
+  // paper actually starts/ends (or the tab wakes). Everything below that
+  // reads `now` (phases, tallies, export rows) recomputes exactly then.
+  const now = useBoundaryNow([
+    ...todayGroups.flatMap(g => [g.startMs, ...(g.endMs !== null ? [g.endMs] : [])]),
+    ...nextGroups.flatMap(g => [g.startMs, ...(g.endMs !== null ? [g.endMs] : [])]),
+  ]);
 
   // Changes only when a paper flips to "done" → recompute the tally then
   // (without re-running it every second from the ticking clock).
@@ -765,7 +791,7 @@ const ConsoleView = ({ planId, onBack }: { planId: string; onBack: () => void })
         </div>
 
         <div className="relative mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
-          <McqTimerButton timer={mcqTimer} />
+          <McqTimerButton />
         </div>
       </div>
 
@@ -781,7 +807,7 @@ const ConsoleView = ({ planId, onBack }: { planId: string; onBack: () => void })
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            {todayGroups.map(g => <PaperCard key={g.key} g={g} now={now} />)}
+            {todayGroups.map(g => <PaperCard key={g.key} g={g} />)}
           </div>
         )}
       </section>
@@ -798,7 +824,7 @@ const ConsoleView = ({ planId, onBack }: { planId: string; onBack: () => void })
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              {nextGroups.map(g => <PaperCard key={g.key} g={g} now={now} />)}
+              {nextGroups.map(g => <PaperCard key={g.key} g={g} />)}
             </div>
           )}
         </section>
@@ -987,7 +1013,10 @@ const ConsoleView = ({ planId, onBack }: { planId: string; onBack: () => void })
 };
 
 // ── Paper card: class names + subject + time range + its OWN countdown ──
-const PaperCard = ({ g, now }: { g: PaperGroup; now: number }) => {
+// PERF: each card ticks ITSELF once per second — the countdowns stay live
+// without re-rendering the rest of the console tree.
+const PaperCard = ({ g }: { g: PaperGroup }) => {
+  const now = useNowTick(1000);
   const phase = phaseOf(g, now);
   let label = "";
   let value = "";
@@ -1109,6 +1138,11 @@ const AbsenteePdfButton = ({ plan, rows, tally, papers }: {
         (a, b) => sortClasses(a.class, b.class) || a.room_name.localeCompare(b.room_name, undefined, { numeric: true }) || a.seat_label.localeCompare(b.seat_label, undefined, { numeric: true })
       );
 
+      // PERF: PDF libraries load only on this click (see import note at top).
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageW = doc.internal.pageSize.getWidth();
 
@@ -1186,10 +1220,13 @@ type McqTimerApi = ReturnType<typeof useMcqTimer>;
 
 const QUICK_MINUTES = [5, 10, 15, 20, 30, 45, 60];
 
-function McqTimerButton({ timer }: { timer: McqTimerApi }) {
+function McqTimerButton() {
   const [open, setOpen] = useState(false);
   const [minutes, setMinutes] = useState("15");
 
+  // PERF: the hook (and its 1 s tick) lives INSIDE the button — the rest of
+  // the console no longer re-renders while the MCQ timer runs.
+  const timer = useMcqTimer();
   const { state, remainingMs, start, stop, reset } = timer;
   const isLive = state && (state.status === "running" || state.status === "stopped");
   const isFinished = state?.status === "finished";

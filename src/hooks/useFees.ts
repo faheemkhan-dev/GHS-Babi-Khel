@@ -498,6 +498,20 @@ export function useFeePayments(filters?: {
   });
 }
 
+// Shape of a fee_payments row as returned by both the RPC and the fallback.
+type FeePaymentRow = {
+  id: string;
+  voucher_id: string;
+  student_id: string;
+  amount: number;
+  payment_method: string;
+  receipt_number: string | null;
+  payment_date: string;
+  received_by: string | null;
+  notes: string | null;
+  [k: string]: unknown;
+};
+
 export function useRecordPayment() {
   const qc = useQueryClient();
 
@@ -512,6 +526,32 @@ export function useRecordPayment() {
       receivedBy?: string;
       notes?: string;
     }) => {
+      // ── FAST PATH: one atomic RPC (payment insert + voucher update in a
+      // single transaction). Also fixes the read-modify-write race where two
+      // clerks recording payments on the same voucher concurrently could
+      // LOSE an amount (both read paid_amount=X, both write X+their amount).
+      // The RPC lives in supabase/migrations/…_fee_record_payment.sql; if it
+      // is not installed yet (PGRST202 / 404), we transparently fall back to
+      // the original 3-step client flow so recording payments NEVER breaks
+      // on a database that hasn't run the migration.
+      const rpc = await supabase.rpc("record_fee_payment", {
+        p_voucher_id: params.voucherId,
+        p_student_id: params.studentId,
+        p_amount: params.amount,
+        p_payment_method: params.paymentMethod,
+        p_receipt_number: params.receiptNumber || `RCP-${Date.now()}`,
+        p_payment_date: params.paymentDate,
+        p_received_by: params.receivedBy ?? null,
+        p_notes: params.notes ?? null,
+      });
+      const rpcMissing =
+        rpc.error &&
+        (rpc.error.code === "PGRST202" || rpc.error.code === "404" ||
+          /function .* does not exist|Could not find the function/i.test(rpc.error.message || ""));
+      if (!rpc.error && rpc.data) return rpc.data as unknown as FeePaymentRow;
+      if (!rpcMissing) throw rpc.error;
+
+      // ── FALLBACK: original 3-step flow (pre-migration databases) ──
       // 1. Insert payment
       const { data: payment, error: payErr } = await supabase
         .from("fee_payments")
@@ -636,9 +676,10 @@ export function useFeeDashboard() {
   });
 }
 
-export function useFeeDefaulters(classLevel?: string) {
+export function useFeeDefaulters(classLevel?: string, options?: { enabled?: boolean }) {
   return useQuery<StudentFeeSummary[]>({
     queryKey: ["fee-defaulters", classLevel],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       let voucherQuery = supabase
         .from("fee_vouchers")
@@ -673,14 +714,25 @@ export function useFeeDefaulters(classLevel?: string) {
         if (v.status === "overdue") map[v.student_id].overdue_count += 1;
       });
 
-      // Get student details
+      // Get student details + last payment dates.
+      // PERF: both queries depend only on studentIds, so they now run in
+      // PARALLEL (previously two serial round trips).
       const studentIds = Object.keys(map);
       if (!studentIds.length) return [];
 
-      const { data: students } = await supabase
-        .from("students")
-        .select("id, full_name, roll_number, class, photo_url")
-        .in("id", studentIds);
+      const [studentsRes, paymentsRes] = await Promise.all([
+        supabase
+          .from("students")
+          .select("id, full_name, roll_number, class, photo_url")
+          .in("id", studentIds),
+        supabase
+          .from("fee_payments")
+          .select("student_id, payment_date")
+          .in("student_id", studentIds)
+          .order("payment_date", { ascending: false }),
+      ]);
+      const students = studentsRes.data;
+      const payments = paymentsRes.data;
 
       students?.forEach((s) => {
         if (map[s.id]) {
@@ -689,13 +741,6 @@ export function useFeeDefaulters(classLevel?: string) {
           map[s.id].photo_url = s.photo_url;
         }
       });
-
-      // Get last payment dates
-      const { data: payments } = await supabase
-        .from("fee_payments")
-        .select("student_id, payment_date")
-        .in("student_id", studentIds)
-        .order("payment_date", { ascending: false });
 
       payments?.forEach((p) => {
         if (map[p.student_id] && !map[p.student_id].last_payment_date) {
@@ -709,11 +754,12 @@ export function useFeeDefaulters(classLevel?: string) {
   });
 }
 
-export function useFeeCollectionReport(year?: number) {
+export function useFeeCollectionReport(year?: number, options?: { enabled?: boolean }) {
   const reportYear = year || new Date().getFullYear();
 
   return useQuery<CollectionReport[]>({
     queryKey: ["fee-collection-report", reportYear],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const { data: vouchers, error } = await supabase
         .from("fee_vouchers")
@@ -747,11 +793,12 @@ export function useFeeCollectionReport(year?: number) {
   });
 }
 
-export function useClassCollectionSummary(year?: number) {
+export function useClassCollectionSummary(year?: number, options?: { enabled?: boolean }) {
   const reportYear = year || new Date().getFullYear();
 
   return useQuery<ClassCollectionSummary[]>({
     queryKey: ["class-collection-summary", reportYear],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const { data: vouchers, error } = await supabase
         .from("fee_vouchers")

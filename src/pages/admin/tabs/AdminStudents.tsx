@@ -13,7 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { Plus, Pencil, Trash2, Loader2, Upload, Search, FileUp, Download, GraduationCap, ArrowRight, User, ChevronLeft, ChevronRight, Eye } from "lucide-react";
-import ExcelJS from "exceljs";
+// PERF (chunk size): exceljs (937 kB) now loads only when the template
+// download is clicked — it was previously bundled into this tab's chunk.
+import type ExcelJSTypes from "exceljs";
 import toast from "react-hot-toast";
 import { StudentProfileDrawer } from "@/components/admin/StudentProfileDrawer";
 import { examTypeLabel } from "@/utils/examTypeLabel";
@@ -204,7 +206,8 @@ const AdminStudents = () => {
   };
 
   const downloadCSVTemplate = async () => {
-    const wb = new ExcelJS.Workbook();
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook() as ExcelJSTypes.Workbook;
     const ws = wb.addWorksheet("Students Template");
 
     const headers = ["full_name", "roll_number", "class", "father_name", "father_cnic", "contact_number"];

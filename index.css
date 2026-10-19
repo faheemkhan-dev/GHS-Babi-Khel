@@ -506,7 +506,7 @@
      }
 
 /* Hides the scrollbar while keeping horizontal scroll functional —
-   used for the Announcements admin tab bar (Notices/News/Achievements/Merit List) */
+   used for the Announcements admin tab bar (Notices) */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;

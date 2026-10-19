@@ -21,7 +21,7 @@
  * Integrates with the existing exam_roll_sessions table (no schema change
  * to existing tables — only adds the three new seating_* tables).
  */
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense, memo, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabase";
@@ -40,9 +40,14 @@ import {
   CalendarDays, ChevronRight, Check, Sparkles, Info, Layers,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import AdminExamConsole from "./AdminExamConsole";
+// PERF (chunk size): jspdf is loaded ONLY inside the three PDF buttons'
+// click handlers (dynamic import) — the old static import shipped ~142 KB
+// compressed of PDF library to every admin who opened this tab. The dead
+// `autoTable` import (never called in this file) is deleted outright.
+// AdminExamConsole is lazy: it is a whole live-console subsystem (its own
+// jspdf usage, a 1 s clock ticker and realtime attendance machinery) that
+// only matters when the "Live Console" pill is selected.
+const AdminExamConsole = lazy(() => import("./AdminExamConsole"));
 import {
   useExamSessions,
 } from "@/hooks/useExamAttendance";
@@ -144,7 +149,9 @@ const AdminExamSeating = () => {
       </div>
 
       {topTab === "console" ? (
-        <AdminExamConsole />
+        <Suspense fallback={<div className="flex items-center justify-center py-24 text-sm text-muted-foreground">Loading Live Console…</div>}>
+          <AdminExamConsole />
+        </Suspense>
       ) : selectedPlanId ? (
         <PlanEditor planId={selectedPlanId} onBack={() => setSelectedPlanId(null)} />
       ) : (
@@ -877,9 +884,76 @@ const RoomSidebar = ({ plan, activeRoomId, onSelect }: {
 // ────────────────────────────────────────────────────────────────────────────
 // 5. ROOM DESK MAP (visual grid editor + viewer)
 // ────────────────────────────────────────────────────────────────────────────
+
+/* PERF: the desk grid can be up to 30×30 = 900 cells, and the invigilator /
+   duty / notes inputs live in the SAME component — every keystroke used to
+   re-render every cell, each cell re-scanning the whole block_layout array
+   and re-running a findIndex over duties. The cell is now a memoised
+   component fed by precomputed Set/lookup props, so typing in the side
+   inputs re-renders nothing but the input itself. */
+const DUTY_BAND_COLORS = [
+  "border-t-4 border-t-blue-400", "border-t-4 border-t-emerald-400",
+  "border-t-4 border-t-amber-400", "border-t-4 border-t-rose-400",
+  "border-t-4 border-t-violet-400", "border-t-4 border-t-cyan-400",
+];
+
+interface DeskCellProps {
+  idx: number;
+  r: number;
+  c: number;
+  isBlocked: boolean;
+  assign: RoomWithAssignments["assignments"][number] | undefined;
+  bandClass: string;
+  onToggle: (r: number, c: number) => void;
+}
+
+const DeskCell = memo(({ idx, r, c, isBlocked, assign, bandClass, onToggle }: DeskCellProps) => {
+  if (isBlocked) {
+    return (
+      <div
+        key={idx}
+        onClick={() => onToggle(r, c)}
+        className={`flex min-h-[58px] cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-foreground/10 text-[11px] text-muted-foreground dark:bg-foreground/20 ${bandClass}`}
+        title="Blocked — tap to unblock"
+      >
+        ✕
+      </div>
+    );
+  }
+  if (assign) {
+    const cc = colorFor(assign.class);
+    return (
+      <div
+        key={idx}
+        className={`flex min-h-[58px] flex-col justify-between gap-0.5 rounded-lg border p-1.5 text-[10px] leading-tight shadow-sm ${cc.bg} ${cc.text} ${bandClass}`}
+        title={`${assign.student_name} · Class ${assign.class} · ${assign.seat_label}`}
+      >
+        <span className="font-bold">R{r + 1}·S{c + 1}</span>
+        <span className="line-clamp-2 break-words font-semibold">{assign.student_name}</span>
+        <span className="font-mono opacity-70">{assign.exam_roll_no}</span>
+      </div>
+    );
+  }
+  return (
+    <div
+      key={idx}
+      onClick={() => onToggle(r, c)}
+      className={`flex min-h-[58px] cursor-pointer items-center justify-center rounded-lg border border-border bg-card text-[10px] text-muted-foreground hover:bg-secondary ${bandClass}`}
+      title={`Empty desk R${r + 1}·S${c + 1} — tap to block`}
+    >
+      R{r + 1}·S{c + 1}
+    </div>
+  );
+});
+DeskCell.displayName = "DeskCell";
+
 const RoomDeskMap = ({ room, plan }: { room: RoomWithAssignments; plan: SeatingPlanFull }) => {
   const upsert = useUpsertRoom();
   const delRoom = useDeleteRoom();
+  // Destructured so the memoised cell toggle below can depend on the STABLE
+  // mutateAsync (the `upsert` result object itself gets a new identity every
+  // render, which would defeat the DeskCell memo).
+  const { mutateAsync: upsertRoomAsync } = upsert;
 
   // Controlled local copies of invigilators/notes, re-synced whenever the
   // active room changes (by id) — this fixes a bug where switching rooms
@@ -925,17 +999,17 @@ const RoomDeskMap = ({ room, plan }: { room: RoomWithAssignments; plan: SeatingP
     } catch { /* handled */ }
   };
 
-  const toggleBlocked = async (r: number, c: number) => {
+  const toggleBlocked = useCallback(async (r: number, c: number) => {
     const cur = room.block_layout ?? [];
     const exists = cur.some(([rr, cc]) => rr === r && cc === c);
     const next = exists ? cur.filter(([rr, cc]) => !(rr === r && cc === c)) : [...cur, [r, c]];
     try {
-      await upsert.mutateAsync({
+      await upsertRoomAsync({
         planId: plan.id,
         room: { id: room.id, name: room.name, rows: room.rows, cols: room.cols, block_layout: next, invigilators: room.invigilators, invigilator_duties: room.invigilator_duties, notes: room.notes },
       });
     } catch { /* handled */ }
-  };
+  }, [upsertRoomAsync, plan.id, room]);
 
   // Build a 2D lookup: assignments[(row,col)] = student
   const grid = useMemo(() => {
@@ -944,18 +1018,24 @@ const RoomDeskMap = ({ room, plan }: { room: RoomWithAssignments; plan: SeatingP
     return m;
   }, [room.assignments]);
 
-  // Which invigilator (by index) is responsible for a given 0-indexed column,
-  // used to color-band the grid so duty coverage is visible at a glance.
-  const invigilatorForCol = (colIdx0: number) => {
-    const colNum = colIdx0 + 1; // duties are 1-indexed
-    const idx = dutiesInput.findIndex(d => colNum >= d.col_start && colNum <= d.col_end);
-    return idx;
-  };
-  const DUTY_BAND_COLORS = [
-    "border-t-4 border-t-blue-400", "border-t-4 border-t-emerald-400",
-    "border-t-4 border-t-amber-400", "border-t-4 border-t-rose-400",
-    "border-t-4 border-t-violet-400", "border-t-4 border-t-cyan-400",
-  ];
+  // PERF: O(1) lookups for the memoised DeskCell — previously every cell
+  // re-scanned block_layout (Array.some) and re-ran a duties findIndex on
+  // every render.
+  const blockedSet = useMemo(
+    () => new Set((room.block_layout ?? []).map(([rr, cc]) => `${rr}:${cc}`)),
+    [room.block_layout]
+  );
+  const bandByCol = useMemo(() => {
+    const multi = invigilatorsInput.filter(Boolean).length > 1;
+    const out: string[] = [];
+    for (let c = 0; c < room.cols; c++) {
+      const colNum = c + 1; // duties are 1-indexed
+      const idx = dutiesInput.findIndex(d => colNum >= d.col_start && colNum <= d.col_end);
+      out.push(multi && idx >= 0 ? DUTY_BAND_COLORS[idx % DUTY_BAND_COLORS.length] : "");
+    }
+    return out;
+  }, [invigilatorsInput, dutiesInput, room.cols]);
+
 
 
   return (
@@ -1039,48 +1119,17 @@ const RoomDeskMap = ({ room, plan }: { room: RoomWithAssignments; plan: SeatingP
               {Array.from({ length: room.rows * room.cols }).map((_, idx) => {
                 const r = Math.floor(idx / room.cols);
                 const c = idx % room.cols;
-                const isBlocked = (room.block_layout ?? []).some(([rr, cc]) => rr === r && cc === c);
-                const assign = grid.get(`${r}:${c}`);
-                const multiInvigilator = invigilatorsInput.filter(Boolean).length > 1;
-                const bandIdx = invigilatorForCol(c);
-                const bandClass = multiInvigilator && r === 0 && bandIdx >= 0
-                  ? DUTY_BAND_COLORS[bandIdx % DUTY_BAND_COLORS.length]
-                  : "";
-                if (isBlocked) {
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => toggleBlocked(r, c)}
-                      className={`flex min-h-[58px] cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-foreground/10 text-[11px] text-muted-foreground dark:bg-foreground/20 ${bandClass}`}
-                      title="Blocked — tap to unblock"
-                    >
-                      ✕
-                    </div>
-                  );
-                }
-                if (assign) {
-                  const cc = colorFor(assign.class);
-                  return (
-                    <div
-                      key={idx}
-                      className={`flex min-h-[58px] flex-col justify-between gap-0.5 rounded-lg border p-1.5 text-[10px] leading-tight shadow-sm ${cc.bg} ${cc.text} ${bandClass}`}
-                      title={`${assign.student_name} · Class ${assign.class} · ${assign.seat_label}`}
-                    >
-                      <span className="font-bold">R{r + 1}·S{c + 1}</span>
-                      <span className="line-clamp-2 break-words font-semibold">{assign.student_name}</span>
-                      <span className="font-mono opacity-70">{assign.exam_roll_no}</span>
-                    </div>
-                  );
-                }
                 return (
-                  <div
+                  <DeskCell
                     key={idx}
-                    onClick={() => toggleBlocked(r, c)}
-                    className={`flex min-h-[58px] cursor-pointer items-center justify-center rounded-lg border border-border bg-card text-[10px] text-muted-foreground hover:bg-secondary ${bandClass}`}
-                    title={`Empty desk R${r + 1}·S${c + 1} — tap to block`}
-                  >
-                    R{r + 1}·S{c + 1}
-                  </div>
+                    idx={idx}
+                    r={r}
+                    c={c}
+                    isBlocked={blockedSet.has(`${r}:${c}`)}
+                    assign={grid.get(`${r}:${c}`)}
+                    bandClass={r === 0 ? bandByCol[c] : ""}
+                    onToggle={toggleBlocked}
+                  />
                 );
               })}
             </div>
@@ -1317,14 +1366,13 @@ const PrintDeskMapButton = ({ room, plan }: { room: RoomWithAssignments; plan: S
   const handle = async () => {
     setBusy(true);
     try {
-      // Pull fresh assignments for this room.
-      const { data: assigns } = await supabase
-        .from("exam_seating_assignments")
-        .select("*")
-        .eq("room_id", room.id);
+      // PERF: use the assignments already in the room object (fetched once by
+      // useSeatingPlan) instead of a redundant extra round trip + select("*").
+      const assigns = room.assignments;
       const aMap = new Map<string, typeof assigns[number]>();
       for (const a of assigns ?? []) aMap.set(`${a.row_idx}:${a.col_idx}`, a);
 
+      const { default: jsPDF } = await import("jspdf");
       const doc = new jsPDF({ orientation: room.cols > 6 ? "landscape" : "portrait", unit: "mm", format: "a4" });
       const pageW = doc.internal.pageSize.getWidth();
       const margin = 10;
@@ -1421,6 +1469,7 @@ const QrStickerSheetButton = ({ plan }: { plan: SeatingPlanFull }) => {
       const all = plan.rooms.flatMap(r => r.assignments.map(a => ({ ...a, room_name: r.name })));
       if (all.length === 0) { toast.error("No assignments yet — generate seating first"); return; }
 
+      const { default: jsPDF } = await import("jspdf");
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageW = doc.internal.pageSize.getWidth();
       const pageH = doc.internal.pageSize.getHeight();
@@ -1502,6 +1551,7 @@ const DutiesPdfButton = ({ plan }: { plan: SeatingPlanFull }) => {
   const handle = async () => {
     setBusy(true);
     try {
+      const { default: jsPDF } = await import("jspdf");
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageW = doc.internal.pageSize.getWidth();   // 210
       const pageH = doc.internal.pageSize.getHeight();  // 297

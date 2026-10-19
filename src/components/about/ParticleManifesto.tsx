@@ -81,13 +81,14 @@ function sampleTextPoints(
   canvasW: number,
   canvasH: number,
   fontPx: number,
-  floorPx: number
-): { x: number; y: number }[] {
+  floorPx: number,
+  preferWrap = false
+): { points: { x: number; y: number }[]; step: number } {
   const off = document.createElement("canvas");
   off.width = canvasW;
   off.height = canvasH;
   const octx = off.getContext("2d", { willReadFrequently: true });
-  if (!octx) return [];
+  if (!octx) return { points: [], step: 1.5 };
   octx.clearRect(0, 0, canvasW, canvasH);
   octx.fillStyle = "#fff";
   octx.textAlign = "center";
@@ -97,20 +98,20 @@ function sampleTextPoints(
   let size = fontPx;
   let lines: string[] = [text];
 
-  const setFont = (px: number) => { octx.font = `600 ${px}px 'Fraunces', 'Playfair Display', Georgia, serif`; };
+  const setFont = (px: number) => { octx.font = `700 ${px}px 'Fraunces', 'Playfair Display', Georgia, serif`; };
   setFont(size);
 
   // 1) Try to fit on one line by shrinking, but only down to floorPx —
   //    below that a word stops reading as a word once sampled onto dots.
-  while (octx.measureText(text).width > maxW && size > floorPx) {
+  while (!preferWrap && octx.measureText(text).width > maxW && size > floorPx) {
     size -= 1;
     setFont(size);
   }
 
   // 2) Still too wide at the floor size → wrap onto lines instead of
   //    continuing to shrink past legibility.
-  if (octx.measureText(text).width > maxW) {
-    size = Math.max(floorPx, Math.round(fontPx * 0.82));
+  if (preferWrap || octx.measureText(text).width > maxW) {
+    size = preferWrap ? fontPx : Math.max(floorPx, Math.round(fontPx * 0.82));
     setFont(size);
     lines = wrapToLines(octx, text, maxW);
     // Keep shrinking (down to a hard floor) until it settles at 2 lines
@@ -143,7 +144,7 @@ function sampleTextPoints(
   // Sampling step scales with the actual rendered font size, so small
   // wrapped text still gets enough dots per letter to read as a word
   // instead of a fixed step crushing detail at small sizes.
-  const step = Math.max(1.1, size / 14);
+  const step = Math.max(1.3, size / 16);
 
   const points: { x: number; y: number }[] = [];
   for (let y = 0; y < canvasH; y += step) {
@@ -152,7 +153,7 @@ function sampleTextPoints(
       if (alpha > 120) points.push({ x, y });
     }
   }
-  return points;
+  return { points, step };
 }
 
 const ParticleManifesto = () => {
@@ -175,10 +176,11 @@ const ParticleManifesto = () => {
     let phaseStart = performance.now();
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
     let w = 0, h = 0; // CSS pixels
+    let dotStep = 1.5;  // sampling step → dot size, keeps letters solid
 
     // Timings (ms) — one calm, readable cycle.
     const T_GATHER = 1500;
-    const T_HOLD = 4000;
+    const T_HOLD = 4500;
     const T_SCATTER = 1300;
     const T_DRIFT = 550; // brief dust beat between scatter and the next gather
 
@@ -204,9 +206,12 @@ const ParticleManifesto = () => {
       // needed, plus a floor below which we wrap to 2 lines instead of
       // continuing to shrink — that floor is what keeps text legible once
       // it's turned into dots.
-      const fontPx = isMobile() ? Math.round(Math.min(w * 0.1, 38)) : Math.round(Math.min(w * 0.058, 72));
-      const floorPx = isMobile() ? 22 : 34;
-      const pts = sampleTextPoints(LINES[lineIndex], w, h, fontPx, floorPx);
+      // Small banner: mobile always wraps to <=2 bold lines at a large,
+      // legible size; desktop stays on one line.
+      const fontPx = isMobile() ? Math.round(Math.min(w * 0.092, 36)) : Math.round(Math.min(w * 0.046, 54));
+      const floorPx = isMobile() ? 22 : 30;
+      const { points: pts, step } = sampleTextPoints(LINES[lineIndex], w, h, fontPx, floorPx, isMobile());
+      dotStep = step;
 
       // Cap particle count for perf; sample down evenly if oversized.
       const CAP = isMobile() ? 4200 : 5200;
@@ -226,9 +231,9 @@ const ParticleManifesto = () => {
           return {
             x: ox, y: oy, ox, oy, tx: p.x, ty: p.y,
             vx: 0, vy: 0,
-            size: 0.9 + Math.random() * 1.6,
-            hue: Math.random() < 0.08 ? 1 : 0,
-            baseAlpha: 0.55 + Math.random() * 0.45,
+            size: dotStep * (0.55 + Math.random() * 0.25),
+            hue: Math.random() < 0.05 ? 1 : 0,
+            baseAlpha: 0.82 + Math.random() * 0.18,
           };
         });
       } else {
@@ -369,7 +374,7 @@ const ParticleManifesto = () => {
         else { bx = p.ox + (p.tx - p.ox) * eased; by = p.oy + (p.ty - p.oy) * eased; }
 
         // Gentle idle sway so even a "held" word feels alive, not frozen.
-        const sway = phase === "holding" ? Math.sin(now / 900 + p.tx * 0.05) * 0.6 : 0;
+        const sway = phase === "holding" ? Math.sin(now / 900 + p.tx * 0.05) * 0.25 : 0;
         bx += sway;
 
         // Cursor/touch repel — a soft push away from the pointer, eased
@@ -428,7 +433,7 @@ const ParticleManifesto = () => {
     <section className="relative w-full overflow-hidden bg-[#120C07]" aria-label="Our mission">
       <div
         ref={wrapRef}
-        className="relative w-full h-[62vh] min-h-[360px] max-h-[620px] sm:h-[68vh] touch-none"
+        className="relative w-full h-[170px] sm:h-[220px] md:h-[250px] touch-pan-y"
       >
         <canvas ref={canvasRef} className="absolute inset-0 block" aria-hidden="true" />
 
@@ -440,7 +445,7 @@ const ParticleManifesto = () => {
 
         {/* Quiet caption beneath the particle field — no eyebrow label,
             just a small on-brand signature so the moment stays wordless. */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-5 sm:bottom-7 flex justify-center">
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 sm:bottom-3 flex justify-center">
           <span className="text-[10px] sm:text-[11px] tracking-[0.3em] text-[#F7B145]/60 font-medium">
             GHS BABI KHEL
           </span>

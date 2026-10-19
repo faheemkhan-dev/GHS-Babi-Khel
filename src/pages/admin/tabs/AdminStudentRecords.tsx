@@ -1,6 +1,10 @@
 import { useState, useRef, useMemo } from "react";
-import * as XLSX from "xlsx";
-import ExcelJS from "exceljs";
+// PERF (chunk size — the two heaviest libraries in the app): xlsx (332 kB)
+// and exceljs (937 kB) were BOTH statically imported here, so merely opening
+// the Student Records tab downloaded ~1.3 MB of spreadsheet libraries before
+// it could paint. They now load only when an import/export actually runs.
+import type * as XLSXTypes from "xlsx";
+import type ExcelJSTypes from "exceljs";
 import {
   useStudentRecords, useCreateStudentRecord, useUpdateStudentRecord,
   useDeleteStudentRecord, useBulkImportStudentRecords, useDeleteAllStudentRecords,
@@ -133,7 +137,7 @@ function parseHandwrittenDateString(raw: string): string | null | undefined {
 // there was nothing to parse), rawIfUnparsed is set only when the cell had
 // real content that could not be safely converted — so the caller can
 // keep the original text instead of losing it.
-function excelDateToISO(val: unknown): { iso?: string; rawIfUnparsed?: string } {
+function excelDateToISO(val: unknown, XLSX: typeof XLSXTypes): { iso?: string; rawIfUnparsed?: string } {
   if (val == null || val === "") return {};
   if (typeof val === "number") {
     const d = XLSX.SSF.parse_date_code(val);
@@ -153,7 +157,9 @@ function excelDateToISO(val: unknown): { iso?: string; rawIfUnparsed?: string } 
   return { rawIfUnparsed: String(val) };
 }
 
-function parseImportedWorkbook(file: ArrayBuffer): Partial<StudentRecordPayload>[] {
+async function parseImportedWorkbook(file: ArrayBuffer): Promise<Partial<StudentRecordPayload>[]> {
+  // PERF: xlsx loads HERE — the first time an import file is actually picked.
+  const XLSX = await import("xlsx");
   const wb = XLSX.read(file, { type: "array", cellDates: false });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const raw: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
@@ -186,7 +192,7 @@ function parseImportedWorkbook(file: ArrayBuffer): Partial<StudentRecordPayload>
       if (val == null || val === "") return;
 
       if (field === "admission_date" || field === "date_of_birth" || field === "left_date") {
-        const { iso, rawIfUnparsed } = excelDateToISO(val);
+        const { iso, rawIfUnparsed } = excelDateToISO(val, XLSX);
         if (iso) {
           (record as any)[field] = iso;
         } else if (rawIfUnparsed) {
@@ -240,7 +246,9 @@ function parseImportedWorkbook(file: ArrayBuffer): Partial<StudentRecordPayload>
 // frozen header row, sensible column widths. Rows arrive already sorted
 // oldest-admission-first from fetchAllStudentRecordsForExport.
 async function exportToExcel(rows: StudentRecord[]) {
-  const wb = new ExcelJS.Workbook();
+  // PERF: exceljs (937 kB) loads HERE — only when Export is clicked.
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook() as ExcelJSTypes.Workbook;
   wb.creator = "GHS Babi Khel";
   const ws = wb.addWorksheet("Student Records", {
     views: [{ state: "frozen", ySplit: 1 }], // freeze header row
@@ -283,7 +291,7 @@ async function exportToExcel(rows: StudentRecord[]) {
     });
   });
 
-  const thinBorder: Partial<ExcelJS.Borders> = {
+  const thinBorder: Partial<ExcelJSTypes.Borders> = {
     top: { style: "thin", color: { argb: "FFB0B0B0" } },
     left: { style: "thin", color: { argb: "FFB0B0B0" } },
     bottom: { style: "thin", color: { argb: "FFB0B0B0" } },
@@ -443,7 +451,7 @@ export default function AdminStudentRecords() {
     if (!file) return;
     try {
       const buf = await file.arrayBuffer();
-      const parsed = parseImportedWorkbook(buf);
+      const parsed = await parseImportedWorkbook(buf);
       if (parsed.length === 0) {
         toast.error("No valid student rows found in this file");
         return;

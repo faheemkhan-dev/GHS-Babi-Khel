@@ -30,61 +30,36 @@
  * an already-expired publish_at) are treated as LIVE here and healed in the
  * DB on a best-effort basis, so previously-stuck countdowns recover.
  */
-import { useState, useEffect, useMemo, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import { format } from "date-fns";
 import {
   Hash, Search, Download, Share2, User, Clock3,
   CheckCircle2, AlertCircle, ArrowLeft, Loader2,
-  Armchair, DoorOpen, ChevronDown, CalendarDays,
+  Armchair, DoorOpen, ChevronDown, ChevronRight, CalendarDays, CalendarPlus, X,
 } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 import PageBanner from "@/components/shared/PageBanner";
 import { supabase } from "@/lib/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
 import toast from "react-hot-toast";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import QRCode from "qrcode";
 import { encodeExamQRData } from "@/hooks/useExamAttendance";
-import { useNowTick } from "@/hooks/useRollSlipCountdown";
+import { useNowTick, useBoundaryNow, useRollSlipCountdown, fetchPublicRolls } from "@/hooks/useRollSlipCountdown";
 import { useAllExamSchedule, ExamScheduleEntry } from "@/hooks/useNewFeatures";
-import { triggerConfetti } from "@/lib/confetti";
 import { examTypeLabel } from "@/utils/examTypeLabel";
 import {
   resolveClassPaperTime,
   type SeatingPlan, type SeatingRoom, type SeatingAssignment,
 } from "@/hooks/useExamSeating";
-import { shareRollSlipCard, toastShareOutcome } from "@/utils/shareResultCard";
+import { SLIP_INSTRUCTIONS, type ExamSession, type RollEntry } from "@/lib/rollSlipTypes";
+import { hasUpcomingPapers } from "@/lib/examCalendar";
+const AddToCalendarSheet = lazy(() => import("@/components/rollslip/AddToCalendarSheet"));
 
-interface ExamSession {
-  id: string; title: string; exam_year: number; exam_term: string;
-  classes: string[]; class_order: string[]; starting_number: number;
-  is_published: boolean; publish_at: string | null;
-  countdown_label: string | null; created_at: string;
-}
-interface RollEntry {
-  id: string; student_id: string; student_name: string; father_name: string | null;
-  class: string; class_roll_no: string; exam_roll_no: string; serial_number: number;
-}
-
-/* ── The 9 exam-day rules — EXACTLY the same text the admin dashboard
-      prints on the official Roll No Slips sheet ───────────────────────────── */
-const SLIP_INSTRUCTIONS = [
-  "1. Bring this Roll No Slip to the exam center for every paper.",
-  "2. No slip, no entry to the examination hall.",
-  "3. Do not bring mobile phones, smart watches, or any electronic device to the exam hall.",
-  "4. Do not fold, scratch, or damage the QR code — it must scan cleanly for attendance.",
-  "5. Report any errors or omissions on this slip before the exam begins.",
-  "6. Reach the exam center at least 30 minutes before the paper starts.",
-];
-
-/* ── Shared motion variant (one-shot, GPU-safe) ─────────────────────────── */
-const fadeUp = {
-  hidden: { opacity: 0, y: 22 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
-};
+/* ── QR data-URL cache (module scope — survives finder resets) ──────────────
+   The same student's slip QR never changes; regenerating it every time the
+   slip re-opened cost a canvas render + (first time) a ~50 KB module
+   download. Bounded so a shared device never grows it unbounded.           */
+const qrCache = new Map<string, string>();
 
 /* ── Case/space-insensitive name normalisation for the finder ────────────── */
 const normName = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
@@ -261,201 +236,71 @@ function CountdownUnit({ value, label }: { value: number; label: string }) {
   );
 }
 
-/* ═══ SLIP PDF — EXACT replica of the admin dashboard "Roll No Slips" sheet ═
-   Full-page A4 PORTRAIT single slip (admin prints 2-up landscape) — same
-   header, info rows, QR, class date-sheet table, 9 instructions and Deputy
-   Controller signature — so the student's download is 1:1 identical to the
-   office copy. The single slip is simply centred on the sheet.            */
-async function downloadSlipPdf(session: ExamSession, r: RollEntry, schedule: ExamScheduleEntry[]) {
-  // Student copy: ONE slip on a full A4 PORTRAIT page (the admin sheet is a
-  // 2-up landscape print; students get a full-size single page instead).
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageW = 210;
-  const pageH = 297;
-  const margin = 8;
-
-  const x = margin;
-  const y = margin;
-  const w = pageW - margin * 2;
-  const h = pageH - margin * 2;
-
-  // Same QR payload + settings as the admin sheet
-  const qrData = encodeExamQRData(session.id, r.student_id, r.exam_roll_no);
-  const qrImg = await QRCode.toDataURL(qrData, { width: 300, margin: 1, errorCorrectionLevel: "M", color: { dark: "#333333", light: "#FFFFFF" } });
-
-  // ── Same layout as the admin sheet (see AdminExamRollNumbers.downloadPrint) ──
-  const padX = 12;
-  const cx = x + w / 2;
-
-  // ── Frame: outer + hairline inner border ──
-  doc.setDrawColor(120, 120, 120);
-  doc.setLineWidth(0.6);
-  doc.rect(x, y, w, h, "S");
-  doc.setDrawColor(190, 190, 190);
-  doc.setLineWidth(0.2);
-  doc.rect(x + 1.6, y + 1.6, w - 3.2, h - 3.2, "S");
-
-  // ── HEADER ──
-  doc.setTextColor(20, 20, 20);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("GOVT. HIGH SCHOOL BABI KHEL", cx, y + 16, { align: "center" });
-
-  doc.setFontSize(13);
-  doc.setTextColor(60, 60, 60);
-  const classExamType = schedule[0]?.exam_type || session.exam_term;
-  doc.text(`${examTypeLabel(classExamType).toUpperCase()} ${session.exam_year}`, cx, y + 24, { align: "center" });
-
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(110, 110, 110);
-  doc.text("EXAM  ROLL  NUMBER  SLIP", cx, y + 30, { align: "center", charSpace: 0.6 } as any);
-
-  doc.setDrawColor(60, 60, 60);
-  doc.setLineWidth(0.7);
-  doc.line(x + padX, y + 34, x + w - padX, y + 34);
-  doc.setLineWidth(0.2);
-  doc.line(x + padX, y + 35.3, x + w - padX, y + 35.3);
-
-  // ── STUDENT INFO (left) + QR (right) ──
-  const qrSize = 42;
-  const qrBoxX = x + w - padX - qrSize - 2;
-  const qrBoxY = y + 42;
-  const leftX = x + padX;
-  const valX = leftX + 36;
-  const maxValW = qrBoxX - valX - 4;
-
-  const drawRow = (label: string, value: string, yy: number, big = false) => {
-    doc.setFontSize(10.5);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(115, 115, 115);
-    doc.text(label, leftX, yy);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(20, 20, 20);
-    doc.setFontSize(big ? 15 : 12);
-    let v = value;
-    while (v.length > 4 && doc.getTextWidth(v) > maxValW) v = v.slice(0, -2);
-    if (v !== value) v = v.replace(/\s+$/, "") + "…";
-    doc.text(v, valX, yy);
-  };
-  let rowY = y + 52;
-  const rowGap = 11;
-  drawRow("Student Name:", r.student_name, rowY); rowY += rowGap;
-  drawRow("Father Name:", r.father_name || "—", rowY); rowY += rowGap;
-  drawRow("Exam Roll No:", r.exam_roll_no, rowY, true); rowY += rowGap;
-  drawRow("Class:", `Class ${r.class}`, rowY);
-
-  if (qrImg) {
-    doc.setDrawColor(150, 150, 150);
-    doc.setLineWidth(0.35);
-    doc.roundedRect(qrBoxX - 1.5, qrBoxY - 1.5, qrSize + 3, qrSize + 3, 1.5, 1.5, "S");
-    doc.addImage(qrImg, "PNG", qrBoxX, qrBoxY, qrSize, qrSize);
-  }
-
-  // ── LAYOUT BUDGET ──
-  // The slip is 198 mm tall. We size the date-sheet rows from the room that is
-  // actually available so the page is filled evenly (no empty block in the middle)
-  // whatever number of papers the class has.
-  const tableStartY = y + 94;
-  const sigY = y + h - 14;
-  const instrLines = SLIP_INSTRUCTIONS.length;
-  const instrLineH = 6;
-  const instrH = 9 + instrLines * instrLineH;
-  const sigTop = sigY - 9;
-  const tableAvail = sigTop - instrH - 6 - tableStartY;
-  const nRows = Math.max(schedule.length, 1) + 1;
-  const rowMm = Math.min(10, Math.max(5, tableAvail / nRows));
-  const fontPt = rowMm >= 8 ? 10 : rowMm >= 6.6 ? 9 : rowMm >= 5.8 ? 7.8 : 7;
-  const cellPad = Math.max(1, (rowMm - fontPt * 0.352 * 1.15) / 2);
-
-  if (schedule.length > 0) {
-    autoTable(doc, {
-      startY: tableStartY,
-      margin: { left: x + padX, right: pageW - (x + w) + padX, bottom: pageH - sigTop },
-      tableWidth: w - padX * 2,
-      head: [["Paper Date", "Day", "Subject", "From", "To"]],
-      body: schedule.map(e => [
-        format(new Date(e.exam_date), "dd-MM-yyyy"),
-        format(new Date(e.exam_date), "EEEE"),
-        e.subject,
-        e.start_time || "—",
-        e.end_time || "—",
-      ]),
-      columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 32 }, 3: { cellWidth: 20 }, 4: { cellWidth: 20 } },
-      styles: { fontSize: fontPt, cellPadding: cellPad, textColor: [30, 30, 30], lineColor: [150, 150, 150], lineWidth: 0.2, halign: "center", valign: "middle" },
-      headStyles: { fillColor: [228, 228, 228], textColor: [20, 20, 20], fontStyle: "bold", fontSize: fontPt, halign: "center", valign: "middle" },
-      alternateRowStyles: { fillColor: [248, 248, 248] },
-      theme: "grid",
-    });
-  } else {
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "italic");
-    doc.setTextColor(150, 150, 150);
-    doc.text("Date sheet not yet published for this class.", cx, tableStartY + 12, { align: "center" });
-  }
-
-  // ── INSTRUCTIONS — sits under the table, never closer than 6 mm, pushed down
-  // when the table is short so the lower half of the slip is balanced. ──
-  const tableEndY = (doc as any).lastAutoTable?.finalY ?? (tableStartY + 30);
-  const instrStartY = Math.max(tableEndY + 7, sigTop - instrH - 1);
-  doc.setDrawColor(150, 150, 150);
-  doc.setLineWidth(0.25);
-  doc.line(x + padX, instrStartY, x + w - padX, instrStartY);
-  doc.setFontSize(10.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(40, 40, 40);
-  doc.text("Instructions:", x + padX, instrStartY + 6);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(85, 85, 85);
-  const instructions = SLIP_INSTRUCTIONS;
-  const maxInstrW = w - padX * 2;
-  instructions.forEach((line, i) => {
-    let t = line;
-    while (t.length > 8 && doc.getTextWidth(t) > maxInstrW) t = t.slice(0, -2);
-    if (t !== line) t = t.replace(/\s+$/, "") + "…";
-    doc.text(t, x + padX, instrStartY + 12.5 + i * instrLineH);
-  });
-
-  // ── SIGNATURE (anchored bottom-right) ──
-  doc.setDrawColor(90, 90, 90);
-  doc.setLineWidth(0.35);
-  doc.line(x + w - padX - 60, sigY, x + w - padX, sigY);
-  doc.setFontSize(9.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(40, 40, 40);
-  doc.text("Deputy Controller of Exams", x + w - padX - 30, sigY + 5, { align: "center" });
-
-  doc.save(`RollNoSlip-${r.exam_roll_no}-${r.student_name.replace(/\s+/g, "_")}.pdf`);
+/* ═══ COUNTDOWN PANEL — the ONLY thing that ticks every second, and it exists
+   only while a countdown is on screen. (Before, the whole page re-rendered
+   every second forever, including the finder and the slip.) ═══════════════ */
+function CountdownPanel({ session }: { session: ExamSession }) {
+  const now = useNowTick(1000);
+  return (
+      <div className="rs-fade-up relative overflow-hidden rounded-3xl border-2 border-gold/40 bg-gradient-to-br from-gold/10 via-card to-gold/5 p-8 text-center shadow-elevated max-w-2xl mx-auto">
+        <div className="orb orb-gold w-56 h-56 -top-20 left-1/2 -translate-x-1/2 opacity-60" />
+        <div className="relative">
+          {(() => {
+            const target = new Date(session.publish_at!).getTime();
+            const diff = target - now;
+            const days = Math.floor(diff / 86400000);
+            const hours = Math.floor((diff % 86400000) / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            return (
+              <>
+                {/* Clock hands show the REAL current time-of-day,
+                    ticking normally toward the target time — not
+                    the remaining countdown duration. */}
+                <span className="w-16 h-16 mx-auto mb-5 flex items-center justify-center"><RealisticClockIcon className="w-14 h-14" hours={new Date(now).getHours()} minutes={new Date(now).getMinutes()} seconds={new Date(now).getSeconds()} /></span>
+                <p className="text-xs md:text-sm font-black uppercase tracking-[0.2em] text-amber-700 dark:text-amber-500 mb-2">
+                  Time Remaining
+                </p>
+                <div className="flex justify-center items-stretch gap-2 md:gap-3 flex-wrap mb-3">
+                  {days > 0 && <CountdownUnit value={days} label="d" />}
+                  <CountdownUnit value={hours} label="h" />
+                  <CountdownUnit value={mins} label="m" />
+                  <CountdownUnit value={secs} label="s" />
+                </div>
+              </>
+            );
+          })()}
+          <h2 className="text-lg md:text-xl font-heading font-bold text-foreground mt-4">{session.title}</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            {examTypeLabel(session.exam_term)} · Classes {session.class_order.join(", ")} · Year {session.exam_year}
+          </p>
+          <p className="text-xs text-muted-foreground mt-4 mb-1 font-medium">
+            Goes live {format(new Date(session.publish_at!), "EEEE, dd MMMM yyyy 'at' h:mm a")}
+          </p>
+          {session.countdown_label && (
+            <p className="text-xs text-muted-foreground mt-6 italic max-w-md mx-auto">"{session.countdown_label}"</p>
+          )}
+          <p className="inline-flex items-center gap-2 mt-6 text-[11px] font-semibold text-amber-700 dark:text-amber-500 bg-amber-600/10 border border-amber-600/20 rounded-full px-4 py-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+            Slips open here automatically — no refresh needed
+          </p>
+        </div>
+      </div>
+  );
 }
 
 /* ═══ MAIN COMPONENT ═══════════════════════════════════════════════════════ */
 const ExamRollNumbers = () => {
   const qc = useQueryClient();
-  const now = useNowTick(1000);
-
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
-  /* ── Exam Date Sheet (exam_schedule table) — the SAME source the admin
-        dashboard prints on the official Roll No Slips, pulled here so the
-        student's slip can carry the identical paper-by-paper schedule ──── */
-  const { data: allExamSchedule = [] } = useAllExamSchedule();
+  /* ── Sessions: the SHARED navbar query (same key, same cache) — the
+        /roll-no-slip page previously kept a second identical request under
+        "public-roll-slip-sessions"; both fired on every visit. ──────────── */
+  const { sessions = [], isLoading: loadingSessions } = useRollSlipCountdown();
 
-  /* ── Sessions: published ones + scheduled ones (countdown running) ────── */
-  const { data: sessions = [], isLoading: loadingSessions } = useQuery<ExamSession[]>({
-    queryKey: ["public-roll-slip-sessions"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("exam_roll_sessions")
-        .select("*")
-        .or("is_published.eq.true,publish_at.not.is.null")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-    staleTime: 15 * 1000,
-    refetchInterval: 60 * 1000,
-  });
+  // Re-renders only when a publish time is actually reached (not every second).
+  const now = useBoundaryNow(sessions.map(publishTs).filter((t): t is number => t !== null));
 
   /* ── Status helpers (tick-driven → countdown end flips UI instantly) ──── */
   const visible = useMemo(() => sessions.filter(s => isScheduled(s, now) || isLive(s, now)), [sessions, now]);
@@ -469,20 +314,24 @@ const ExamRollNumbers = () => {
     [visible, liveSessions, scheduledSessions, selectedSessionId]
   );
 
+  const showCountdown = !!selectedSession && isScheduled(selectedSession, now);
+
+  /* ── Exam Date Sheet (exam_schedule table) — the SAME source the admin
+        dashboard prints on the official Roll No Slips, pulled here so the
+        student's slip can carry the identical paper-by-paper schedule.
+        PERF: only needed in LIVE mode — the countdown panel never shows a
+        date sheet, so the query stays disabled while counting down (one
+        whole table fetch saved on countdown visits). It warms the moment
+        the finder appears — while the student is still typing. ─────────── */
+  const scheduleEnabled = !!selectedSession && !showCountdown;
+  const { data: allExamSchedule = [] } = useAllExamSchedule({ enabled: scheduleEnabled });
+
   /* ── Roll numbers: PRE-FETCHED even during the countdown so the flip to
-        the finder at 0:00 is instant (data already on the device) ────────── */
+        the finder at 0:00 is instant (data already on the device). The
+        fetcher is shared with the Navbar's hover prefetch. ───────────── */
   const { data: rollNumbers = [], isLoading: loadingRolls } = useQuery<RollEntry[]>({
     queryKey: ["public-exam-rolls", selectedSession?.id],
-    queryFn: async () => {
-      if (!selectedSession) return [];
-      const { data, error } = await supabase
-        .from("exam_roll_numbers")
-        .select("id, student_id, student_name, father_name, class, class_roll_no, exam_roll_no, serial_number")
-        .eq("session_id", selectedSession.id)
-        .order("serial_number", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchPublicRolls(selectedSession!.id),
     enabled: !!selectedSession,
     staleTime: 5 * 60 * 1000,
   });
@@ -502,13 +351,11 @@ const ExamRollNumbers = () => {
           .eq("id", s.id)
           .eq("is_published", false)
           .then(({ error }) => {
-            if (!error) qc.invalidateQueries({ queryKey: ["public-roll-slip-sessions"] });
+            if (!error) qc.invalidateQueries({ queryKey: ["roll-slip-countdown"] });
           });
       }
     }
   }, [sessions, now, qc]);
-
-  const showCountdown = !!selectedSession && isScheduled(selectedSession, now);
 
   return (
     <PageLayout>
@@ -521,7 +368,7 @@ const ExamRollNumbers = () => {
         subtitle="Find your exam roll number and download your admit card"
       />
 
-      <section className="py-8 md:py-12">
+      <section className="py-5 md:py-10">
         <div className="container mx-auto px-4">
 
           {loadingSessions ? (
@@ -538,7 +385,7 @@ const ExamRollNumbers = () => {
             <>
               {/* Session switcher (only when more than one) */}
               {visible.length > 1 && (
-                <div className="flex flex-wrap gap-2 mb-8">
+                <div className="mb-4 flex flex-wrap justify-center gap-1.5">
                   {visible.map(s => {
                     const sched = isScheduled(s, now);
                     const active = selectedSession?.id === s.id;
@@ -546,14 +393,14 @@ const ExamRollNumbers = () => {
                       <button
                         key={s.id}
                         onClick={() => setSelectedSessionId(s.id)}
-                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all border-2 ${
+                        className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold leading-tight touch-manipulation transition-colors ${
                           active
-                            ? "gradient-hero text-white border-gold shadow-card"
-                            : "bg-card text-muted-foreground border-border hover:border-primary/50"
+                            ? "border-gold bg-primary text-primary-foreground"
+                            : "border-border bg-card text-muted-foreground active:bg-muted hover:border-gold/50"
                         }`}
                       >
-                        {sched && <Clock3 className="w-3.5 h-3.5 text-amber-500" />}
-                        {s.title} — {s.exam_year}
+                        {sched && <Clock3 className="h-3 w-3 shrink-0 text-amber-400" />}
+                        <span>{s.title} — {s.exam_year}</span>
                       </button>
                     );
                   })}
@@ -562,55 +409,7 @@ const ExamRollNumbers = () => {
 
               {selectedSession && (showCountdown ? (
                 /* ═══ SCHEDULED — premium countdown (Merit-List style) ═══ */
-                <motion.div
-                  variants={fadeUp}
-                  initial="hidden"
-                  animate="visible"
-                  className="relative overflow-hidden rounded-3xl border-2 border-gold/40 bg-gradient-to-br from-gold/10 via-card to-gold/5 p-8 text-center shadow-elevated max-w-2xl mx-auto"
-                >
-                  <div className="orb orb-gold w-56 h-56 -top-20 left-1/2 -translate-x-1/2 opacity-60" />
-                  <div className="relative">
-                    {(() => {
-                      const target = new Date(selectedSession.publish_at!).getTime();
-                      const diff = target - now;
-                      const days = Math.floor(diff / 86400000);
-                      const hours = Math.floor((diff % 86400000) / 3600000);
-                      const mins = Math.floor((diff % 3600000) / 60000);
-                      const secs = Math.floor((diff % 60000) / 1000);
-                      return (
-                        <>
-                          {/* Clock hands show the REAL current time-of-day,
-                              ticking normally toward the target time — not
-                              the remaining countdown duration. */}
-                          <span className="w-16 h-16 mx-auto mb-5 flex items-center justify-center"><RealisticClockIcon className="w-14 h-14" hours={new Date(now).getHours()} minutes={new Date(now).getMinutes()} seconds={new Date(now).getSeconds()} /></span>
-                          <p className="text-xs md:text-sm font-black uppercase tracking-[0.2em] text-amber-700 dark:text-amber-500 mb-2">
-                            Time Remaining
-                          </p>
-                          <div className="flex justify-center items-stretch gap-2 md:gap-3 flex-wrap mb-3">
-                            {days > 0 && <CountdownUnit value={days} label="d" />}
-                            <CountdownUnit value={hours} label="h" />
-                            <CountdownUnit value={mins} label="m" />
-                            <CountdownUnit value={secs} label="s" />
-                          </div>
-                        </>
-                      );
-                    })()}
-                    <h2 className="text-lg md:text-xl font-heading font-bold text-foreground mt-4">{selectedSession.title}</h2>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {examTypeLabel(selectedSession.exam_term)} · Classes {selectedSession.class_order.join(", ")} · Year {selectedSession.exam_year}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-4 mb-1 font-medium">
-                      Goes live {format(new Date(selectedSession.publish_at!), "EEEE, dd MMMM yyyy 'at' h:mm a")}
-                    </p>
-                    {selectedSession.countdown_label && (
-                      <p className="text-xs text-muted-foreground mt-6 italic max-w-md mx-auto">"{selectedSession.countdown_label}"</p>
-                    )}
-                    <p className="inline-flex items-center gap-2 mt-6 text-[11px] font-semibold text-amber-700 dark:text-amber-500 bg-amber-600/10 border border-amber-600/20 rounded-full px-4 py-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
-                      Slips open here automatically — no refresh needed
-                    </p>
-                  </div>
-                </motion.div>
+                <CountdownPanel session={selectedSession} />
               ) : (
                 /* ═══ LIVE — premium slip finder ═══ */
                 <SlipFinder
@@ -823,8 +622,36 @@ function SeatCard({ info, className }: { info: MySeatInfo; className: string }) 
 /* ═══ SLIP FINDER — class + full-name search, one student at a time ════════ */
 interface SlipResult {
   entry: RollEntry;
+  /** "" while the QR is still generating (slip paints instantly with a
+   *  placeholder box); filled in asynchronously. */
   qrDataURL: string;
+  /** True when QR generation failed — the box shows a note instead of an
+   *  eternal spinner. The PDF download always regenerates its own QR. */
+  qrFailed?: boolean;
 }
+
+function MatchRow({ r, onOpen, sub }: { r: RollEntry; onOpen: (r: RollEntry) => void; sub: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(r)}
+      className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left touch-manipulation transition-colors active:bg-muted/60 hover:border-gold/60"
+    >
+      <span className="flex h-11 w-[52px] shrink-0 flex-col items-center justify-center rounded-lg border border-gold/50 bg-gold/5 leading-none">
+        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Roll</span>
+        <span className="mt-0.5 font-mono text-[13px] font-bold text-foreground">{r.exam_roll_no}</span>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block break-words text-[13px] font-semibold leading-snug text-foreground">{r.student_name}</span>
+        <span className="mt-0.5 block break-words text-[11px] leading-snug text-muted-foreground">{sub}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+    </button>
+  );
+}
+
+const ghostBtn =
+  "mx-auto mt-4 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-4 text-xs font-semibold text-muted-foreground touch-manipulation transition-colors active:bg-muted hover:text-primary";
 
 function SlipFinder({ session, rolls, loading, schedule }: {
   session: ExamSession;
@@ -832,21 +659,37 @@ function SlipFinder({ session, rolls, loading, schedule }: {
   loading: boolean;
   schedule: ExamScheduleEntry[];
 }) {
-  const classes = session.class_order?.length ? session.class_order : ["6", "7", "8", "9", "10"];
+  // Always ascending (6, 7, 8…) no matter what order the admin saved them in.
+  const classes = [...(session.class_order?.length ? session.class_order : ["6", "7", "8", "9", "10"])].sort((a, b) => Number(a) - Number(b));
+  // "1st Semester 2026 · 1st Semester 2026" → show the label once.
+  const termLabel = `${examTypeLabel(session.exam_term)} ${session.exam_year}`;
+  const sessionLabel = session.title.toLowerCase().includes(termLabel.toLowerCase()) ? session.title : `${session.title} · ${termLabel}`;
   const [selectedClass, setSelectedClass] = useState<string>(classes[0] || "6");
   const [fullName, setFullName] = useState("");
   const [matches, setMatches] = useState<RollEntry[] | null>(null);
   const [activeSlip, setActiveSlip] = useState<SlipResult | null>(null);
-  const [qrBusy, setQrBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   const typed = fullName.trim();
   // A name needs 2+ letters; a roll number (digits only) can be a single digit.
   const canSearch = /^\d+$/.test(typed) ? typed.length >= 1 : typed.length >= 2;
 
+  /* ── Warm the QR library while the student is still typing ─────────────
+     The slip renders instantly now; the QR box fills the moment its data
+     URL is ready. Downloading the (small, cached) qrcode module a moment
+     after the finder mounts removes the last cold-start wait from the
+     FIRST slip a student opens. */
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      import("qrcode").catch(() => {});
+    }, 1500);
+    return () => window.clearTimeout(id);
+  }, []);
+
   /* ── My Seat — fetched only for the open slip; button appears ONLY when a
         published seat exists for this student ─────────────────────────── */
   const [showSeat, setShowSeat] = useState(false);
+  const [showCal, setShowCal] = useState(false);
   const seatEntry = activeSlip?.entry;
   const seatQuery = useQuery<MySeatInfo[]>({
     queryKey: ["slip-my-seat", session.id, seatEntry?.student_id, seatEntry?.exam_roll_no],
@@ -874,24 +717,37 @@ function SlipFinder({ session, rolls, loading, schedule }: {
   };
 
   const qcSeat = useQueryClient();
-  const openSlip = async (r: RollEntry) => {
+  const openSlip = (r: RollEntry) => {
     // Start loading the seat NOW — it runs in parallel with QR generation,
-    // so My Seat is ready by the time the slip appears.
+    // so My Seat is ready by the time the student looks for it.
     qcSeat.prefetchQuery({
       queryKey: ["slip-my-seat", session.id, r.student_id, r.exam_roll_no],
       queryFn: () => fetchMySeats(session, r),
       staleTime: 60 * 1000,
     });
-    setQrBusy(true);
-    try {
-      const qrData = encodeExamQRData(session.id, r.student_id, r.exam_roll_no);
-      const qrDataURL = await QRCode.toDataURL(qrData, { width: 400, margin: 1, errorCorrectionLevel: "M", color: { dark: "#333333", light: "#FFFFFF" } });
-      setActiveSlip({ entry: r, qrDataURL });
-      triggerConfetti("burst");
-    } catch {
-      toast.error("Could not prepare the slip — please try again");
-    }
-    setQrBusy(false);
+    // PERF: paint the slip IMMEDIATELY — no waiting for the qrcode module
+    // download or the canvas render. The QR box shows a same-size
+    // placeholder and swaps in the instant the data URL is ready (cached
+    // QRs appear with the slip, first-time QRs a beat later).
+    const cacheKey = `${session.id}:${r.student_id}:${r.exam_roll_no}`;
+    const cachedQr = qrCache.get(cacheKey);
+    setActiveSlip({ entry: r, qrDataURL: cachedQr || "" });
+    import("@/lib/confetti").then((m) => m.triggerConfetti("burst")).catch(() => {});
+    if (cachedQr) return;
+
+    (async () => {
+      try {
+        const qrData = encodeExamQRData(session.id, r.student_id, r.exam_roll_no);
+        const { default: QRCode } = await import("qrcode");
+        const qrDataURL = await QRCode.toDataURL(qrData, { width: 400, margin: 1, errorCorrectionLevel: "M", color: { dark: "#333333", light: "#FFFFFF" } });
+        if (qrCache.size > 200) qrCache.clear(); // bounded on shared devices
+        qrCache.set(cacheKey, qrDataURL);
+        setActiveSlip(prev => (prev && prev.entry.id === r.id ? { ...prev, qrDataURL } : prev));
+      } catch {
+        // Placeholder stays; the slip and its PDF remain fully usable.
+        setActiveSlip(prev => (prev && prev.entry.id === r.id ? { ...prev, qrFailed: true } : prev));
+      }
+    })();
   };
 
   const handleSearch = () => {
@@ -910,6 +766,7 @@ function SlipFinder({ session, rolls, loading, schedule }: {
 
   const resetFinder = () => {
     setShowSeat(false);
+    setShowCal(false);
     setMatches(null);
     setActiveSlip(null);
     setFullName("");
@@ -918,6 +775,7 @@ function SlipFinder({ session, rolls, loading, schedule }: {
   const handleDownload = async (r: RollEntry) => {
     setDownloading(true);
     try {
+      const { downloadSlipPdf } = await import("@/lib/rollSlipPdf");
       await downloadSlipPdf(session, r, scheduleForClass(r.class));
       toast.success("Roll No. Slip downloaded!");
     } catch {
@@ -937,6 +795,7 @@ function SlipFinder({ session, rolls, loading, schedule }: {
     setSharingSlip(true);
     try {
       const examLabel = `${examTypeLabel(scheduleForClass(r.class)[0]?.exam_type || session.exam_term)} ${session.exam_year}`;
+      const { shareRollSlipCard, toastShareOutcome } = await import("@/utils/shareResultCard");
       const outcome = await shareRollSlipCard({
         studentName: r.student_name,
         fatherName: r.father_name || "—",
@@ -959,7 +818,7 @@ function SlipFinder({ session, rolls, loading, schedule }: {
     const slipSchedule = scheduleForClass(r.class);
     const classExamType = slipSchedule[0]?.exam_type || session.exam_term;
     return (
-      <motion.div variants={fadeUp} initial="hidden" animate="visible" className="max-w-xl mx-auto">
+      <div className="rs-fade-up max-w-xl mx-auto">
         {/* Premium gold frame around the true-to-print slip */}
         <div className="relative overflow-hidden rounded-3xl border-2 border-gold/40 bg-gradient-to-br from-gold/10 via-card to-gold/5 shadow-elevated">
           <div className="orb orb-gold w-44 h-44 -top-16 -right-12 opacity-40 pointer-events-none" />
@@ -992,8 +851,21 @@ function SlipFinder({ session, rolls, loading, schedule }: {
                     </div>
                   ))}
                 </div>
+                {/* QR box — same 84px footprint whether the QR is ready,
+                    still generating (tiny spinner) or failed (retry hint),
+                    so the slip NEVER reflows when the image arrives. */}
                 <div className="shrink-0 rounded-lg border border-[#b4b4b4] p-1 bg-white">
-                  <img src={activeSlip.qrDataURL} alt="Attendance QR code" className="w-[84px] h-[84px]" />
+                  {activeSlip.qrDataURL ? (
+                    <img src={activeSlip.qrDataURL} alt="Attendance QR code" width={84} height={84} className="w-[84px] h-[84px]" />
+                  ) : activeSlip.qrFailed ? (
+                    <div className="w-[84px] h-[84px] grid place-items-center px-1 text-center" aria-label="QR code unavailable">
+                      <span className="text-[8px] leading-tight font-semibold text-[#969696]">QR unavailable — it will be on the downloaded slip</span>
+                    </div>
+                  ) : (
+                    <div className="w-[84px] h-[84px] grid place-items-center" aria-label="Preparing QR code">
+                      <Loader2 className="w-5 h-5 animate-spin text-[#b4b4b4]" />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1083,6 +955,26 @@ function SlipFinder({ session, rolls, loading, schedule }: {
           </button>
         </div>
 
+        {hasUpcomingPapers(slipSchedule) && (
+          <button
+            onClick={() => setShowCal(true)}
+            className="mt-2 flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-gold/50 bg-gold/5 px-3 text-[12.5px] font-bold text-gold-strong transition-colors active:bg-gold/15 dark:text-gold"
+          >
+            <CalendarPlus className="h-4 w-4 shrink-0" />
+            <span>Add Date Sheet to Calendar</span>
+          </button>
+        )}
+        {showCal && (
+          <Suspense fallback={null}>
+            <AddToCalendarSheet
+              entries={slipSchedule}
+              student={{ name: r.student_name, rollNo: r.exam_roll_no, className: r.class }}
+              examLabel={`${examTypeLabel(classExamType)} ${session.exam_year}`}
+              onClose={() => setShowCal(false)}
+            />
+          </Suspense>
+        )}
+
         {seatQuery.isLoading && (
           <Skeleton className="mt-2 h-8 w-full rounded-lg" />
         )}
@@ -1099,12 +991,7 @@ function SlipFinder({ session, rolls, loading, schedule }: {
         {mySeats.length > 0 && (
           <div className="mt-2">
             {showSeat && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className="mt-3 space-y-3"
-              >
+              <div className="rs-fade-up mt-3 space-y-3">
                 <div className="flex items-center gap-2 px-1">
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg gradient-hero text-gold">
                     <DoorOpen className="h-4 w-4" />
@@ -1117,7 +1004,7 @@ function SlipFinder({ session, rolls, loading, schedule }: {
                 {mySeats.map(info => (
                   <SeatCard key={`${info.plan.id}-${info.seat.id}`} info={info} className="" />
                 ))}
-              </motion.div>
+              </div>
             )}
           </div>
         )}
@@ -1128,7 +1015,7 @@ function SlipFinder({ session, rolls, loading, schedule }: {
         >
           <ArrowLeft className="w-4 h-4" /> Search another student
         </button>
-      </motion.div>
+      </div>
     );
   }
 
@@ -1136,185 +1023,168 @@ function SlipFinder({ session, rolls, loading, schedule }: {
   if (matches && matches.length === 1 && !activeSlip) {
     const r = matches[0];
     return (
-      <motion.div variants={fadeUp} initial="hidden" animate="visible" className="max-w-lg mx-auto">
-        <button
-          onClick={() => openSlip(r)}
-          className="w-full text-left bg-card rounded-2xl p-4 shadow-card border border-border hover:border-primary/40 transition-colors flex items-center gap-3"
-        >
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex flex-col items-center justify-center shrink-0">
-            <span className="text-[8px] text-primary font-semibold leading-none">ROLL</span>
-            <span className="text-primary font-bold text-[13px] leading-tight font-mono">{r.exam_roll_no}</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-heading font-semibold text-foreground truncate text-sm">{r.student_name}</p>
-            <p className="text-xs text-muted-foreground truncate">Class {r.class} · Class Roll No: {r.class_roll_no}</p>
-          </div>
-          <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-3 py-1.5 shrink-0">View Slip</span>
+      <div className="rs-fade-up max-w-lg mx-auto">
+        <MatchRow r={r} onOpen={openSlip} sub={`Class ${r.class} · Class Roll No: ${r.class_roll_no}`} />
+        <button onClick={resetFinder} className={ghostBtn + " flex"}>
+          <ArrowLeft className="h-3.5 w-3.5" /> Search another student
         </button>
-        <button onClick={resetFinder} className="mt-4 mx-auto flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Search another student
-        </button>
-      </motion.div>
+      </div>
     );
   }
 
   /* ── Multiple matches with the same name — let the student pick ────────── */
   if (matches && matches.length > 1) {
     return (
-      <motion.div variants={fadeUp} initial="hidden" animate="visible" className="max-w-lg mx-auto space-y-3">
-        <div className="rounded-2xl border border-border bg-card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
-            <User className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="font-heading font-semibold text-foreground text-sm">{matches.length} students named "{fullName.trim()}" in Class {selectedClass}</p>
-            <p className="text-xs text-muted-foreground">Tap your exact name to open your slip</p>
+      <div className="rs-fade-up max-w-lg mx-auto space-y-2">
+        <div className="flex items-start gap-2.5 rounded-xl border border-gold/40 bg-gold/5 p-3">
+          <User className="mt-0.5 h-4 w-4 shrink-0 text-gold-strong" />
+          <div className="min-w-0">
+            <p className="break-words text-[13px] font-semibold leading-snug text-foreground">
+              {matches.length} students match “{fullName.trim()}” in Class {selectedClass}
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Tap your exact name to open your slip</p>
           </div>
         </div>
         {matches.slice(0, 10).map(r => (
-          <button
-            key={r.id}
-            onClick={() => openSlip(r)}
-            className="w-full text-left bg-card rounded-2xl p-4 shadow-card border border-border hover:border-primary/40 transition-colors flex items-center gap-3"
-          >
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex flex-col items-center justify-center shrink-0">
-              <span className="text-[8px] text-primary font-semibold leading-none">ROLL</span>
-              <span className="text-primary font-bold text-[13px] leading-tight font-mono">{r.exam_roll_no}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-heading font-semibold text-foreground truncate text-sm">{r.student_name}</p>
-              <p className="text-xs text-muted-foreground truncate">S/o {r.father_name || "—"} · Class Roll No: {r.class_roll_no}</p>
-            </div>
-            <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-3 py-1.5 shrink-0">View Slip</span>
-          </button>
+          <MatchRow key={r.id} r={r} onOpen={openSlip} sub={`S/o ${r.father_name || "—"} · Class Roll No: ${r.class_roll_no}`} />
         ))}
         {matches.length > 10 && (
-          <p className="text-center text-xs text-muted-foreground">Showing 10 of {matches.length} — type the full name to narrow it down</p>
+          <p className="text-center text-[11px] text-muted-foreground">Showing 10 of {matches.length} — type the full name to narrow it down</p>
         )}
-        <button onClick={resetFinder} className="mx-auto flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-primary transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Search again
+        <button onClick={resetFinder} className={ghostBtn + " flex"}>
+          <ArrowLeft className="h-3.5 w-3.5" /> Search again
         </button>
-      </motion.div>
+      </div>
     );
   }
 
   /* ── Not found ──────────────────────────────────────────────────────────── */
   if (matches && matches.length === 0) {
     return (
-      <motion.div variants={fadeUp} initial="hidden" animate="visible" className="max-w-lg mx-auto">
-        <div className="rounded-3xl border-2 border-amber-500/30 bg-amber-500/5 p-8 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-600 flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-7 h-7" />
-          </div>
-          <h3 className="font-heading font-bold text-foreground">No slip found for "{fullName.trim()}"</h3>
-          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-            No student matches in <span className="font-semibold text-foreground">Class {selectedClass}</span>.
-            Double-check the selected class and the spelling of your full name — it must match the school record.
+      <div className="rs-fade-up max-w-lg mx-auto">
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 text-center">
+          <span className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-xl bg-amber-500/15 text-amber-600">
+            <AlertCircle className="h-5 w-5" />
+          </span>
+          <h3 className="break-words font-heading text-[15px] font-bold leading-snug text-foreground">No slip found for “{fullName.trim()}”</h3>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            No student matches in <span className="font-semibold text-foreground">Class {selectedClass}</span>. Check the selected class and the
+            spelling of your full name — it must match the school record.
           </p>
-          <div className="flex items-center justify-center gap-2 mt-6">
-            <button onClick={resetFinder} className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-primary/90 transition-colors">
-              <ArrowLeft className="w-4 h-4" /> Try Again
-            </button>
-          </div>
+          <button
+            onClick={resetFinder}
+            className="mt-4 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-5 text-[13px] font-semibold text-primary-foreground touch-manipulation transition-opacity active:opacity-85"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Try again
+          </button>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
-  /* ── Default: the premium finder form ───────────────────────────────────── */
+  /* ── Default: the premium finder form (the page banner above is the ONLY
+        green banner — this card is deliberately light so the page stays calm) */
   return (
-    <motion.div variants={fadeUp} initial="hidden" animate="visible" className="max-w-lg mx-auto">
-      {/* Hero — with the realistic 3D slip artwork */}
-      <div className="relative overflow-hidden rounded-[22px] gradient-hero text-white px-5 py-4 sm:py-5 text-center shadow-elevated mb-4 border border-gold/30">
-        <div className="orb orb-gold w-52 h-52 -top-20 -right-14 opacity-90" />
-        <div className="orb orb-light w-44 h-44 -bottom-20 -left-12" />
-        <div className="absolute inset-0 dot-grid opacity-[0.10]" />
-        <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />
-        <div className="relative">
-          <RealisticSlipIcon className="w-[48px] h-[48px] mx-auto mb-1.5 drop-shadow-[0_8px_14px_rgba(0,0,0,0.45)]" />
-          <h2 className="font-heading font-bold text-xl leading-tight">Find Your Roll No. Slip</h2>
-          <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-semibold text-on-hero">
-            <CheckCircle2 className="w-3 h-3 text-gold" />
-            {session.title} · {examTypeLabel(session.exam_term)} {session.exam_year}
-          </span>
-        </div>
-      </div>
-
+    <div className="rs-fade-up max-w-lg mx-auto">
       {loading ? (
-        <div className="space-y-3">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 rounded-2xl" />)}
+        <div className="space-y-2.5">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
         </div>
       ) : rolls.length === 0 ? (
-        <div className="rounded-3xl border border-border bg-card p-8 text-center">
-          <Hash className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="font-heading font-semibold text-foreground">Slips are being prepared</p>
-          <p className="text-sm text-muted-foreground mt-1">Please check back a little later</p>
+        <div className="rounded-2xl border border-border bg-card p-6 text-center">
+          <Hash className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
+          <p className="font-heading text-sm font-semibold text-foreground">Slips are being prepared</p>
+          <p className="mt-1 text-xs text-muted-foreground">Please check back a little later</p>
         </div>
       ) : (
-        <div className="relative overflow-hidden rounded-[28px] border border-border bg-card shadow-elevated p-4 sm:p-5 space-y-4">
-          {/* Step 1 — class */}
-          <div>
-            <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.12em] text-muted-foreground mb-2">
-              <span className="w-5 h-5 rounded-full gradient-hero text-gold text-[10px] font-bold flex items-center justify-center">1</span>
-              Select Your Class
-            </p>
-            <div className="flex flex-wrap justify-center gap-1.5">
-              {classes.map(cls => {
-                const active = selectedClass === cls;
-                return (
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+          <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold to-transparent" aria-hidden />
+
+          {/* header */}
+          <div className="flex items-center gap-3 border-b border-border px-4 pb-3 pt-4">
+            <RealisticSlipIcon className="h-10 w-10 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <h2 className="font-heading text-[15px] font-bold leading-tight text-foreground">Find your slip</h2>
+              <p className="mt-0.5 inline-flex max-w-full items-start gap-1 text-[11px] leading-snug text-muted-foreground">
+                <CheckCircle2 className="mt-px h-3 w-3 shrink-0 text-gold-strong" />
+                <span className="min-w-0 break-words">{sessionLabel}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4 p-4">
+            {/* Step 1 — class */}
+            <div>
+              <p className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+                <span className="grid h-5 w-5 place-items-center rounded-full border border-gold/60 text-[10px] font-bold text-gold-strong">1</span>
+                Select your class
+              </p>
+              <div className="flex flex-wrap justify-center gap-2" role="radiogroup" aria-label="Class">
+                {classes.map(cls => {
+                  const active = selectedClass === cls;
+                  return (
+                    <button
+                      key={cls}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => { setSelectedClass(cls); resetFinder(); }}
+                      className={`h-10 w-14 rounded-lg border text-[15px] font-extrabold touch-manipulation transition-colors ${
+                        active
+                          ? "border-gold bg-primary text-primary-foreground shadow-sm"
+                          : "border-border bg-background text-muted-foreground active:bg-muted hover:border-gold/50"
+                      }`}
+                    >
+                      {cls}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Step 2 — name / roll no. */}
+            <div>
+              <label htmlFor="rs-find" className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+                <span className="grid h-5 w-5 place-items-center rounded-full border border-gold/60 text-[10px] font-bold text-gold-strong">2</span>
+                Full name or roll no.
+              </label>
+              <div className="relative">
+                <input
+                  id="rs-find"
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && canSearch) handleSearch(); }}
+                  placeholder="Type name or roll number"
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  className="block h-11 w-full rounded-lg border border-border bg-background pl-4 pr-10 text-sm font-medium text-foreground placeholder:text-muted-foreground/60 focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/25"
+                />
+                {fullName && (
                   <button
-                    key={cls}
-                    onClick={() => { setSelectedClass(cls); resetFinder(); }}
-                    className={`w-14 sm:w-16 rounded-xl py-1.5 flex flex-col items-center gap-0 border-2 transition-all active:scale-95 ${
-                      active
-                        ? "gradient-hero text-white border-gold shadow-[0_10px_22px_-10px_hsl(var(--primary)/0.8)] -translate-y-0.5"
-                        : "bg-muted/50 text-muted-foreground border-transparent hover:border-gold/40"
-                    }`}
+                    type="button"
+                    onClick={() => setFullName("")}
+                    aria-label="Clear"
+                    className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-muted-foreground active:bg-muted"
                   >
-                    <span className="text-base font-black leading-none">{cls}</span>
-                    <span className={`text-[8px] font-bold uppercase tracking-wide ${active ? "opacity-85" : "opacity-70"}`}>
-                      {cls === "6" ? "6th" : cls === "7" ? "7th" : cls === "8" ? "8th" : cls === "9" ? "9th" : "10th"}
-                    </span>
+                    <X className="h-4 w-4" />
                   </button>
-                );
-              })}
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Step 2 — full name */}
-          <div>
-            <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.12em] text-muted-foreground mb-2">
-              <span className="w-5 h-5 rounded-full gradient-hero text-gold text-[10px] font-bold flex items-center justify-center">2</span>
-              Full Name or Roll No.
-            </p>
-            <div className="relative">
-              <input
-                value={fullName}
-                onChange={e => setFullName(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && canSearch) handleSearch(); }}
-                placeholder="e.g. Muhammad Ahmad Khan or 100123"
-                enterKeyHint="search"
-                className="w-full h-11 px-4 rounded-xl border-2 border-border bg-muted/40 text-sm font-medium text-foreground placeholder:text-muted-foreground/60 focus:bg-background focus:ring-4 focus:ring-gold/20 focus:border-gold outline-none transition-all"
-              />
-            </div>
+            {/* Search */}
+            <button
+              onClick={handleSearch}
+              disabled={!canSearch}
+              className="flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-primary to-primary-glow px-4 text-[13px] font-bold text-primary-foreground touch-manipulation transition-opacity active:opacity-85 disabled:opacity-50"
+            >
+              <Search className="h-4 w-4 shrink-0" />
+              <span>Search my slip</span>
+            </button>
           </div>
-
-          {/* Search */}
-          <button
-            onClick={handleSearch}
-            disabled={!canSearch || qrBusy}
-            className="sheen mx-auto w-full max-w-[230px] h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap gradient-hero text-white font-bold text-[13px] px-4 rounded-lg border border-gold/50 shadow-[0_8px_18px_-10px_hsl(var(--primary)/0.7)] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {qrBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-            {qrBusy ? "Preparing your slip…" : "Search My Slip"}
-          </button>
-          <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground -mt-2">
-            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-            Your official slip appears instantly — same as the school office copy
-          </p>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 

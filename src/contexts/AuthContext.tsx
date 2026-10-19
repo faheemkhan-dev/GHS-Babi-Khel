@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, signOutSafely, recoverSessionIfUnintended } from "@/lib/supabase";
+import { startAuthKeepAlive } from "@/lib/authKeepAlive";
 import type { User, Session } from "@supabase/supabase-js";
 
 export interface Profile {
@@ -207,7 +208,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (!mounted) return;
 
-        const sess = (sessionResult as { data: { session: Session | null } }).data.session;
+        let sess = (sessionResult as { data: { session: Session | null } }).data.session;
+
+        // Storage was wiped (browser eviction, cleared site data) but we hold
+        // a backup of the last good session — restore it instead of making
+        // the admin sign in again. A deliberate sign-out clears the backup.
+        if (!sess && (await recoverSessionIfUnintended()) === "recovered") {
+          sess = (await supabase.auth.getSession()).data.session;
+        }
 
         setSession(sess);
         setUser(sess?.user ?? null);
@@ -267,11 +275,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSessionPending(false);
 
         if (event === "SIGNED_OUT") {
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          writeCachedProfile("", null);
-          // Don't touch loading here — sign-out is instant
+          // SIGNED_OUT is also what the library emits when a refresh was
+          // interrupted or storage vanished — not only when the person
+          // clicked "Sign out". Before wiping the UI, try to restore the last
+          // good session (deferred: auth calls inside this callback deadlock).
+          setTimeout(async () => {
+            if (!mounted) return;
+            const result = await recoverSessionIfUnintended();
+            if (!mounted) return;
+            // "recovered" → SIGNED_IN follows and repopulates state.
+            // "unknown"   → offline; keep the UI as-is, keep-alive retries.
+            if (result !== "failed") return;
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            writeCachedProfile("", null);
+          }, 0);
           return;
         }
 
@@ -407,12 +426,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [userId, hasProfile, fetchProfile, applyProfile]);
 
+  // Keep the session alive across tab sleep / network loss (see authKeepAlive).
+  useEffect(() => startAuthKeepAlive(), []);
+
   const signOut = async () => {
     setProfile(null);
     setUser(null);
     setSession(null);
     writeCachedProfile("", null);
-    await supabase.auth.signOut();
+    // Local scope: signs out THIS device only, never the admin's other devices.
+    await signOutSafely("local");
   };
 
   const refreshProfile = async () => {

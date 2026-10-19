@@ -1,28 +1,11 @@
 /**
  * examRollHelpers.ts — pure helpers + shared types for the Exam Roll Numbers tab
  * (extracted from AdminExamRollNumbers.tsx; no behaviour change).
+ *
+ * PERF: the QRCode import and the two QR helper functions below were DEAD
+ * CODE (zero call sites — AdminExamRollNumbers builds its own QR images)
+ * and pulled the whole `qrcode` library into the exam-rolls chunk. Removed.
  */
-import QRCode from "qrcode";
-import { encodeExamQRData } from "@/hooks/useExamAttendance";
-
-// ── Real QR Code generation using `qrcode` npm package ─────────────────────────
-const qrCache = new Map<string, string>();
-export async function getQRDataURL(sessionId: string, studentId: string, examRollNo: string): Promise<string> {
-  const key = `${sessionId}-${studentId}-${examRollNo}`;
-  if (qrCache.has(key)) return qrCache.get(key)!;
-  const data = encodeExamQRData(sessionId, studentId, examRollNo);
-  const url = await QRCode.toDataURL(data, {
-    width: 200, margin: 1, errorCorrectionLevel: "M",
-    color: { dark: "#333333", light: "#FFFFFF" },
-  });
-  qrCache.set(key, url);
-  return url;
-}
-
-// Single QR for attendance scan
-export async function generateSingleQR(data: string): Promise<string> {
-  return QRCode.toDataURL(data, { width: 200, margin: 1, errorCorrectionLevel: "M" });
-}
 
 export interface ExamSession {
   id: string; title: string; exam_year: number; exam_term: string;

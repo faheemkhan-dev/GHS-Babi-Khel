@@ -19,7 +19,7 @@ const useAdminStats = () =>
     queryFn: async () => {
       const [
         students, teachers, notices, library, albums,
-        users, achievements, results, pendingUsers,
+        users, results, pendingUsers,
         admissions, pendingAdmissions, notes,
       ] = await Promise.all([
         supabase.from("students").select("id", { count: "exact", head: true }),
@@ -28,7 +28,6 @@ const useAdminStats = () =>
         supabase.from("library_files").select("id", { count: "exact", head: true }),
         supabase.from("gallery_albums").select("id", { count: "exact", head: true }),
         supabase.from("profiles").select("id", { count: "exact", head: true }),
-        supabase.from("achievements").select("id", { count: "exact", head: true }),
         supabase.from("results").select("id", { count: "exact", head: true }),
         supabase.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending"),
         supabase.from("admissions").select("id", { count: "exact", head: true }),
@@ -42,7 +41,6 @@ const useAdminStats = () =>
         library: library.count ?? 0,
         albums: albums.count ?? 0,
         users: users.count ?? 0,
-        achievements: achievements.count ?? 0,
         results: results.count ?? 0,
         pendingUsers: pendingUsers.count ?? 0,
         admissions: admissions.count ?? 0,
@@ -264,7 +262,6 @@ const AdminOverview = () => {
   const resourceStats = [
     { key: "library" as const,      label: "Library Files",    icon: BookOpen, tone: TONES.cyan },
     { key: "albums" as const,       label: "Gallery Albums",   icon: ImageIcon, tone: TONES.pink },
-    { key: "achievements" as const, label: "Achievements",     icon: Trophy,   tone: TONES.gold },
     { key: "users" as const,        label: "Registered Users", icon: UserCog,  tone: TONES.rose,
       badge: stats?.pendingUsers ? { text: `${n(stats.pendingUsers)} pending`, urgent: true } : undefined },
   ];

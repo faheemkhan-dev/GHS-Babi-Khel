@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import type { Html5Qrcode } from "html5-qrcode";
 import { Button } from "@/components/ui/button";
 import { Camera, X, AlertCircle, Loader2, ScanLine } from "lucide-react";
 
@@ -66,6 +66,8 @@ export default function QRScanner({ onScan, enabled }: { onScan: (data: string) 
   }, []);
 
   const start = useCallback(async () => {
+    // Idempotent: a rapid enabled-flip must not spin up a second camera.
+    if (scannerRef.current) return;
     setError(null);
     
     // Detect device type for adaptive settings
@@ -112,6 +114,10 @@ export default function QRScanner({ onScan, enabled }: { onScan: (data: string) 
     const qrboxSize = { width: boxSide, height: boxSide };
     // Portrait viewport on phones (3:4), standard 4:3 on laptops.
     const viewAspect = isMobile ? 0.75 : 1.3333;
+
+    // PERF: html5-qrcode (~90 KB gz) loads ONLY when the camera is actually
+    // started — the Attendance tab chunk no longer ships it for every admin.
+    const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
 
     const attemptStart = async (): Promise<void> => {
       // QR only (skips every other barcode format) + the browser's native detector when available.
@@ -173,10 +179,13 @@ export default function QRScanner({ onScan, enabled }: { onScan: (data: string) 
   }, [handleDecoded]);
 
   // ── AUTO-START (removes the redundant double-click) ──
+  // "enabled" is a dependency now (it was previously ignored, so a scanner
+  // mounted before its tab was ready never started when enabled flipped
+  // true). start() is idempotent, so a re-run is harmless.
   useEffect(() => {
     if (enabled) start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enabled]);
 
   useEffect(() => () => { stop(); }, [stop]);
 

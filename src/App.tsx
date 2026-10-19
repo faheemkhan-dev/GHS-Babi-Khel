@@ -29,7 +29,7 @@ import Deferred from "./components/shared/Deferred";
 
 const PageTracker = () => { usePageTracker(); return null; };
 
-// Restores offline-cached data (notices/teachers/achievements/
+// Restores offline-cached data (notices/teachers/
 // school-settings/results) from IndexedDB on cold start so
 // Home, About, Contact, Notices, and Results can paint
 // instantly even with no network, then keeps that cache updated in the

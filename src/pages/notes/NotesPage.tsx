@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Search, BookOpen, ChevronRight, Sparkles, GraduationCap, Star, WifiOff, RefreshCw, SearchX } from "lucide-react";
+import { BookOpen, ChevronRight, Sparkles, GraduationCap, Star, WifiOff, RefreshCw, SearchX } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 import { useNoteSubjects } from "@/hooks/useNotes";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,12 +49,13 @@ const NotesPage = () => {
             </p>
 
             <div className="relative max-w-md mx-auto mt-5">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search subjects…"
-                className="w-full h-11 pl-11 pr-4 rounded-full bg-white text-gray-900 placeholder:text-gray-400 text-sm font-medium outline-none border border-gold/40 focus:ring-4 focus:ring-gold/25 shadow-[0_14px_30px_-14px_rgba(0,0,0,0.55)] transition-shadow"
+                type="text"
+                enterKeyHint="search"
+                className="w-full h-11 px-5 rounded-full bg-white text-gray-900 placeholder:text-gray-400 text-sm font-medium outline-none border border-gold/40 focus:ring-4 focus:ring-gold/25 shadow-[0_14px_30px_-14px_rgba(0,0,0,0.55)] transition-shadow"
               />
             </div>
           </motion.div>

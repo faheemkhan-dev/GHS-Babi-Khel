@@ -14,7 +14,6 @@ import PageLayout from "@/components/layout/PageLayout";
 import { useSchoolSettings, safeMediaUrl, optimizedCloudinaryUrl } from "@/hooks/useSchoolSettings";
 import { useNotices } from "@/hooks/useNotices";
 import { useTeachers } from "@/hooks/useTeachers";
-import { useAchievements } from "@/hooks/useAchievements";
 import { useCountUp } from "@/hooks/useCountUp";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -1077,7 +1076,6 @@ const Home = () => {
   const { data: settings,          isLoading: settingsLoading }      = useSchoolSettings();
   const { data: notices = [],      isLoading: noticesLoading }        = useNotices(4);
   const { data: teachers = [],     isLoading: teachersLoading }       = useTeachers(4);
-  const { data: achievements = [], isLoading: achievementsLoading }   = useAchievements(3);
   const { data: admSettings, isLoading: admLoading }                   = useAdmissionSettings();
 
   // Treat admissions as closed if last_date has already passed, even if DB is_open=true
@@ -1157,24 +1155,24 @@ const Home = () => {
                 </span>
               </m.div>
               <HeroTypewriterHeading
-                className="mt-5 sm:mt-6 text-[2.4rem] leading-[1.06] sm:text-[2.9rem] sm:leading-[1.05] md:text-6xl lg:text-[4.1rem] font-display font-normal tracking-tight"
+                className="mt-5 sm:mt-6 text-[2.65rem] leading-[1.06] sm:text-[3.2rem] sm:leading-[1.05] md:text-[4rem] lg:text-[4.5rem] font-display font-normal tracking-tight"
                 textColor={heroTextColor}
               />
-              <m.p variants={stagger.child} className={`mt-4 sm:mt-5 text-[15px] md:text-lg ${heroDescColor} max-w-xl leading-relaxed`}>
+              <m.p variants={stagger.child} className={`mt-4 sm:mt-5 text-[16.5px] md:text-xl ${heroDescColor} max-w-xl leading-relaxed`}>
                 {settings?.description || "Government High School Babi Khel is committed to providing quality education and nurturing the future leaders of Pakistan."}
               </m.p>
 
-              {/* CTAs — thin professional pills (h-9), gold primary + quiet outline */}
+              {/* CTAs — thin professional pills (h-10), gold primary + quiet outline */}
               <m.div variants={stagger.child} className="mt-6 sm:mt-7 flex flex-row flex-nowrap items-center justify-start gap-2.5">
                 <Link to="/results">
                   <m.button whileTap={{ scale: 0.97 }}
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 h-9 rounded-full bg-gradient-to-r from-gold to-gold-strong text-white dark:text-gold-ink text-[13px] font-semibold px-5 shadow-[0_6px_16px_-8px_hsl(var(--gold)/0.55)] hover:shadow-[0_8px_20px_-8px_hsl(var(--gold)/0.7)] transition-shadow duration-200">
-                    View Results <ArrowRight className="w-3.5 h-3.5" />
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 h-10 rounded-full bg-gradient-to-r from-gold to-gold-strong text-white dark:text-gold-ink text-sm font-semibold px-6 shadow-[0_6px_16px_-8px_hsl(var(--gold)/0.55)] hover:shadow-[0_8px_20px_-8px_hsl(var(--gold)/0.7)] transition-shadow duration-200">
+                    View Results <ArrowRight className="w-4 h-4" />
                   </m.button>
                 </Link>
                 <Link to="/about">
                   <m.button whileTap={{ scale: 0.97 }}
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 h-9 rounded-full border border-primary/25 hover:border-gold/60 hover:text-primary text-foreground text-[13px] font-medium px-5 bg-transparent transition-colors duration-200">
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 h-10 rounded-full border border-primary/25 hover:border-gold/60 hover:text-primary text-foreground text-sm font-medium px-6 bg-transparent transition-colors duration-200">
                     Learn more
                   </m.button>
                 </Link>
@@ -1409,28 +1407,6 @@ const Home = () => {
                 <h3 className="font-heading font-semibold text-[15px] text-foreground leading-snug">{teacher.full_name}</h3>
                 {teacher.subject       && <p className="text-[13px] text-muted-foreground font-medium mt-0.5">{teacher.subject}</p>}
                 {teacher.qualification && <p className="text-xs text-muted-foreground/80 mt-0.5">{teacher.qualification}</p>}
-              </m.div>
-            ))}
-          </div>
-          </ScrollStage>
-        </div>
-      </m.section>
-
-      {/* ══ 12. ACHIEVEMENTS ══ */}
-      <m.section initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }} variants={sectionFadeUp} className="section-y cv-auto">
-        <div className="container mx-auto px-4">
-          <ScrollReveal><SectionHeader eyebrow="Our Pride" title="Achievements" /></ScrollReveal>
-          <ScrollStage variant="zoom">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {achievementsLoading ? Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="bg-card rounded-2xl p-6 shadow-card"><Skeleton className="w-12 h-12 rounded-xl mb-4" /><Skeleton className="h-5 w-3/4 mb-2" /><Skeleton className="h-3 w-1/2" /></div>
-            )) : achievements.map((a) => (
-              <m.div key={a.id} initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }}
-                className="bg-card rounded-xl p-5 shadow-card hover:shadow-elevated transition-all duration-300 border border-border/70 hover:border-gold/50">
-                <div className="w-10 h-10 rounded-lg bg-gold/15 flex items-center justify-center mb-3"><Trophy className="w-5 h-5 text-gold" /></div>
-                <h3 className="font-heading font-semibold text-[15px] text-foreground leading-snug">{a.title}</h3>
-                {a.student_name && <p className="text-[13px] text-foreground/80 font-medium mt-0.5">{a.student_name}{a.class && ` · Class ${a.class}`}</p>}
-                {a.description  && <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{a.description}</p>}
               </m.div>
             ))}
           </div>

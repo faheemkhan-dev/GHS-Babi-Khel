@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, lazy, Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,14 +26,17 @@ import {
   CalendarDays, CircleDollarSign, UserX, CheckCheck,
   UserCircle, X,
 } from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, Legend, PieChart, Pie,
-} from "recharts";
 import toast from "react-hot-toast";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
+// PERF (chunk size): recharts lives in its own lazy chunk (see
+// ./fees/FeeCharts.tsx) and jspdf/jspdf-autotable load only inside the
+// download/export click handlers — the Fees tab no longer ships ~100 KB of
+// charts + ~142 KB of PDF library to admins who only manage structures,
+// vouchers or payments.
+const AgingPie = lazy(() => import("./fees/FeeCharts").then(m => ({ default: m.AgingPie })));
+const ClassCollectionBar = lazy(() => import("./fees/FeeCharts").then(m => ({ default: m.ClassCollectionBar })));
+const MonthlyCollectionBar = lazy(() => import("./fees/FeeCharts").then(m => ({ default: m.MonthlyCollectionBar })));
+const ClassSummaryBar = lazy(() => import("./fees/FeeCharts").then(m => ({ default: m.ClassSummaryBar })));
 
 import {
   useAllFeeStructures,
@@ -98,7 +101,12 @@ const CLASS_COLORS: Record<string, string> = {
 // 2. Shows payment_methods (EasyPaisa, JazzCash, Bank) properly
 // 3. Professional editorial look suitable for printing
 
-function generateVoucherPDF(voucher: FeeVoucher, studentName: string, rollNumber: string) {
+async function generateVoucherPDF(voucher: FeeVoucher, studentName: string, rollNumber: string) {
+  // PERF: the PDF libraries load only when a voucher is actually downloaded.
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const w = doc.internal.pageSize.getWidth();
   const h = doc.internal.pageSize.getHeight();
@@ -357,22 +365,7 @@ function generateVoucherPDF(voucher: FeeVoucher, studentName: string, rollNumber
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Custom Tooltip for Charts
-// ═══════════════════════════════════════════════════════════════
-
-const CustomTip = ({ active, payload, label }: any) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-card border border-border/60 rounded-xl p-2.5 shadow-lg text-xs">
-      <p className="font-bold text-foreground mb-1">{label}</p>
-      {payload.map((p: any, i: number) => (
-        <p key={i} style={{ color: p.color || p.fill }}>
-          {p.name}: <strong>Rs. {Number(p.value).toLocaleString()}</strong>
-        </p>
-      ))}
-    </div>
-  );
-};
+// CustomTip moved to ./fees/FeeCharts.tsx (lazy chunk).
 
 // ═══════════════════════════════════════════════════════════════
 // Status Badge Component
@@ -554,21 +547,9 @@ function DashboardTab() {
             <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-orange-500" /> Aging Analysis
             </h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
-                <Pie
-                  data={agingData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  dataKey="value"
-                >
-                  {agingData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                </Pie>
-                <Tooltip formatter={(v: number) => `Rs. ${v.toLocaleString()}`} />
-              </PieChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<div className="h-[220px] animate-pulse rounded-xl bg-muted/40" />}>
+              <AgingPie data={agingData} />
+            </Suspense>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 mt-2">
               {agingData.map((entry, i) => (
                 <div key={i} className="flex items-center gap-1.5 min-w-0">
@@ -591,17 +572,9 @@ function DashboardTab() {
             <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
               <Users className="w-4 h-4 text-primary" /> Class-wise Collection
             </h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={classChartData} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="class" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip content={<CustomTip />} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="collected" name="Collected" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="outstanding" name="Outstanding" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<div className="h-[200px] animate-pulse rounded-xl bg-muted/40" />}>
+              <ClassCollectionBar data={classChartData} />
+            </Suspense>
           </div>
         )}
       </div>
@@ -1167,7 +1140,7 @@ function VouchersTab() {
   };
 
   const handleDownloadVoucher = (v: FeeVoucher) => {
-    generateVoucherPDF(v, v.students?.full_name || "", v.students?.roll_number || "");
+    generateVoucherPDF(v, v.students?.full_name || "", v.students?.roll_number || "").catch(() => toast.error("Could not load the PDF library — check your connection"));
   };
 
   const handleDeleteVoucher = async (v: FeeVoucher) => {
@@ -1696,12 +1669,23 @@ function ReportsTab() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [reportType, setReportType] = useState<"collection" | "class" | "defaulters">("collection");
 
-  const { data: collectionReport = [], isLoading: loadingCollection } = useFeeCollectionReport(year);
-  const { data: classSummary = [], isLoading: loadingClass } = useClassCollectionSummary(year);
-  const { data: defaulters = [], isLoading: loadingDefaulters } = useFeeDefaulters();
+  // PERF: each report query runs ONLY when its sub-report is selected.
+  // Previously all three (two of them whole-year full-table aggregations)
+  // fired on mount even for an admin who only ever looked at one report.
+  const { data: collectionReport = [], isLoading: loadingCollection } = useFeeCollectionReport(year, { enabled: reportType === "collection" });
+  const { data: classSummary = [], isLoading: loadingClass } = useClassCollectionSummary(year, { enabled: reportType === "class" });
+  const { data: defaulters = [], isLoading: loadingDefaulters } = useFeeDefaulters({ enabled: reportType === "defaulters" });
 
-  const handleExportDefaulterList = () => {
-    const doc = new jsPDF();
+  // PERF: the defaulters table rendered EVERY defaulter at once; large
+  // lists now render in pages of 25 with a "Show more" button.
+  const [defaulterLimit, setDefaulterLimit] = useState(25);
+  const visibleDefaulters = defaulters.slice(0, defaulterLimit);
+
+  const handleExportDefaulterList = async () => {
+    let doc: import("jspdf")["default"], autoTable: typeof import("jspdf-autotable")["default"];
+    try {
+      ([{ default: doc }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]));
+    } catch { toast.error("Could not load the PDF library — check your connection"); return; }
     doc.setFontSize(14);
     doc.text("Fee Defaulters List", 14, 16);
     doc.setFontSize(9);
@@ -1753,17 +1737,12 @@ function ReportsTab() {
                 <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-primary" /> Monthly Collection — {year}
                 </h3>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={collectionReport.filter((r) => r.total_vouchers > 0)} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={(v: number) => MONTHS[v - 1]?.slice(0, 3) || String(v)} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip content={<CustomTip />} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="collected" name="Collected" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="outstanding" name="Outstanding" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<div className="h-[280px] animate-pulse rounded-xl bg-muted/40" />}>
+                  <MonthlyCollectionBar
+                    data={collectionReport.filter((r) => r.total_vouchers > 0)}
+                    monthLabel={(v: number) => MONTHS[v - 1]?.slice(0, 3) || String(v)}
+                  />
+                </Suspense>
               </div>
 
               <div className="rounded-2xl border border-border/60 bg-card overflow-hidden shadow-sm">
@@ -1824,19 +1803,9 @@ function ReportsTab() {
                 <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
                   <Users className="w-4 h-4 text-primary" /> Class-wise Collection — {year}
                 </h3>
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={classSummary} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="class" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip content={<CustomTip />} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="total_collected" name="Collected" radius={[4, 4, 0, 0]}>
-                      {classSummary.map((c, i) => <Cell key={i} fill={CLASS_COLORS[c.class] || "#6366f1"} />)}
-                    </Bar>
-                    <Bar dataKey="total_outstanding" name="Outstanding" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<div className="h-[240px] animate-pulse rounded-xl bg-muted/40" />}>
+                  <ClassSummaryBar data={classSummary} classColors={CLASS_COLORS} />
+                </Suspense>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1898,7 +1867,7 @@ function ReportsTab() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {defaulters.map((d, i) => (
+                    {visibleDefaulters.map((d, i) => (
                       <TableRow key={d.student_id} className="border-border/50 hover:bg-primary/5">
                         <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
                         <TableCell>
@@ -1925,6 +1894,18 @@ function ReportsTab() {
                     ))}
                   </TableBody>
                 </Table>
+                {defaulters.length > visibleDefaulters.length && (
+                  <div className="border-t border-border/50 p-3 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDefaulterLimit((n) => n + 25)}
+                      className="h-8 rounded-full px-4 text-xs font-semibold"
+                    >
+                      Show more ({defaulters.length - visibleDefaulters.length} remaining)
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           )}

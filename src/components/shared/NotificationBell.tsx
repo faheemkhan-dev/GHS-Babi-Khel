@@ -5,7 +5,7 @@ import {
   Bell, Check, CheckCheck, Trash2,
   Newspaper, Megaphone, BarChart3, Hash, Wallet, IdCard,
   CalendarDays, BookMarked, Video, MonitorPlay, GraduationCap,
-  Trophy, ClipboardList, FileText, UserPlus, Upload, HelpCircle,
+  ClipboardList, FileText, UserPlus, Upload, HelpCircle,
   Mail, MessageSquareText, Flag, LayoutGrid, BellRing, BellOff, Clock, X,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -46,7 +46,6 @@ const TYPE_META: Record<string, { icon: any; color: string; bg: string }> = {
   video:                 { icon: Video,        color: "text-rose-500",       bg: "bg-rose-500/10"       },
   online_class:          { icon: MonitorPlay,  color: "text-teal-500",       bg: "bg-teal-500/10"       },
   admission_open:        { icon: GraduationCap,color: "text-green-500",      bg: "bg-green-500/10"      },
-  achievement:           { icon: Trophy,       color: "text-yellow-500",     bg: "bg-yellow-500/10"     },
   homework:              { icon: ClipboardList,color: "text-sky-500",        bg: "bg-sky-500/10"        },
   admission_application: { icon: UserPlus,     color: "text-violet-500",     bg: "bg-violet-500/10"     },
   admission_doc:         { icon: Upload,       color: "text-fuchsia-500",    bg: "bg-fuchsia-500/10"    },
@@ -439,12 +438,12 @@ const NotificationBell = ({ variant = "header" }: NotificationBellProps = {}) =>
         <span className="relative inline-flex items-center justify-center leading-none">
           {unreadCount > 0 ? (
             <BellRing
-              className={`${isSheet ? "w-6 h-6" : "w-5 h-5"} ${pulse ? "animate-bounce text-gold-strong" : ""} transition-colors`}
+              className={`${isSheet ? "w-[22px] h-[22px]" : "w-5 h-5"} ${pulse ? "animate-bounce text-gold-strong" : ""} transition-colors`}
               fill={isSheet && open ? "currentColor" : "none"}
             />
           ) : (
             <Bell
-              className={`${isSheet ? "w-6 h-6" : "w-5 h-5"} transition-colors`}
+              className={`${isSheet ? "w-[22px] h-[22px]" : "w-5 h-5"} transition-colors`}
               fill={isSheet && open ? "currentColor" : "none"}
             />
           )}

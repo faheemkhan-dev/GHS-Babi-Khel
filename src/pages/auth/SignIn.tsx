@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Mail, Lock, GraduationCap, ArrowRight, Loader2, Clock, XCircle } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase, signOutSafely } from "@/lib/supabase";
 import toast from "react-hot-toast";
 import { useSchoolSettings, safeMediaUrl } from "@/hooks/useSchoolSettings";
 
@@ -80,7 +80,7 @@ const SignIn = () => {
         }
       } catch {
         // Both profile fetches timed out — sign out and tell the user
-        await supabase.auth.signOut();
+        await signOutSafely();
         toast.error("Server is slow. Please try again in a moment.");
         setLoading(false);
         return;
@@ -98,7 +98,7 @@ const SignIn = () => {
       // profile is an admin action, not something a failed login should
       // do on the user's behalf.
       if (!profile) {
-        await supabase.auth.signOut();
+        await signOutSafely();
         toast.error("No account found for this email. Please sign up first.");
         setLoading(false);
         return;
@@ -109,14 +109,14 @@ const SignIn = () => {
 
       // ── 3. Block pending / rejected accounts ──────────────────────────────
       if (status === "pending") {
-        await supabase.auth.signOut();
+        await signOutSafely();
         setPendingStatus("pending");
         setLoading(false);
         return;
       }
 
       if (status === "rejected") {
-        await supabase.auth.signOut();
+        await signOutSafely();
         setPendingStatus("rejected");
         setLoading(false);
         return;

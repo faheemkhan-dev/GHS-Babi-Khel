@@ -3,7 +3,7 @@
 // Results, Admission, Notes, Merit List, Roll No. Slip
 // ─────────────────────────────────────────────────────────────────────────────
 // Persists the React Query cache for these public pages' data (notices,
-// teachers, achievements, school settings, results, the homepage's
+// teachers, school settings, results, the homepage's
 // "School Rank #1" toppers section, the homepage's admission-banner
 // settings, and the Notes subject + chapter lists) into IndexedDB, so
 // that when a page loads with no internet, it can paint instantly from
@@ -50,7 +50,6 @@ const STORAGE_KEY = "homepage-query-cache";
 const PERSISTED_KEY_PREFIXES = [
   "notices",
   "teachers",
-  "achievements",
   "school-settings",
   "results",
   "result-years",
@@ -169,7 +168,7 @@ async function idbSet(value: unknown): Promise<void> {
 
 /**
  * Call after an admin mutation (add/update/delete) changes data for a
- * persisted key prefix (e.g. "achievements"). Removes that prefix's
+ * persisted key prefix (e.g. "notices"). Removes that prefix's
  * entries from the IndexedDB snapshot so a stale offline copy can never
  * be re-injected into the query cache on a future cold/offline load.
  * Without this, restoreHomepageCache() would keep resurrecting deleted

@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import type { VideoItem } from "@/pages/dashboard/tabs/VideosTab";
 import { supabase } from "@/lib/supabase";
 
 export interface LibraryFile {
@@ -23,15 +24,17 @@ export function useLibraryFiles(options?: {
   search?: string;
   page?: number;
   perPage?: number;
+  /** Skip the request entirely (e.g. when another tab is showing). */
+  enabled?: boolean;
 }) {
-  const { category, classFilter, search, page = 1, perPage = 12 } = options || {};
+  const { category, classFilter, search, page = 1, perPage = 12, enabled = true } = options || {};
 
   return useQuery<{ data: LibraryFile[]; count: number }>({
     queryKey: ["library-files", category, classFilter, search, page, perPage],
     queryFn: async () => {
       let query = supabase
         .from("library_files")
-        .select("id, title, description, category, class, subject, file_url, file_type, file_size, cover_url, download_count, uploaded_by, created_at", { count: "exact" })
+        .select("id, title, category, class, subject, file_url, file_type, file_size, cover_url, download_count, created_at", { count: "exact" })
         .order("created_at", { ascending: false });
 
       if (category && category !== "All") query = query.eq("category", category);
@@ -51,7 +54,38 @@ export function useLibraryFiles(options?: {
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    placeholderData: { data: [], count: 0 },
+    // Keep the previous page on screen while the next one loads (no flicker,
+    // no empty-state flash) — first load still shows skeletons.
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** Light videos query for the Library: only the first `limit` rows, only when
+ *  the Videos tab is open, search done on the server. */
+export function useLibraryVideos(options: { search?: string; limit?: number; enabled?: boolean }) {
+  const { search, limit = 12, enabled = true } = options;
+  return useQuery<VideoItem[]>({
+    queryKey: ["library-videos", search, limit],
+    queryFn: async () => {
+      let query = supabase
+        .from("videos")
+        .select("id, title, description, video_url, thumbnail_url, category, class, subject, is_published, created_at")
+        .eq("is_published", true)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (search) {
+        const safe = search.replace(/%/g, "\\%").replace(/_/g, "\\_");
+        query = query.ilike("title", `%${safe}%`);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as VideoItem[];
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    placeholderData: keepPreviousData,
+    enabled,
   });
 }
 

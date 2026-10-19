@@ -509,7 +509,7 @@
      }
 
 /* Hides the scrollbar while keeping horizontal scroll functional —
-   used for the Announcements admin tab bar (Notices/News/Achievements/Merit List) */
+   used for the Announcements admin tab bar (Notices) */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -1072,3 +1072,27 @@
    admin action sits flat & elegant (the "Manage Teachers" look). Scoped to
    the admin routes wrapper so the public site keeps its raised CTAs. */
 main .admin-thin-shadow-none { box-shadow: none !important; }
+
+
+/* Mobile navbar accordion — compositor-only reveal (opacity + transform).
+   No height/layout animation, so it stays smooth on low-end phones. */
+@keyframes m-panel-in {
+  from { opacity: 0; transform: translate3d(0, -6px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.m-panel-in { animation: m-panel-in 140ms ease-out backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .m-panel-in { animation: none; }
+}
+
+
+/* Roll No. Slip — compositor-only entrance animations (replace framer-motion) */
+@keyframes rs-fade-up { from { opacity: 0; transform: translate3d(0, 14px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+@keyframes rs-sheet-in { from { transform: translate3d(0, 24px, 0); opacity: 0; } to { transform: translate3d(0, 0, 0); opacity: 1; } }
+@keyframes rs-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+.rs-fade-up { animation: rs-fade-up 260ms ease-out backwards; } /* no forward fill: a lingering transform would trap position:fixed children */
+.rs-sheet-in { animation: rs-sheet-in 220ms cubic-bezier(.2,.8,.2,1) both; }
+.rs-backdrop-in { animation: rs-backdrop-in 180ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .rs-fade-up, .rs-sheet-in, .rs-backdrop-in { animation: none; }
+}

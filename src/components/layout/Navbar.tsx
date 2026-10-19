@@ -9,7 +9,7 @@ import {
   Hash, Timer, Command as CommandIcon,
   Bell, FileSignature, type LucideIcon,
 } from "lucide-react";
-import { useRollSlipCountdown, compactCountdown } from "@/hooks/useRollSlipCountdown";
+import { useRollSlipCountdown, compactCountdown, prefetchPublicRolls } from "@/hooks/useRollSlipCountdown";
 import { useResultsCountdown, splitCountdown } from "@/hooks/useResultsCountdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { armAutoPublish, serverNow, syncServerClock } from "@/lib/autoPublish";
@@ -370,11 +370,12 @@ function ResultsTopStrip() {
   );
 }
 
-// INSTANT NAVIGATION: one delegated listener set on the navbar root covers
-// every link inside it. The instant a finger touches or a cursor hovers a
-// link, the target page's JS chunk starts downloading — by the time the tap
-// completes, navigation is instant even on slow internet.
-const navIntentPrefetch = intentPrefetchHandlers();
+// INSTANT NAVIGATION: the intent-prefetch handler set is built inside the
+// Navbar component (see navIntentPrefetch below) — one delegated listener set
+// on the navbar root covers every link inside it. The instant a finger
+// touches or a cursor hovers a link, the target page's JS chunk starts
+// downloading — and for the Roll No. Slip link, its roster data too — so by
+// the time the tap completes, navigation is instant even on slow internet.
 
 /* ── Desktop panel link row — clean, roomy list item: tinted icon chip,
       bold label + one-line description, gold active bar and an arrow that
@@ -519,27 +520,29 @@ const MobileAccordionSection = memo(function MobileAccordionSection({
         onClick={() => onToggle(section.id)}
         aria-expanded={isOpen}
         aria-controls={`m-panel-${section.id}`}
-        className="relative flex min-h-12 w-full items-center justify-between py-3 text-left text-base font-semibold touch-manipulation select-none"
+        className="relative flex min-h-12 w-full items-center justify-between py-3 text-left text-base font-semibold touch-manipulation select-none active:opacity-70"
       >
         {sectionActive && <span className="absolute -left-4 top-3 bottom-3 w-[3px] rounded-full bg-gold" aria-hidden="true" />}
         <span className={sectionActive ? "text-primary" : "text-foreground"}>{section.label}</span>
         <ChevronDown
-          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180 text-gold" : "text-muted-foreground"}`}
+          className={`h-4 w-4 shrink-0 transition-transform duration-150 will-change-transform ${isOpen ? "rotate-180 text-gold" : "text-muted-foreground"}`}
           aria-hidden="true"
         />
       </button>
 
-      {/* CSS-only expand: grid-template-rows 0fr → 1fr. The panel is always
-          in the DOM (it is tiny), so no mount/unmount work happens on tap. */}
-      <div
-        id={`m-panel-${section.id}`}
-        className="grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
-        style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
-      >
-        <div className="min-h-0 overflow-hidden">
+      {/* INSTANT expand (the real fix for the low-end-phone hang):
+          animating height / grid-template-rows forces the browser to
+          re-run layout for the whole drawer on EVERY frame — that is what
+          felt like hanging on cheap phones. Now the panel snaps to its
+          final size in one layout pass and only a compositor-only fade/slide
+          (opacity + transform, GPU, zero layout) plays on top. Contents are
+          mounted only while open, so closed groups cost nothing — including
+          the Roll Slip countdown's 1-second ticker. */}
+      <div id={`m-panel-${section.id}`}>
+        {isOpen && (
           <div
             ref={panelRef}
-            className={`space-y-0.5 pb-3 pl-1 transition-opacity duration-200 ${isOpen ? "opacity-100" : "opacity-0"}`}
+            className="m-panel-in space-y-0.5 pb-3 pl-1"
           >
             {section.links.map((link) => (
               <MobileLinkRow key={link.to} link={link} active={pathname === link.to} onNavigate={onNavigate} />
@@ -565,7 +568,7 @@ const MobileAccordionSection = memo(function MobileAccordionSection({
               </Link>
             )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -729,16 +732,17 @@ const MobileMenu = memo(function MobileMenu({
   // group never re-renders the others.
   const toggleMobileSection = useCallback((id: string) => {
     setMobileOpenSection((cur) => (cur === id ? null : id));
-    // Reveal the freshly expanded list in the drawer — scheduled to land
-    // right after the 300ms CSS transition, as ONE instant scroll (no
-    // smooth-scroll animation loop on the main thread).
-    window.clearTimeout(revealTimer.current);
-    revealTimer.current = window.setTimeout(() => {
-      revealPanelInDrawer(document.getElementById(`m-panel-${id}`));
-    }, 320);
+    // Reveal the freshly expanded list in the very next frame (React has
+    // already committed the tap's state by then). One instant scroll — no
+    // 300ms wait, no animation loop. Closing needs no reveal.
+    window.cancelAnimationFrame(revealTimer.current);
+    revealTimer.current = window.requestAnimationFrame(() => {
+      const panel = document.getElementById(`m-panel-${id}`);
+      if (panel && panel.childElementCount > 0) revealPanelInDrawer(panel);
+    });
   }, []);
 
-  useEffect(() => () => window.clearTimeout(revealTimer.current), []);
+  useEffect(() => () => window.cancelAnimationFrame(revealTimer.current), []);
 
   // Reset the accordion whenever the drawer closes (next open starts clean).
   useEffect(() => {
@@ -856,6 +860,47 @@ const Navbar = () => {
   // PERF: gate the desktop-only NavSearchBox (and its Supabase queries) so
   // they never mount on mobile. See useIsDesktop docstring above.
   const isDesktop = useIsDesktop();
+
+  /* ── DATA prefetch on intent (hover / touch / focus) ─────────────────────
+     The chunk prefetch below already warms a route's JS. For the Roll No.
+     Slip link we ALSO warm the roster query: the sessions table is already
+     in the React Query cache (the navbar's own countdown query), so after
+     this prefetch the /roll-no-slip page opens with ZERO new requests —
+     the finder is interactive the instant the route chunk mounts.        */
+  const qc = useQueryClient();
+  const { sessions: rollSlipSessions } = useRollSlipCountdown();
+  const rollSlipPrefetchId = useMemo(() => {
+    const now = Date.now();
+    const live = rollSlipSessions.find(
+      (s) => s.is_published && (!s.publish_at || new Date(s.publish_at).getTime() <= now)
+    );
+    if (live) return live.id;
+    // Countdown running → the page pre-fetches that session's rolls anyway
+    // (instant flip at 0:00); warming it early is the same bytes, earlier.
+    const scheduled = rollSlipSessions.find((s) => s.publish_at);
+    return scheduled?.id ?? null;
+  }, [rollSlipSessions]);
+
+  const navIntentPrefetch = useMemo(() => {
+    const base = intentPrefetchHandlers();
+    const withRollSlipData =
+      (orig: (e: { target: EventTarget | null }) => void) =>
+      (e: React.SyntheticEvent) => {
+        try {
+          const a = (e.target as HTMLElement | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+          if (a) {
+            const path = new URL(a.href, location.href).pathname.replace(/\/+$/, "") || "/";
+            if (path === "/roll-no-slip") prefetchPublicRolls(qc, rollSlipPrefetchId);
+          }
+        } catch { /* malformed href — chunk prefetch below is best effort too */ }
+        orig(e as unknown as { target: EventTarget | null });
+      };
+    return {
+      onPointerEnter: withRollSlipData(base.onPointerEnter) as typeof base.onPointerEnter,
+      onTouchStart: withRollSlipData(base.onTouchStart) as typeof base.onTouchStart,
+      onFocus: withRollSlipData(base.onFocus) as typeof base.onFocus,
+    };
+  }, [qc, rollSlipPrefetchId, location.href]);
 
   useEffect(() => { setLogoFailed(false); }, [settings?.logo_url]);
 
@@ -982,7 +1027,6 @@ const Navbar = () => {
       window.removeEventListener("scroll", onScroll);
       if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep the rAF closure in sync with menu-open state without re-binding
@@ -1346,7 +1390,7 @@ const Navbar = () => {
                 location.pathname === "/" ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <Home className="w-6 h-6" fill={location.pathname === "/" ? "currentColor" : "none"} />
+              <Home className="w-[22px] h-[22px]" fill={location.pathname === "/" ? "currentColor" : "none"} />
             </Link>
 
             {/* Search — opens the ⌘K command palette (the working mobile
@@ -1358,7 +1402,7 @@ const Navbar = () => {
               onClick={() => { closeAllMenus(); openCommandPalette(); }}
               className="dock-item flex-1 flex flex-col items-center justify-center py-3 text-muted-foreground"
             >
-              <Search className="w-6 h-6" />
+              <Search className="w-[22px] h-[22px]" />
             </button>
 
             {/* Results */}
@@ -1371,7 +1415,7 @@ const Navbar = () => {
                 location.pathname === "/results" ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <Trophy className="w-6 h-6" fill={location.pathname === "/results" ? "currentColor" : "none"} />
+              <Trophy className="w-[22px] h-[22px]" fill={location.pathname === "/results" ? "currentColor" : "none"} />
             </Link>
 
             {/* Notifications — opens the existing NotificationBell panel */}
@@ -1387,7 +1431,7 @@ const Navbar = () => {
                 location.pathname === "/admission" ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <FileSignature className="w-6 h-6" fill={location.pathname === "/admission" ? "currentColor" : "none"} />
+              <FileSignature className="w-[22px] h-[22px]" fill={location.pathname === "/admission" ? "currentColor" : "none"} />
             </Link>
           </div>
       </div>

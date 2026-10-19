@@ -569,7 +569,7 @@ const AudioNotesPlayer: React.FC<AudioNotesPlayerProps> = ({
             className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 w-full"
             title="Audio Notes"
           >
-            <Volume2 className="w-5 h-5 text-blue-600" />
+            <Volume2 className="w-6 h-6 text-blue-600" />
           </button>
         ) : (
           <button

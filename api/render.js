@@ -1859,7 +1859,14 @@ async function renderHandler(req, res) {
     try {
       bisep = await Promise.race([
         getCurrentBisepPayload(Date.now()),
-        new Promise((resolve) => setTimeout(() => resolve(null), 4500)),
+        // 3000 ms (was 4500): the middleware's live-render hop aborts at
+        // 6000 ms, and 4500 (this race) + a cold function start (1-2 s)
+        // regularly pushed /results past that ceiling — Googlebot then got
+        // the SPA fallback shell (no canonical, ~100 words) instead of the
+        // live page. 3 s keeps the worst case comfortably inside the hop
+        // budget; a slow board just means the live BISEP banner is omitted
+        // (the rest of the page renders from Supabase as usual).
+        new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
       ]);
     } catch {
       bisep = null;
@@ -1956,6 +1963,15 @@ ${notesChapter.audio_enabled ? `<p class="meta">Audio narration is available for
           parts.push(statsListHtml(data.school, route === "/"));
           return parts.join("\n");
         }
+        // `links: {source}` markers are BUILD-TIME placeholders — the live
+        // sections below always carry fresh lists with their own headings.
+        // Previously the placeholder's bare <h2> ("Recent notices",
+        // "Latest library items", "Current subjects and chapters") was still
+        // emitted, producing EMPTY heading sections followed by a second,
+        // differently-titled live heading — a content-quality smell on
+        // /notices, /notes and /library that reads as thin/duplicated
+        // structure to crawlers. Skip the whole placeholder block here.
+        if (block.links?.source) return "";
         if (block.h2) parts.push(`<h2>${esc(block.h2)}</h2>`);
         if (block.p) for (const para of block.p) parts.push(`<p>${esc(para)}</p>`);
         if (block.ul) parts.push(`<ul>${block.ul.map((li) => `<li>${esc(li)}</li>`).join("")}</ul>`);
@@ -1966,8 +1982,6 @@ ${notesChapter.audio_enabled ? `<p class="meta">Audio narration is available for
               .join("")}</ul>`
           );
         }
-        // `links: {source}` markers (build-time concept) are skipped here —
-        // the live sections below always carry fresh lists instead.
         return parts.join("\n");
       })
       .join("\n");

@@ -23,11 +23,12 @@ import {
   Keyboard, History, FileText, Lock, XCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { triggerConfetti } from "@/lib/confetti";
-import QRCode from "qrcode";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+// PERF (chunk size): jspdf / jspdf-autotable / qrcode / canvas-confetti are
+// loaded ONLY inside their click handlers via dynamic import(). The old
+// static imports dragged ~300+ KB of PDF/QR/canvas libraries into this
+// tab's chunk even for admins who never export anything — this single tab
+// chunk was 443 kB. html5-qrcode (never used in this file at all — the
+// scanner component imports its own) is deleted outright.
 import {
   useExamSessions as useAttExamSessions,
   useExamRollNumbers as useAttExamRollNumbers,
@@ -104,6 +105,25 @@ function canonicalSubject(raw: string): string {
   if (SUBJECT_ALIASES[key]) return SUBJECT_ALIASES[key];
   const hit = EXAM_SUBJECTS.find(x => x.toLowerCase().replace(/[^a-z]/g, "") === key);
   return hit ?? String(raw || "").trim();
+}
+
+/* PERF: the manual-attendance list used to build BOTH the mobile card tree
+   (sm:hidden) and the desktop table tree (hidden sm:block) on every render —
+   double reconciliation for hundreds of students on every scan / 15 s tick.
+   This matchMedia hook renders only the variant the device actually shows
+   (same sm breakpoint, same markup — the `hidden` classes are kept as a
+   harmless belt-and-braces while the JS-driven choice does the real work). */
+function useIsMobileLayout(): boolean {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const onChange = () => setMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return mobile;
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -424,12 +444,21 @@ const AdminExamRollNumbers = () => {
     if (startingNumber < 100000 || startingNumber > 999999) { toast.error("Starting number must be 6 digits"); return; }
     setGenerating(true);
     try {
+      // PERF: ONE round trip for every selected class (was one sequential
+      // request per class — 3-5 waterfalls on a slow link).
+      const wantedClasses = classOrder.filter(c => selectedClasses.includes(c));
       const studentsPerClass: Record<string, Student[]> = {};
-      for (const cls of classOrder) {
-        if (!selectedClasses.includes(cls)) continue;
-        const { data, error } = await supabase.from("students").select("id, full_name, roll_number, class, father_name").eq("class", cls).eq("is_active", true);
+      if (wantedClasses.length > 0) {
+        const { data, error } = await supabase
+          .from("students")
+          .select("id, full_name, roll_number, class, father_name")
+          .in("class", wantedClasses)
+          .eq("is_active", true);
         if (error) throw error;
-        studentsPerClass[cls] = sortByRollNumber(data ?? []);
+        for (const s of data ?? []) {
+          (studentsPerClass[s.class] ||= []).push(s);
+        }
+        for (const cls of wantedClasses) studentsPerClass[cls] = sortByRollNumber(studentsPerClass[cls] ?? []);
       }
       const orderedStudents: Student[] = interleaveByClassOrder(classOrder.filter(c => selectedClasses.includes(c)), studentsPerClass);
       if (orderedStudents.length === 0) { toast.error("No active students found"); setGenerating(false); return; }
@@ -451,7 +480,7 @@ const AdminExamRollNumbers = () => {
         if (error) throw error;
       }
       toast.success(`Generated ${rows.length} exam roll numbers!`);
-      triggerConfetti("burst");
+      import("@/lib/confetti").then((m) => m.triggerConfetti("burst")).catch(() => {});
       qc.invalidateQueries({ queryKey: ["exam-sessions"] });
       setSelectedSession(sessionData);
       setView("detail");
@@ -471,11 +500,20 @@ const AdminExamRollNumbers = () => {
       // reshuffled every time Update is clicked — so the exact student who
       // lands in a given class's slot changes, even if the class roster
       // itself didn't change.
+      // PERF: ONE round trip for every class (was one sequential request per
+      // class — a 5-class session paid 5 serial round trips on slow links).
       const studentsPerClass: Record<string, Student[]> = {};
-      for (const cls of session.class_order) {
-        const { data, error } = await supabase.from("students").select("id, full_name, roll_number, class, father_name").eq("class", cls).eq("is_active", true);
+      if (session.class_order.length > 0) {
+        const { data, error } = await supabase
+          .from("students")
+          .select("id, full_name, roll_number, class, father_name")
+          .in("class", session.class_order)
+          .eq("is_active", true);
         if (error) throw error;
-        studentsPerClass[cls] = shuffleArray(data ?? []);
+        for (const s of data ?? []) {
+          (studentsPerClass[s.class] ||= []).push(s);
+        }
+        for (const cls of session.class_order) studentsPerClass[cls] = shuffleArray(studentsPerClass[cls] ?? []);
       }
       const orderedStudents: Student[] = interleaveByClassOrder(session.class_order, studentsPerClass);
       if (orderedStudents.length === 0) { toast.error("No active students found"); setUpdatingStudents(false); return; }
@@ -517,7 +555,7 @@ const AdminExamRollNumbers = () => {
     const { error } = await supabase.from("exam_roll_sessions").update(payload).eq("id", session.id);
     if (error) { toast.error("Failed"); return; }
     toast.success(goingLive ? "Published — slips are live now!" : "Unpublished");
-    if (goingLive) triggerConfetti("burst");
+    if (goingLive) import("@/lib/confetti").then((m) => m.triggerConfetti("burst")).catch(() => {});
     qc.invalidateQueries({ queryKey: ["exam-sessions"] });
     if (selectedSession?.id === session.id) {
       setSelectedSession({
@@ -583,6 +621,13 @@ const AdminExamRollNumbers = () => {
 
     const genToast = toast.loading("Generating Roll No Slips with date sheet & QR codes...");
 
+    // PERF: the PDF libraries load ONLY now — this click is the first time
+    // they are needed (see the import block comment at the top of the file).
+    const [{ default: jsPDF }, { default: autoTable }, { default: QRCode }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+      import("qrcode"),
+    ]);
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageW = 297;
     const pageH = 210;
@@ -601,12 +646,21 @@ const AdminExamRollNumbers = () => {
       ordered.push(...group);
     }
 
-    // Pre-generate all QR code images
+    // Pre-generate all QR code images — 8 at a time instead of one-by-one.
+    // A 300-student print previously waited on 300 SERIAL canvas renders
+    // before drawing a single page; small bounded batches keep the UI
+    // responsive and cut wall-clock time several-fold.
     const qrImages = new Map<string, string>();
-    for (const slip of ordered) {
-      const qrData = encodeExamQRData(selectedSession.id, slip.student_id, slip.exam_roll_no);
-      const qrDataURL = await QRCode.toDataURL(qrData, { width: 300, margin: 1, errorCorrectionLevel: "M", color: { dark: "#333333", light: "#FFFFFF" } });
-      qrImages.set(slip.id, qrDataURL);
+    const QR_BATCH = 8;
+    for (let i = 0; i < ordered.length; i += QR_BATCH) {
+      const batch = ordered.slice(i, i + QR_BATCH);
+      const urls = await Promise.all(batch.map(slip =>
+        QRCode.toDataURL(
+          encodeExamQRData(selectedSession.id, slip.student_id, slip.exam_roll_no),
+          { width: 300, margin: 1, errorCorrectionLevel: "M", color: { dark: "#333333", light: "#FFFFFF" } }
+        ).catch(() => "")
+      ));
+      batch.forEach((slip, k) => { if (urls[k]) qrImages.set(slip.id, urls[k]); });
     }
 
     // Build each class's paper-by-paper date sheet from the admin-authored
@@ -808,9 +862,11 @@ const AdminExamRollNumbers = () => {
     toast.success(`${ordered.length} Roll No Slips downloaded!`);
   };
 
-  const filteredRolls = detailSearch
-    ? rollNumbers.filter(r => r.student_name.toLowerCase().includes(detailSearch.toLowerCase()) || r.exam_roll_no.includes(detailSearch) || r.class_roll_no.includes(detailSearch) || r.class.includes(detailSearch))
-    : rollNumbers;
+  const filteredRolls = useMemo(() => {
+    if (!detailSearch) return rollNumbers;
+    const q = detailSearch.toLowerCase();
+    return rollNumbers.filter(r => r.student_name.toLowerCase().includes(q) || r.exam_roll_no.includes(detailSearch) || r.class_roll_no.includes(detailSearch) || r.class.includes(detailSearch));
+  }, [rollNumbers, detailSearch]);
 
   // ── ATTENDANCE COMPUTED ────────────────────────────────────────────────
   const isInitialized = attendance.length > 0;
@@ -903,6 +959,7 @@ const AdminExamRollNumbers = () => {
   }, [isAllClassesMode, classPaperTimesByClass, singleClassPaperTimesQuery.data]);
 
   const [attNowTick, setAttNowTick] = useState(() => Date.now());
+  const isMobileLayout = useIsMobileLayout();
   useEffect(() => {
     const id = setInterval(() => setAttNowTick(Date.now()), 15 * 1000);
     return () => clearInterval(id);
@@ -972,14 +1029,29 @@ const AdminExamRollNumbers = () => {
   // class's window. The old code merged all classes into one window
   // (earliest start → latest end), so Class 8 could be scanned at 10:30 while
   // its paper starts at 12:00.
+  //
+  // PERF: the offline fallback ("first attendance row that carries this
+  // class's saved paper times") used to be a linear .find() INSIDE
+  // classTimesFor — and classTimesFor runs per student per render, making
+  // every 15 s tick O(students × attendance rows). The map below is built
+  // once per attendance change instead.
+  const offlineClassTimes = useMemo(() => {
+    const m = new Map<string, { start: string; end: string }>();
+    for (const r of attendanceFromServer) {
+      if (r.paper_start_time && r.paper_end_time && !m.has(r.class)) {
+        m.set(r.class, { start: r.paper_start_time, end: r.paper_end_time });
+      }
+    }
+    return m;
+  }, [attendanceFromServer]);
+
   const classTimesFor = (cls: string): { start: string; end: string } | null => {
     const plan = isAllClassesMode
       ? classPaperTimesByClass[cls]
       : (cls === attClass ? seatingPaperTimes : classPaperTimesByClass[cls]);
     if (plan) return { start: plan.start, end: plan.end };
     // Offline / not loaded yet → snapshot saved on that class's attendance rows.
-    const row = attendanceFromServer.find(r => r.class === cls && r.paper_start_time && r.paper_end_time);
-    return row ? { start: row.paper_start_time!, end: row.paper_end_time! } : null;
+    return offlineClassTimes.get(cls) ?? null;
   };
   const getClassWindow = (cls: string): { status: PaperWindowStatus; start: string | null; end: string | null } => {
     const t = classTimesFor(cls);
@@ -1059,9 +1131,13 @@ const AdminExamRollNumbers = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attRollNumbers, attMap, attNowTick, attDate, attClass, seatingPaperTimes, classPaperTimesByClass]);
 
-  const attFiltered = attSearch
-    ? mergedList.filter(s => s.student_name.toLowerCase().includes(attSearch.toLowerCase()) || s.exam_roll_no.includes(attSearch) || s.class_roll_no.includes(attSearch))
-    : mergedList;
+  // PERF: memoised search filter — previously re-filtered the whole roster on
+  // EVERY keystroke AND every 15 s tick even when the search box was untouched.
+  const attFiltered = useMemo(() => {
+    if (!attSearch) return mergedList;
+    const q = attSearch.toLowerCase();
+    return mergedList.filter(s => s.student_name.toLowerCase().includes(q) || s.exam_roll_no.includes(attSearch) || s.class_roll_no.includes(attSearch));
+  }, [mergedList, attSearch]);
 
   const attStats = useMemo(() => {
     let present = 0, absent = 0, leave = 0, pending = 0;
@@ -1572,8 +1648,12 @@ const AdminExamRollNumbers = () => {
 
 
   // ── EXPORT ATTENDANCE PDF ───────────────────────────────────────────────
-  const exportAttendancePDF = () => {
+  const exportAttendancePDF = async () => {
     if (!attendance.length) { toast.error("No data to export"); return; }
+    let jsPDF: typeof import("jspdf")["default"], autoTable: typeof import("jspdf-autotable")["default"];
+    try {
+      ([{ default: jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]));
+    } catch { toast.error("Could not load the PDF library — check your connection"); return; }
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const w = doc.internal.pageSize.getWidth();
     const sessionTitle = (attSelectedSession as any)?.title || "";
@@ -1650,13 +1730,17 @@ const AdminExamRollNumbers = () => {
   // Subject x student grid for one class. Papers are ordered by exam date,
   // every cell is colour-coded (P / A / L), and each student gets a
   // Present / Absent / Attendance-% summary so the report is usable as-is.
-  const exportOverviewPDF = (
+  const exportOverviewPDF = async (
     scopedClass?: string,
     scopedPivot?: { students: typeof overviewPivot.students; columns: typeof overviewPivot.columns; grid: typeof overviewPivot.grid }
   ) => {
     const pivot = scopedPivot ?? overviewPivot;
     const clsLabel = typeof scopedClass === "string" ? scopedClass : attClass;
     if (!pivot.students.length) { toast.error("No data to export"); return; }
+    let jsPDF: typeof import("jspdf")["default"], autoTable: typeof import("jspdf-autotable")["default"];
+    try {
+      ([{ default: jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]));
+    } catch { toast.error("Could not load the PDF library — check your connection"); return; }
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const w = doc.internal.pageSize.getWidth();
     const sessionTitle = (attSelectedSession as any)?.title || "";
@@ -1756,10 +1840,14 @@ const AdminExamRollNumbers = () => {
   // possible (one page when it fits, otherwise two). Classes sit in two
   // columns; row height is chosen automatically so the whole school fits.
   // Black & white only — an absent mark is bold on a light-grey cell.
-  const exportSchoolOverviewPDF = () => {
+  const exportSchoolOverviewPDF = async () => {
     const sections = overviewByClass.filter(sec => sec.students.length > 0 && sec.columns.length > 0);
     if (!sections.length) { toast.error("No attendance data to export"); return; }
 
+    let jsPDF: typeof import("jspdf")["default"], autoTable: typeof import("jspdf-autotable")["default"];
+    try {
+      ([{ default: jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]));
+    } catch { toast.error("Could not load the PDF library — check your connection"); return; }
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
@@ -2562,7 +2650,11 @@ const AdminExamRollNumbers = () => {
                           placeholder="Search student..." value={attSearch} onChange={e => setAttSearch(e.target.value)} />
                       </div>
 
-                      {/* Attendance list — mobile cards / desktop table */}
+                      {/* Attendance list — mobile cards / desktop table.
+                          PERF: only ONE of the two trees is built (see
+                          useIsMobileLayout) — previously BOTH were rendered
+                          with one hidden by CSS, doubling reconciliation on
+                          every scan / 15 s tick. */}
                       {loadingAtt ? (
                         <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
                       ) : attFiltered.length === 0 ? (
@@ -2570,6 +2662,7 @@ const AdminExamRollNumbers = () => {
                       ) : (
                     <>
                       {/* Mobile cards */}
+                      {isMobileLayout && (
                       <div className="sm:hidden space-y-2">
                         {attFiltered.map(s => {
                           const att = s.attRecord;
@@ -2599,7 +2692,9 @@ const AdminExamRollNumbers = () => {
                           );
                         })}
                       </div>
+                      )}
                       {/* Desktop table */}
+                      {!isMobileLayout && (
                       <div className="hidden sm:block">
                         <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm"><CardContent className="p-0 overflow-x-auto">
                           <table className="w-full text-sm">
@@ -2640,6 +2735,7 @@ const AdminExamRollNumbers = () => {
                           </table>
                         </CardContent></Card>
                       </div>
+                      )}
                     </>
                       )}
                     </>

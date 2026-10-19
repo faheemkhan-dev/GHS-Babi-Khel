@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Lock, Loader2, GraduationCap } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase, signOutSafely } from "@/lib/supabase";
 import toast from "react-hot-toast";
 
 type PageState = "loading" | "ready" | "invalid";
@@ -85,7 +85,7 @@ const ResetPassword = () => {
       toast.error(error.message);
     } else {
       toast.success("Password updated successfully!");
-      await supabase.auth.signOut();
+      await signOutSafely("global");
       navigate("/auth/signin", { replace: true });
     }
   };

@@ -2,7 +2,7 @@
  * pdfHelpers.ts — shared premium PDF building blocks for exam reports
  * (extracted from AdminExamRollNumbers.tsx; no behaviour change).
  */
-import jsPDF from "jspdf";
+import type { jsPDF } from "jspdf";
 import { format as formatDateFns } from "date-fns";
 
 // ── Shared premium PDF helpers (attendance reports) ──────────────────────────

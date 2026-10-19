@@ -19,18 +19,37 @@
  * to render it (chip, strip, badge, big countdown panel...).
  */
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import type { ExamSession, RollEntry } from "@/lib/rollSlipTypes";
 
-export interface RollSlipSession {
-  id: string;
-  title: string;
-  exam_year: number;
-  exam_term: string;
-  class_order: string[] | null;
-  is_published: boolean;
-  publish_at: string | null;
-  countdown_label: string | null;
+/** The full session row (same shape the /roll-no-slip page needs). */
+export type RollSlipSession = ExamSession;
+
+/**
+ * "now" that only changes when something actually happens: the next time in
+ * `times` is reached (or the tab wakes up). Unlike a 1-second ticker it causes
+ * ZERO re-renders while nothing is changing — important because this hook runs
+ * in the Navbar, which is on every page.
+ */
+export function useBoundaryNow(times: number[]): number {
+  const [now, setNow] = useState(() => Date.now());
+  const key = times.join(",");
+  useEffect(() => {
+    const upcoming = times.filter((t) => t > now);
+    if (upcoming.length === 0) return;
+    const delay = Math.min(Math.min(...upcoming) - Date.now() + 60, 2_000_000_000);
+    const id = window.setTimeout(() => setNow(Date.now()), Math.max(0, delay));
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, now]);
+  useEffect(() => {
+    // Timers are throttled while a tab sleeps — re-sync the moment it wakes.
+    const wake = () => { if (document.visibilityState === "visible") setNow(Date.now()); };
+    document.addEventListener("visibilitychange", wake);
+    return () => document.removeEventListener("visibilitychange", wake);
+  }, []);
+  return now;
 }
 
 /** Live 1-second "now" ticker (starts immediately, cleans itself up). */
@@ -44,20 +63,25 @@ export function useNowTick(intervalMs = 1000): number {
 }
 
 /**
- * Returns the NEXT scheduled roll-slip session (the one with the earliest
- * publish_at still in the future), or null when nothing is being counted
- * down. Also refetches periodically so admin-side changes (cancel / set a
- * new countdown) propagate to every open tab within ~30s.
+ * Returns the sessions table (published + scheduled) — ONE shared query for
+ * the Navbar chip/strip AND the public /roll-no-slip page, so opening the
+ * page never re-fetches what the navbar already has in the React Query
+ * cache (previously the page kept a SECOND, identical request under a
+ * different key — two round trips for the same rows on every visit).
+ *
+ * Ordering is created_at DESC (newest first — the /roll-no-slip page's
+ * semantics for "first live session"); the scheduled pick below is
+ * order-independent.
  */
 export function useRollSlipCountdown() {
-  const { data: sessions = [] } = useQuery<RollSlipSession[]>({
+  const { data: sessions = [], isLoading } = useQuery<RollSlipSession[]>({
     queryKey: ["roll-slip-countdown"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("exam_roll_sessions")
-        .select("id, title, exam_year, exam_term, class_order, is_published, publish_at, countdown_label")
+        .select("*")
         .or("is_published.eq.true,publish_at.not.is.null")
-        .order("publish_at", { ascending: true, nullsFirst: false });
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -66,16 +90,46 @@ export function useRollSlipCountdown() {
     refetchOnWindowFocus: true,
   });
 
-  const now = useNowTick();
+  const now = useBoundaryNow(sessions.map((s) => (s.publish_at ? new Date(s.publish_at).getTime() : 0)));
 
+  // Earliest still-future publish_at — independent of row order.
   let scheduled: RollSlipSession | null = null;
+  let scheduledTs = Infinity;
   for (const s of sessions) {
     if (!s.publish_at) continue;
     const t = new Date(s.publish_at).getTime();
-    if (t > now) { scheduled = s; break; } // rows are ordered by publish_at asc
+    if (t > now && t < scheduledTs) {
+      scheduled = s;
+      scheduledTs = t;
+    }
   }
 
-  return { scheduled, sessions, now };
+  return { scheduled, sessions, now, isLoading };
+}
+
+/* ── Shared roll-number fetcher + hover-prefetch ────────────────────────────
+   Used by the /roll-no-slip page AND by the Navbar's intent prefetch, so a
+   student who hovers/touches the "Roll No. Slip" link starts downloading
+   the roster before the tap completes — the slip finder is then ready in
+   ONE network round trip (sessions are already cached by the navbar).   */
+export async function fetchPublicRolls(sessionId: string): Promise<RollEntry[]> {
+  const { data, error } = await supabase
+    .from("exam_roll_numbers")
+    .select("id, student_id, student_name, father_name, class, class_roll_no, exam_roll_no, serial_number")
+    .eq("session_id", sessionId)
+    .order("serial_number", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Warm the roster for a session (idempotent, respects staleTime). */
+export function prefetchPublicRolls(qc: QueryClient, sessionId: string | undefined | null) {
+  if (!sessionId) return;
+  void qc.prefetchQuery({
+    queryKey: ["public-exam-rolls", sessionId],
+    queryFn: () => fetchPublicRolls(sessionId),
+    staleTime: 5 * 60 * 1000,
+  });
 }
 
 /** Split a millisecond diff into zero-padded d / h / m / s parts. */

@@ -5,19 +5,23 @@
 // thin action buttons, mobile-first bottom-sheet modals.
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { optimizedCloudinaryUrl } from "@/hooks/useSchoolSettings";
 import {
-  Download, FileText, Search, File, Play, X, Youtube, Library as LibraryIcon,
+  Download, FileText, File, Play, X, Youtube, Library as LibraryIcon,
   Video as VideoIcon, ExternalLink as ExternalLinkIcon, ChevronLeft, ChevronRight, SearchX,
 } from "lucide-react";
 import { triggerConfetti } from "@/lib/confetti";
 import PageLayout from "@/components/layout/PageLayout";
-import { useLibraryFiles, incrementDownloadCount, type LibraryFile } from "@/hooks/useLibrary";
+import { useLibraryFiles, useLibraryVideos, incrementDownloadCount, type LibraryFile } from "@/hooks/useLibrary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import {
-  useVideos, getYouTubeId, getYouTubeThumbnail, isVideoFileUrl,
+  getYouTubeId, isVideoFileUrl,
   type VideoItem,
 } from "@/pages/dashboard/tabs/VideosTab";
+
+// Smaller YouTube thumbnail (320×180) — ~3× lighter than hqdefault on slow data
+const ytThumb = (id: string) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 
 const fileCategories = ["All", "Past Papers", "Books", "Notes", "Assignments", "Admission", "Other"];
 const classOptions = ["All", "6", "7", "8", "9", "10"];
@@ -52,6 +56,7 @@ const Library = () => {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [videoLimit, setVideoLimit] = useState(12);
   const [playingVideo, setPlayingVideo] = useState<VideoItem | null>(null);
   const [readingFile, setReadingFile] = useState<LibraryFile | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -59,7 +64,7 @@ const Library = () => {
   const handleSearch = (val: string) => {
     setSearch(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => { setDebouncedSearch(val); setPage(1); }, 300);
+    debounceRef.current = setTimeout(() => { setDebouncedSearch(val); setPage(1); setVideoLimit(12); }, 400);
   };
 
   // ── Files data ──
@@ -69,15 +74,17 @@ const Library = () => {
     search: debouncedSearch,
     page,
     perPage: 12,
+    enabled: contentType === "files", // don't download files while on Videos
   });
   const files = data?.data ?? [];
   const totalCount = data?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / 12));
 
   // ── Videos data (reuses the same hook the student dashboard uses) ──
-  const { data: videos = [], isLoading: videosLoading } = useVideos({
-    category: "All",
+  const { data: videos = [], isLoading: videosLoading } = useLibraryVideos({
     search: debouncedSearch,
+    limit: videoLimit,
+    enabled: contentType === "videos",
   });
   const filteredVideos = classFilter === "All" ? videos : videos.filter((v) => !v.class || v.class === "All" || v.class === classFilter);
 
@@ -130,12 +137,13 @@ const Library = () => {
 
           {/* Search */}
           <div className="relative max-w-md mx-auto mt-5">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <input
+              type="text"
+              enterKeyHint="search"
               value={search}
               onChange={(e) => handleSearch(e.target.value)}
               placeholder={contentType === "files" ? "Search files, papers, books…" : "Search video lessons…"}
-              className="w-full h-11 pl-11 pr-4 rounded-full bg-white text-gray-900 placeholder:text-gray-400 text-sm font-medium outline-none border border-gold/40 focus:ring-4 focus:ring-gold/25 shadow-[0_14px_30px_-14px_rgba(0,0,0,0.55)] transition-shadow"
+              className="w-full h-11 px-5 rounded-full bg-white text-gray-900 placeholder:text-gray-400 text-sm font-medium outline-none border border-gold/40 focus:ring-4 focus:ring-gold/25 shadow-[0_14px_30px_-14px_rgba(0,0,0,0.55)] transition-shadow"
             />
           </div>
         </div>
@@ -221,18 +229,16 @@ const Library = () => {
                   : files.map((f) => {
                       const isLink = f.file_type === "LINK";
                       return (
-                      <motion.div
+                      <div
                         key={f.id}
-                        initial={{ opacity: 0, y: 12 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="group relative overflow-hidden bg-card rounded-2xl border border-border shadow-card hover:shadow-elevated hover:border-gold/40 transition-all"
+                        style={{ contentVisibility: "auto", containIntrinsicSize: "0 118px" }}
+                        className="group relative overflow-hidden bg-card rounded-2xl border border-border shadow-card"
                       >
                         <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-gold to-primary" />
                         <div className="p-4 pl-5">
                           <div className="flex items-start gap-3">
                             {f.cover_url ? (
-                              <img src={f.cover_url} alt={f.title} loading="lazy"
+                              <img src={optimizedCloudinaryUrl(f.cover_url, { width: 120 }) || f.cover_url} alt="" loading="lazy" decoding="async" width={48} height={64}
                                 className="w-12 h-16 rounded-lg object-cover shrink-0 border border-border shadow-sm" />
                             ) : (
                               <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shrink-0 border border-border">
@@ -262,7 +268,7 @@ const Library = () => {
                             </button>
                           </div>
                         </div>
-                      </motion.div>
+                      </div>
                       );
                     })}
               </div>
@@ -310,28 +316,25 @@ const Library = () => {
                     ))
                   : filteredVideos.map((v) => {
                       const ytId = getYouTubeId(v.video_url);
-                      const thumb = v.thumbnail_url || (ytId ? getYouTubeThumbnail(ytId) : null);
+                      const thumb = (v.thumbnail_url ? (optimizedCloudinaryUrl(v.thumbnail_url, { width: 400 }) || v.thumbnail_url) : null) || (ytId ? ytThumb(ytId) : null);
                       return (
-                        <motion.button
+                        <button
                           type="button"
                           key={v.id}
-                          initial={{ opacity: 0, y: 12 }}
-                          whileInView={{ opacity: 1, y: 0 }}
-                          viewport={{ once: true }}
                           onClick={() => setPlayingVideo(v)}
-                          className="text-left bg-card rounded-2xl overflow-hidden border border-border shadow-card hover:shadow-elevated hover:border-gold/40 transition-all group"
+                          className="text-left bg-card rounded-2xl overflow-hidden border border-border shadow-card active:scale-[0.99] transition group"
                         >
                           <div className="aspect-video relative bg-muted overflow-hidden">
                             {thumb ? (
-                              <img src={thumb} alt={v.title} loading="lazy"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                              <img src={thumb} alt="" loading="lazy" decoding="async" width={320} height={180}
+                                className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full gradient-hero flex items-center justify-center">
                                 <VideoIcon className="w-8 h-8 text-white/40" />
                               </div>
                             )}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-                            <div className="absolute right-2 bottom-2 w-8 h-8 rounded-full bg-gold text-[hsl(var(--gold-ink))] flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                            <div className="absolute right-2 bottom-2 w-8 h-8 rounded-full bg-gold text-[hsl(var(--gold-ink))] flex items-center justify-center shadow-lg">
                               <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
                             </div>
                             {ytId && (
@@ -349,10 +352,22 @@ const Library = () => {
                               )}
                             </div>
                           </div>
-                        </motion.button>
+                        </button>
                       );
                     })}
               </div>
+
+              {!videosLoading && videos.length >= videoLimit && (
+                <div className="flex justify-center mt-5">
+                  <button
+                    type="button"
+                    onClick={() => setVideoLimit((n) => n + 12)}
+                    className="h-9 px-6 rounded-full border border-gold/40 bg-gold/10 text-xs font-bold text-amber-700 dark:text-amber-300 active:scale-95 transition"
+                  >
+                    Show more videos
+                  </button>
+                </div>
+              )}
 
               {!videosLoading && filteredVideos.length === 0 && (
                 <div className="text-center py-14 bg-card rounded-2xl border border-border shadow-card">

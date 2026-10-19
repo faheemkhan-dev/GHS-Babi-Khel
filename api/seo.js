@@ -11,7 +11,7 @@
 // /api/rss URLs are also rewritten here (backward compatibility).
 //
 // WHY ONE FUNCTION?
-//   Vercel's Hobby plan allows a maximum of 12 Serverless Functions per
+//   Vercel's Hobby plan allows a maximum of 12 Serverless Functions per 
 //   deployment. The repo previously had 14 separate function files, which
 //   would make every deploy fail with "exceeded the maximum number of
 //   Serverless Functions". These four small text/XML endpoints all serve
@@ -611,8 +611,31 @@ async function rssHandler(req, res) {
 // ── Entry point — dispatcher on ?kind= ───────────────────────────────────────
 // Every rewrite in vercel.json supplies exactly one kind. An unknown or
 // missing kind is a plain 404 (no Information disclosure, no accidental work).
+// ── Domain-migration support (indevs.in → ghsbabikhel.dpdns.org) ─────────────
+// vercel.json 308-redirects EVERY old-host URL to the same path on the new
+// domain — except /sitemap.xml and /robots.txt. On the OLD host those two
+// stay reachable and list the OLD URLs, so when Google re-reads the old
+// property's sitemap it re-crawls each old URL, meets the permanent redirect
+// and moves that URL's ranking to the new domain (Google's recommended way to
+// speed up a move when "Change of Address" is not available). On the NEW
+// host everything is unchanged.
+const OLD_HOST_RE = /(^|\.)indevs\.in$/i;
+function requestHost(req) {
+  return String(req.headers?.["x-forwarded-host"] || req.headers?.host || "")
+    .split(",")[0].trim().toLowerCase().replace(/:\d+$/, "");
+}
+function withOldHostUrls(req, res) {
+  const host = requestHost(req);
+  if (!OLD_HOST_RE.test(host)) return;
+  const oldOrigin = `https://${host}`;
+  const realSend = res.send.bind(res);
+  res.send = (body) =>
+    realSend(typeof body === "string" ? body.split(SITE_URL).join(oldOrigin) : body);
+}
+
 export default async function handler(req, res) {
   const kind = String(req.query?.kind || "").toLowerCase();
+  if (kind === "sitemap" || kind === "robots") withOldHostUrls(req, res);
   switch (kind) {
     case "robots":
       return robotsHandler(req, res);
