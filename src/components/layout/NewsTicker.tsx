@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useNotices } from "@/hooks/useNotices";
 import { supabase } from "@/lib/supabase";
 import { useRollSlipCountdown } from "@/hooks/useRollSlipCountdown";
 import { useAdmissionSettings } from "@/hooks/useAdmission";
@@ -28,11 +29,10 @@ type TickerItem = { key: string; label: string; to: string; urgent?: boolean };
 
 /* ── Data ─────────────────────────────────────────────────────────────────── */
 
-type NoticeRow = { id: string; title: string; is_urgent: boolean; expires_at: string | null };
 type ResultRow = { exam_type: string; year: number };
 type MeritRow = {
   id: string; scope: string; class: string; year: number;
-  title: string | null; publish_at: string | null;
+  title: string | null; publish_at: string | null; created_at: string;
 };
 
 const meritTitle = (m: MeritRow) =>
@@ -41,110 +41,105 @@ const meritTitle = (m: MeritRow) =>
     : m.scope === "school-bise" ? `BISE Merit List ${m.year}`
     : `Class ${m.class} Merit List ${m.year}`);
 
-function useTickerData() {
-  return useQuery({
-    queryKey: ["ticker-items"],
+/* Every source is its OWN query: one slow or failing table can never hide the
+   others. Errors are logged (never swallowed silently) so a blocked table is
+   visible in the browser console as "[ticker] <source> failed: …". */
+const LIVE = {
+  staleTime: 30 * 1000,
+  refetchInterval: 60 * 1000,
+  refetchOnWindowFocus: false,
+  retry: 1,
+} as const;
+
+function useLatestResults() {
+  return useQuery<ResultRow[]>({
+    queryKey: ["ticker-results"],
     queryFn: async () => {
-      const nowIso = new Date().toISOString();
-      const [notices, results, merits] = await Promise.allSettled([
-        supabase
-          .from("notices")
-          .select("id, title, is_urgent, expires_at")
-          .eq("is_published", true)
-          .order("is_pinned", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(8),
-        supabase
-          .from("results")
-          .select("exam_type, year")
-          .eq("is_published", true)
-          .order("created_at", { ascending: false })
-          .limit(80),
-        supabase
-          .from("merit_lists")
-          .select("id, scope, class, year, title, publish_at")
-          .eq("is_published", true)
-          .order("created_at", { ascending: false })
-          .limit(4),
-      ]);
-
-      const ok = <T,>(r: PromiseSettledResult<{ data: unknown; error: unknown }>): T[] =>
-        r.status === "fulfilled" && !r.value.error ? ((r.value.data ?? []) as T[]) : [];
-
-      const noticeRows = ok<NoticeRow>(notices).filter(
-        (n) => n.title?.trim() && (!n.expires_at || n.expires_at > nowIso),
-      );
-
-      // Latest distinct exam (exam_type + year) among published results.
+      const { data, error } = await supabase
+        .from("results")
+        .select("exam_type, year, created_at")
+        .eq("is_published", true)
+        .order("created_at", { ascending: false })
+        .limit(80);
+      if (error) { console.warn("[ticker] results failed:", error.message); return []; }
       const seen = new Set<string>();
-      const resultRows: ResultRow[] = [];
-      for (const r of ok<ResultRow>(results)) {
+      const out: ResultRow[] = [];
+      for (const r of (data ?? []) as ResultRow[]) {
         const k = `${r.exam_type}|${r.year}`;
         if (!r.exam_type || seen.has(k)) continue;
         seen.add(k);
-        resultRows.push(r);
+        out.push({ exam_type: r.exam_type, year: r.year });
       }
-
-      const meritRows = ok<MeritRow>(merits).filter((m) => !m.publish_at || m.publish_at <= nowIso);
-
-      return { noticeRows, resultRows, meritRows };
+      return out;
     },
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
-    refetchOnWindowFocus: false,
-    placeholderData: keepPreviousData,
+    ...LIVE,
+  });
+}
+
+function useLatestMeritLists() {
+  return useQuery<MeritRow[]>({
+    queryKey: ["ticker-merit"],
+    queryFn: async () => {
+      // Same select the public /merit-list page uses.
+      const { data, error } = await supabase
+        .from("merit_lists")
+        .select("id, scope, class, exam_type, year, is_published, publish_at, title, notes, created_at")
+        .eq("is_published", true)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      if (error) { console.warn("[ticker] merit lists failed:", error.message); return []; }
+      return (data ?? []) as unknown as MeritRow[];
+    },
+    ...LIVE,
   });
 }
 
 function useTickerItems() {
-  const { data, isLoading } = useTickerData();
+  const { data: notices, isLoading: nLoading } = useNotices(8); // same query as the Notices page
+  const { data: results } = useLatestResults();
+  const { data: merits } = useLatestMeritLists();
   const { sessions, now } = useRollSlipCountdown(); // shared cache with the Navbar
   const { data: admission } = useAdmissionSettings(); // shared cache with Home
 
   const items = useMemo<TickerItem[]>(() => {
     const out: TickerItem[] = [];
+    const nowIso = new Date(now).toISOString();
 
     // 1. Latest notices
-    for (const n of (data?.noticeRows ?? []).slice(0, 5)) {
-      out.push({ key: `n-${n.id}`, label: n.title.trim(), to: `/notices/${n.id}`, urgent: n.is_urgent });
-    }
+    (notices ?? [])
+      .filter((n) => n.title?.trim() && (!n.expires_at || n.expires_at > nowIso))
+      .slice(0, 5)
+      .forEach((n) => out.push({ key: `n-${n.id}`, label: n.title.trim(), to: `/notices/${n.id}`, urgent: n.is_urgent }));
 
     // 2. Latest results (newest exam first, max 2)
-    for (const r of (data?.resultRows ?? []).slice(0, 2)) {
-      out.push({
-        key: `r-${r.exam_type}-${r.year}`,
-        label: `${examTypeLabel(r.exam_type)} ${r.year} Result`,
-        to: "/results",
-      });
-    }
+    (results ?? []).slice(0, 2).forEach((r) =>
+      out.push({ key: `r-${r.exam_type}-${r.year}`, label: `${examTypeLabel(r.exam_type)} ${r.year} Result`, to: "/results" }),
+    );
 
     // 3. Admission
     if (admission?.is_open) {
       out.push({ key: "adm", label: `Admissions Open ${admission.session_year}`, to: "/admission" });
     }
 
-    // 4. Roll No. Slip — newest session that is actually live (not still counting down)
+    // 4. Roll No. Slip — newest published session that is not still counting down
     const live = sessions.find(
       (s) => s.is_published && (!s.publish_at || new Date(s.publish_at).getTime() <= now),
     );
     if (live) {
       const t = live.title.trim();
-      out.push({
-        key: `rs-${live.id}`,
-        label: /roll|slip/i.test(t) ? t : `${t} Roll No Slip`,
-        to: "/roll-no-slip",
-      });
+      out.push({ key: `rs-${live.id}`, label: /roll|slip/i.test(t) ? t : `${t} Roll No Slip`, to: "/roll-no-slip" });
     }
 
-    // 5. Merit list (newest, max 2)
-    for (const m of (data?.meritRows ?? []).slice(0, 2)) {
-      out.push({ key: `m-${m.id}`, label: meritTitle(m), to: "/merit-list" });
-    }
+    // 5. Merit list (newest, max 2; skip ones still scheduled)
+    (merits ?? [])
+      .filter((m) => !m.publish_at || m.publish_at <= nowIso)
+      .slice(0, 2)
+      .forEach((m) => out.push({ key: `m-${m.id}`, label: meritTitle(m), to: "/merit-list" }));
 
     return out;
-  }, [data, admission, sessions, now]);
+  }, [notices, results, merits, admission, sessions, now]);
 
-  return { items, isLoading };
+  return { items, isLoading: nLoading && items.length === 0 };
 }
 
 /* ── View ─────────────────────────────────────────────────────────────────── */
