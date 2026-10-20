@@ -7,7 +7,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 const AdminOverview          = lazy(() => import("./tabs/AdminOverview"));
 const AdminSchoolSettings    = lazy(() => import("./tabs/AdminSchoolSettings"));
 const AdminTeachers          = lazy(() => import("./tabs/AdminTeachers"));
-const AdminStudents          = lazy(() => import("./tabs/AdminStudents"));
 const AdminResults           = lazy(() => import("./tabs/AdminResults"));
 const AdminTimetables        = lazy(() => import("./tabs/AdminTimetables"));
 const AdminAnnouncements     = lazy(() => import("./tabs/AdminAnnouncements"));
@@ -32,7 +31,6 @@ const tabMap: Record<string, React.LazyExoticComponent<React.ComponentType<any>>
   overview:           AdminOverview,
   settings:           AdminSchoolSettings,
   teachers:           AdminTeachers,
-  students:           AdminStudents,
   results:            AdminResults,
   timetables:         AdminTimetables,
   announcements:      AdminAnnouncements,
