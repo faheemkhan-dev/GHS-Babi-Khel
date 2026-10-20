@@ -22,6 +22,7 @@ import NotificationBell from "@/components/shared/NotificationBell";
 import ThemeSwitcher from "@/components/shared/ThemeSwitcher";
 import ThemeToggleButton from "@/components/shared/ThemeToggleButton";
 import HexagonLogoFrame from "@/components/shared/HexagonLogoFrame";
+import NewsTicker from "@/components/layout/NewsTicker";
 import NavSearchDropdown from "@/components/layout/NavSearchDropdown";
 import { openCommandPalette } from "@/components/shared/CommandPalette";
 import { intentPrefetchHandlers } from "@/lib/routePrefetch";
@@ -1339,6 +1340,9 @@ const Navbar = () => {
           </button>
         </div>
       </div>
+
+      {/* Green headline ticker — right → left, directly under the school name */}
+      <NewsTicker />
 
       {/* subtle gold hairline glowing along the navbar's bottom edge — base
           wash stays static so the line is never fully invisible, and the
