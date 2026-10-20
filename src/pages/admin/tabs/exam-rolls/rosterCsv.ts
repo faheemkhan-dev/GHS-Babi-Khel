@@ -151,21 +151,25 @@ export function parseRosterRows(rows: string[][]): RosterParseResult {
   return out;
 }
 
-/** Reads the first sheet of an .xlsx file into plain string rows. */
-export async function readRosterWorkbook(buffer: ArrayBuffer): Promise<string[][]> {
-  const ExcelJS = (await import("exceljs")).default;
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buffer);
-  const ws = wb.worksheets[0];
-  if (!ws) return [];
-  const width = Math.max(ws.columnCount, 4);
-  const rows: string[][] = [];
-  ws.eachRow({ includeEmpty: false }, (row) => {
-    const cells: string[] = [];
-    for (let c = 1; c <= width; c++) cells.push(String(row.getCell(c).text ?? "").trim());
-    rows.push(cells);
-  });
-  return rows;
+/**
+ * Reads ANY roster file the phone hands us — .xlsx, old .xls or .csv — by its
+ * real content (not its name or MIME type, which Android often gets wrong).
+ */
+export async function readRosterFile(file: File): Promise<RosterParseResult> {
+  const buf = await file.arrayBuffer();
+  const head = new Uint8Array(buf.slice(0, 4));
+  const isZip = head[0] === 0x50 && head[1] === 0x4b;                                  // .xlsx
+  const isOle = head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0; // .xls
+  if (isZip || isOle) {
+    const XLSX = await import("xlsx");
+    const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    if (!ws) return { students: [], total: 0, skippedNoName: 0, skippedBadClass: 0, skippedDuplicate: 0, headerFound: false, error: "The file has no sheet." };
+    const rows = (XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }) as unknown[][])
+      .map((r) => r.map((c) => String(c ?? "").trim()));
+    return parseRosterRows(rows);
+  }
+  return parseRosterCsv(new TextDecoder("utf-8").decode(buf));
 }
 
 /**
