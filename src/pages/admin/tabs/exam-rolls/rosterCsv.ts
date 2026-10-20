@@ -99,19 +99,29 @@ function detectHeader(first: string[]): Cols | null {
     if (/class|grade/.test(c)) { if (cols.cls < 0) cols.cls = i; return; }
     if (/name|student/.test(c)) { if (cols.name < 0) cols.name = i; }
   });
-  return cols.name >= 0 && cols.cls >= 0 && cols.roll >= 0 ? cols : null;
+  const idx = [cols.roll, cols.name, cols.cls];
+  return idx.every((i) => i >= 0) && new Set(idx).size === 3 ? cols : null;
 }
 
 export function parseRosterCsv(text: string): RosterParseResult {
+  return parseRosterRows(parseCsvText(text));
+}
+
+/** Shared by CSV and Excel: rows of plain strings (a title row above the header is fine). */
+export function parseRosterRows(rows: string[][]): RosterParseResult {
   const empty: RosterParseResult = {
     students: [], total: 0, skippedNoName: 0, skippedBadClass: 0, skippedDuplicate: 0, headerFound: false,
   };
-  const rows = parseCsvText(text);
   if (rows.length === 0) return { ...empty, error: "The file is empty." };
 
-  const header = detectHeader(rows[0]);
+  let header: Cols | null = null;
+  let headerAt = -1;
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const h = detectHeader(rows[i]);
+    if (h) { header = h; headerAt = i; break; }
+  }
   const cols: Cols = header ?? { roll: 0, name: 1, father: 2, cls: 3 };
-  const dataRows = header ? rows.slice(1) : rows;
+  const dataRows = (header ? rows.slice(headerAt + 1) : rows).filter((r) => r.some((c) => String(c ?? "").trim() !== ""));
 
   const out: RosterParseResult = { ...empty, headerFound: !!header, total: dataRows.length };
   const seen = new Set<string>();
@@ -141,5 +151,110 @@ export function parseRosterCsv(text: string): RosterParseResult {
   return out;
 }
 
-export const ROSTER_TEMPLATE_CSV =
-  "Class No,Full Name,Father Name,Class\n1,Ahmad Khan,Gul Khan,6\n2,Bilal Shah,Noor Shah,6\n1,Zainab Bibi,Rahim Khan,7\n";
+/** Reads the first sheet of an .xlsx file into plain string rows. */
+export async function readRosterWorkbook(buffer: ArrayBuffer): Promise<string[][]> {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buffer);
+  const ws = wb.worksheets[0];
+  if (!ws) return [];
+  const width = Math.max(ws.columnCount, 4);
+  const rows: string[][] = [];
+  ws.eachRow({ includeEmpty: false }, (row) => {
+    const cells: string[] = [];
+    for (let c = 1; c <= width; c++) cells.push(String(row.getCell(c).text ?? "").trim());
+    rows.push(cells);
+  });
+  return rows;
+}
+
+/**
+ * Professional sample sheet: title banner, dark-green header, centred cells,
+ * black borders, light green banding, class dropdown, 40 ready rows.
+ */
+export async function downloadRosterTemplateXlsx(): Promise<void> {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "GHS Babi Khel";
+  const ws = wb.addWorksheet("Students", {
+    views: [{ state: "frozen", ySplit: 3 }],
+    pageSetup: { orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 },
+  });
+  ws.columns = [{ width: 12 }, { width: 32 }, { width: 32 }, { width: 12 }];
+
+  const BLACK = { argb: "FF000000" };
+  const border = {
+    top: { style: "thin" as const, color: BLACK }, left: { style: "thin" as const, color: BLACK },
+    bottom: { style: "thin" as const, color: BLACK }, right: { style: "thin" as const, color: BLACK },
+  };
+  const center = { horizontal: "center" as const, vertical: "middle" as const, wrapText: true };
+  const fill = (argb: string) => ({ type: "pattern" as const, pattern: "solid" as const, fgColor: { argb } });
+
+  // 1 · title banner
+  ws.mergeCells("A1:D1");
+  const title = ws.getCell("A1");
+  title.value = "GHS Babi Khel — Class Students List";
+  title.font = { name: "Calibri", size: 15, bold: true, color: { argb: "FFFFFFFF" } };
+  title.fill = fill("FF14532D");
+  title.alignment = center;
+  ws.getRow(1).height = 30;
+
+  // 2 · instruction
+  ws.mergeCells("A2:D2");
+  const note = ws.getCell("A2");
+  note.value = "Replace the sample rows with your students · Class must be 6, 7, 8, 9 or 10";
+  note.font = { name: "Calibri", size: 10, italic: true, color: { argb: "FF78350F" } };
+  note.fill = fill("FFFEF3C7");
+  note.alignment = center;
+  ws.getRow(2).height = 22;
+
+  // 3 · header
+  const headers = ["Class No", "Full Name", "Father Name", "Class"];
+  const hr = ws.getRow(3);
+  hr.height = 24;
+  headers.forEach((h, i) => {
+    const c = hr.getCell(i + 1);
+    c.value = h;
+    c.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+    c.fill = fill("FF1F7A4A");
+    c.alignment = center;
+  });
+
+  // 4+ · rows (3 samples, rest empty but formatted)
+  const samples: (string | number)[][] = [
+    [1, "Ahmad Khan", "Gul Khan", 6],
+    [2, "Bilal Shah", "Noor Shah", 6],
+    [1, "Zainab Bibi", "Rahim Khan", 7],
+  ];
+  const TOTAL = 40;
+  for (let i = 0; i < TOTAL; i++) {
+    const row = ws.getRow(4 + i);
+    row.height = 20;
+    const vals = samples[i] ?? [];
+    for (let c = 0; c < 4; c++) {
+      const cell = row.getCell(c + 1);
+      if (vals[c] !== undefined) cell.value = vals[c];
+      cell.font = { name: "Calibri", size: 11, bold: c === 1 && !!vals[c] };
+      cell.alignment = center;
+      if (i % 2 === 1) cell.fill = fill("FFF0FDF4");
+    }
+    row.getCell(4).dataValidation = {
+      type: "list", allowBlank: true, formulae: ['"6,7,8,9,10"'],
+      showErrorMessage: true, errorStyle: "warning", errorTitle: "Class", error: "Use 6, 7, 8, 9 or 10",
+    };
+  }
+
+  // black borders on every cell of the table
+  for (let r = 1; r <= 3 + TOTAL; r++) {
+    for (let c = 1; c <= 4; c++) ws.getRow(r).getCell(c).border = border;
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "class-students-template.xlsx";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
