@@ -41,7 +41,6 @@ const navSections: NavSection[] = [
   {
     heading: "STUDENTS",
     items: [
-      { id: "students",     label: "Manage Students",     emoji: "🎓" },
       { id: "admissions",   label: "Admissions",          emoji: "📋" },
       { id: "results",      label: "Manage Results",      emoji: "📝" },
       { id: "fees",          label: "Fee Management",       emoji: "💰" },
