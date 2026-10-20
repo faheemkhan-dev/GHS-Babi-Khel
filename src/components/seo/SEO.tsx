@@ -3,10 +3,10 @@ import { Helmet } from "react-helmet-async";
 export const SITE_URL  = "https://ghsbabikhel.dpdns.org";
 export const SITE_NAME = "GHS Babi Khel";
 
-// ✅ OG image: actual file is 1730×909 px (public/og-image.jpg)
+// ✅ OG image: actual file is 1200×630 px (public/og-image.jpg)
 const DEFAULT_IMAGE        = `${SITE_URL}/og-image.jpg`;
-const DEFAULT_IMAGE_WIDTH  = "1730";
-const DEFAULT_IMAGE_HEIGHT = "909";
+const DEFAULT_IMAGE_WIDTH  = "1200";
+const DEFAULT_IMAGE_HEIGHT = "630";
 
 // ✅ Twitter handle — update to your real @handle or set to "" to omit
 const TWITTER_SITE = "@GHSBabiKhel";

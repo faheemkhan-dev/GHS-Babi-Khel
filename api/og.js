@@ -18,8 +18,8 @@ import { createClient } from "@supabase/supabase-js";
 const SITE_URL = "https://ghsbabikhel.dpdns.org";
 const SITE_NAME = "GHS Babi Khel";
 const DEFAULT_IMAGE = `${SITE_URL}/og-image.jpg`;
-const DEFAULT_IMAGE_WIDTH = "1730";
-const DEFAULT_IMAGE_HEIGHT = "909";
+const DEFAULT_IMAGE_WIDTH = "1200";
+const DEFAULT_IMAGE_HEIGHT = "630";
 const TWITTER_SITE = "@GHSBabiKhel";
 
 // ── Supabase client (serverless, no session) ────────────────────────────────
