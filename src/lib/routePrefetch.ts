@@ -167,9 +167,11 @@ export function startBackgroundRoutePrefetch(): void {
   // seconds costs a real user nothing (intent prefetch still covers taps
   // instantly) but keeps the warm-up out of the critical loading path.
   window.setTimeout(() => {
-    requestIdleCallback
-      ? requestIdleCallback(runQueue, { timeout: 20_000 })
-      : runQueue();
+    if (requestIdleCallback) {
+      requestIdleCallback(runQueue, { timeout: 20_000 });
+    } else {
+      runQueue();
+    }
   }, 6_000);
 
   const runQueue = () => {

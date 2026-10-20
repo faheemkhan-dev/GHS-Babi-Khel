@@ -215,7 +215,6 @@ GHS-Babi-Khel/
 │   ├── bisep-proxy.js            # BISE Peshawar results + live exam title
 │   ├── calendar.js               # /calendar.ics feed
 │   ├── og.js                     # Open Graph / JSON-LD HTML for social crawlers
-│   ├── phet.js                   # PhET simulation + asset proxy
 │   ├── push.js                   # Web Push: config · subscribe · topics · dispatch
 │   ├── push-core.js              # Shared Web Push logic used by push.js
 │   ├── render.js                 # Live DB-rendered HTML for crawlers + AI JSON feed
@@ -230,7 +229,7 @@ GHS-Babi-Khel/
 │   │                             # admissions · ReportCard · Calendar · seo · admin
 │   ├── contexts/AuthContext.tsx
 │   ├── hooks/                    # Data hooks per domain (results, fees, notes …)
-│   ├── lib/                      # supabase · cloudinary · csrf · push · routePrefetch …
+│   ├── lib/                      # supabase · cloudinary · push · routePrefetch …
 │   ├── pages/                    # Public pages · admin/ · auth/ · notes/
 │   └── App.tsx                   # Routes, lazy loading with retry, offline bootstrap
 ├── vite.config.ts                # Build, chunking, prerender hook
@@ -351,7 +350,6 @@ tables whose policies allow it; admin operations require `profiles.role = 'admin
 | `GET /api/og?path=/…` | Open Graph / Twitter / JSON-LD HTML for social crawlers |
 | `GET /api/bisep-proxy` | BISE Peshawar results; `mode=current` returns the live exam title |
 | `GET /calendar.ics` | iCalendar feed of school events |
-| `/api/phet-proxy` · `/api/phet-asset` | PhET simulation and asset proxy |
 | `GET /api/word-of-day` | Word of the Day |
 | `POST /api/resolve-fb` | Facebook share link → canonical permalink |
 | `/api/push?action=…` | Web Push: `config`, `subscribe`, `topics`, `unsubscribe`, `test`, `dispatch` |
@@ -379,8 +377,8 @@ tables whose policies allow it; admin operations require `profiles.role = 'admin
 
 - **Blocked clients**: dedicated attack tools (such as sqlmap, nikto, nmap) and generic script
   clients (such as curl, wget, python-requests) receive `403`. Search and AI crawlers are never matched.
-- **Client hardening**: CSRF helper, CAPTCHA component, encrypted secure-storage hook,
-  client-side rate limiter, safe embed and image components, per-route error boundaries.
+- **Client hardening**: per-route error boundaries, safe URL handling, rate limiting,
+  and security-focused request middleware.
 - **Secrets stay server-side**: the AI key, service-role key and VAPID private key are only read in `api/`.
 - **Private routes** (`/admin`, `/auth`, `/search`) are never proxied to the crawler renderer.
 
@@ -412,8 +410,7 @@ npm run test       # Vitest, single run
 npm run lint       # ESLint
 ```
 
-Vitest runs with jsdom and Testing Library. The AI proxy protocol is covered in
-`api/ai-chat.test.mts`. Playwright is installed for end-to-end tests.
+Vitest runs with jsdom and Testing Library. Playwright is installed for end-to-end tests.
 
 ---
 

@@ -22,8 +22,6 @@
     { "source": "/api/sitemap", "destination": "/api/seo?kind=sitemap" },
     { "source": "/api/robots", "destination": "/api/seo?kind=robots" },
     { "source": "/api/rss", "destination": "/api/seo?kind=rss" },
-    { "source": "/api/phet-proxy", "destination": "/api/phet" },
-    { "source": "/api/phet-asset", "destination": "/api/phet" },
     { "source": "/api/bisep-proxy", "destination": "/api/bisep-proxy" },
     { "source": "/about", "destination": "/about/index.html" },
     { "source": "/contact", "destination": "/contact/index.html" },
@@ -67,27 +65,6 @@
       "source": "/(.*).html",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
-      ]
-    },
-    {
-      "source": "/api/phet",
-      "headers": [
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" }
-      ]
-    },
-    {
-      "source": "/api/phet-proxy",
-      "headers": [
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" }
-      ]
-    },
-    {
-      "source": "/api/phet-asset",
-      "headers": [
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" }
       ]
     },
     {
