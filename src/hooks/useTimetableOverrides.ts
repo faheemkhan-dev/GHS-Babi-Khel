@@ -222,64 +222,64 @@ export function useAssignSubstitutes() {
         return !busy || !busy.has(t);
       };
 
-      // 3. Round-robin across absent teachers so each gets fair coverage.
-      //    Group entries by absent teacher (preserving original order), then
-      //    pull one entry per teacher in turn. This means if teacher A and
-      //    teacher B both have a Period-1 class, they get DIFFERENT
-      //    substitutes (instead of one teacher eating both).
-      const entriesByAbsent = new Map<string, typeof absentEntries>();
-      absentEntries.forEach((e) => {
-        const ownerKey = (e.teacher || e.teacher_name || "").trim().toLowerCase();
-        if (!entriesByAbsent.has(ownerKey)) entriesByAbsent.set(ownerKey, []);
-        entriesByAbsent.get(ownerKey)!.push(e);
-      });
-      // Stable per-teacher order: sort each bucket by period_number.
-      entriesByAbsent.forEach((arr) => {
-        arr.sort((a, b) => a.period_number - b.period_number);
-      });
-      // Round-robin: take one from each absent teacher in turn until empty.
-      const ownerOrder = Array.from(entriesByAbsent.keys()); // original teachers (lower)
-      const orderedEntries: typeof absentEntries = [];
-      let anyLeft = true;
-      while (anyLeft) {
-        anyLeft = false;
-        for (const owner of ownerOrder) {
-          const arr = entriesByAbsent.get(owner);
-          if (arr && arr.length > 0) {
-            orderedEntries.push(arr.shift()!);
-            anyLeft = true;
-          }
-        }
-      }
+      // 3. FAIR ASSIGNMENT.
+      //    Previously the subject-match teacher was ALWAYS preferred, so one
+      //    teacher could end up covering every period. Now every free
+      //    teacher gets a score and the lowest score wins:
+      //        score = (substitute periods already given today) * 10
+      //              + (15 if the teacher does NOT teach this subject)
+      //              + (regular periods the teacher already teaches today) * 0.5
+      //    => a subject expert is used at most ~2 times before the work is
+      //       spread to other free teachers, and nobody is double-booked.
+      //    The most constrained periods (fewest free teachers) are solved
+      //    first so fewer periods are left uncovered.
+      const norm = (n: string) => n.trim().toLowerCase();
+      const assignCount = new Map<string, number>();
+      const getCount = (name: string) => assignCount.get(norm(name)) || 0;
 
-      // 4. For each entry in round-robin order, pick a substitute.
-      //
-      // LOAD BALANCING: previously this always picked the FIRST free
-      // teacher by display_order — meaning if e.g. "Faheem" happened to be
-      // early in that list and free at several periods, he'd get picked
-      // for every single one of those slots while other equally-free
-      // teachers never got touched at all (one teacher doing 3 subs, two
-      // periods left completely uncovered, while a dozen other free
-      // teachers sat idle). That's not actually "no free teacher available"
-      // — it's the algorithm re-picking the same person out of habit.
-      //
-      // Fix: track how many substitute periods each teacher has already
-      // picked up during THIS run (assignCount), and among the free
-      // candidates for each slot, prefer whoever currently has the FEWEST
-      // assignments so far. Ties fall back to display_order for stability.
-      // This spreads coverage across the whole free-teacher pool instead of
-      // repeatedly loading up one or two people.
-      const assignCount = new Map<string, number>(); // teacherLower → count this run
-      const getCount = (name: string) => assignCount.get(name.trim().toLowerCase()) || 0;
-      const bumpCount = (name: string) => {
-        const key = name.trim().toLowerCase();
-        assignCount.set(key, (assignCount.get(key) || 0) + 1);
+      // Slots being (re)assigned now -- old overrides on these are replaced.
+      const slotKey = (e: { class: string; day: string; period_number: number }) =>
+        `${e.class}|${e.day}|${e.period_number}`;
+      const replacing = new Set(absentEntries.map(slotKey));
+
+      // Load already given today (from earlier runs) counts too.
+      existingOverrides.forEach((o) => {
+        if (o.effective_date !== today || replacing.has(slotKey(o))) return;
+        assignCount.set(norm(o.substitute_teacher), getCount(o.substitute_teacher) + 1);
+      });
+
+      // Regular teaching load today (tie-breaker: spare the busiest teachers).
+      const regularLoad = new Map<string, number>();
+      allTimetableEntries.forEach((e) => {
+        if (e.day !== todayName) return;
+        const t = norm(e.teacher || e.teacher_name || "");
+        if (t) regularLoad.set(t, (regularLoad.get(t) || 0) + 1);
+      });
+
+      // Rebuild busy map without overrides that are being replaced.
+      busyMap.clear();
+      allTimetableEntries.forEach((e) => {
+        if (e.day !== todayName) return;
+        const t = e.teacher || e.teacher_name || "";
+        if (t) addBusy(e.day, e.period_number, t);
+      });
+      existingOverrides.forEach((o) => {
+        if (o.effective_date !== today || replacing.has(slotKey(o))) return;
+        addBusy(o.day, o.period_number, o.substitute_teacher);
+      });
+
+      const candidates = teachers.filter(
+        (t) => t.is_active !== false && !absentNorms.has(norm(t.full_name))
+      );
+      const subjectOk = (t: Teacher, subjectNorm: string) => {
+        const tSub = (t.subject || "").trim().toLowerCase();
+        return !!tSub && !!subjectNorm &&
+          (tSub === subjectNorm || tSub.includes(subjectNorm) || subjectNorm.includes(tSub));
       };
-      const byLoadThenOrder = (a: Teacher, b: Teacher) => {
-        const diff = getCount(a.full_name) - getCount(b.full_name);
-        if (diff !== 0) return diff;
-        return (a.display_order || 0) - (b.display_order || 0);
-      };
+      const scoreOf = (t: Teacher, subjectNorm: string) =>
+        getCount(t.full_name) * 10 +
+        (subjectOk(t, subjectNorm) ? 0 : 15) +
+        (regularLoad.get(norm(t.full_name)) || 0) * 0.5;
 
       const assigned: SubstitutionResult["assigned"] = [];
       const uncovered: SubstitutionResult["uncovered"] = [];
@@ -294,45 +294,31 @@ export function useAssignSubstitutes() {
         reason: string;
       }> = [];
 
-      for (const entry of orderedEntries) {
-        const entrySubject = entry.subject?.trim() || "";
-        const entrySubjectNorm = entrySubject.toLowerCase();
+      const remaining = [...absentEntries];
+      while (remaining.length > 0) {
+        // Pick the most constrained remaining entry.
+        let bestIdx = 0;
+        let bestFree = Infinity;
+        remaining.forEach((e, i) => {
+          const free = candidates.filter((t) => isFree(t.full_name, e.day, e.period_number)).length;
+          if (free < bestFree || (free === bestFree && e.period_number < remaining[bestIdx].period_number)) {
+            bestFree = free;
+            bestIdx = i;
+          }
+        });
+        const entry = remaining.splice(bestIdx, 1)[0];
+        const subjectNorm = (entry.subject || "").trim().toLowerCase();
         const absentOwnerName = (entry.teacher || entry.teacher_name || "").trim();
 
-        // Candidate pool: all active teachers EXCEPT any absent one.
-        const candidates = teachers.filter(
-          (t) => !absentNorms.has(t.full_name.trim().toLowerCase())
-        );
-
-        // Strategy 1: subject match + free — among matches, prefer the
-        // least-loaded teacher so far this run, not just the first in list.
-        let pick: Teacher | undefined;
-        let reason = "";
-        const subjectMatches = candidates
-          .filter((t) => {
-            const tSub = (t.subject || "").trim().toLowerCase();
-            return tSub && (tSub === entrySubjectNorm || tSub.includes(entrySubjectNorm) || entrySubjectNorm.includes(tSub));
-          })
+        const pick = candidates
           .filter((t) => isFree(t.full_name, entry.day, entry.period_number))
-          .sort(byLoadThenOrder);
-        if (subjectMatches.length > 0) {
-          pick = subjectMatches[0];
-          reason = "subject-match";
-        }
-
-        // Strategy 2: any free teacher (fallback — no subject match),
-        // again preferring whoever has picked up the fewest subs so far.
-        if (!pick) {
-          const anyFree = candidates
-            .filter((t) => isFree(t.full_name, entry.day, entry.period_number))
-            .sort(byLoadThenOrder);
-          if (anyFree.length > 0) {
-            pick = anyFree[0];
-            reason = "free-period";
-          }
-        }
+          .sort((a, b) =>
+            scoreOf(a, subjectNorm) - scoreOf(b, subjectNorm) ||
+            (a.display_order || 0) - (b.display_order || 0)
+          )[0];
 
         if (pick) {
+          const reason = subjectOk(pick, subjectNorm) ? "subject-match" : "free-period";
           assigned.push({
             class: entry.class,
             day: entry.day,
@@ -353,12 +339,8 @@ export function useAssignSubstitutes() {
             substitute_teacher: pick.full_name,
             reason,
           });
-          // Mark this substitute as busy at this period for subsequent entries
-          // (so we don't assign the same substitute to two classes at once —
-          // even across different absent teachers), AND bump their load
-          // count so the next slot prefers someone else.
           addBusy(entry.day, entry.period_number, pick.full_name);
-          bumpCount(pick.full_name);
+          assignCount.set(norm(pick.full_name), getCount(pick.full_name) + 1);
         } else {
           uncovered.push({
             class: entry.class,
