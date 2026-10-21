@@ -85,8 +85,10 @@ export function useRollSlipCountdown() {
       if (error) throw error;
       return data ?? [];
     },
-    staleTime: 15 * 1000,
-    refetchInterval: 30 * 1000,
+    // Countdown flips locally at the boundary (useBoundaryNow), so no 30 s polling is needed.
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
 
