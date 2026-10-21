@@ -24,6 +24,23 @@ function getDeviceType(): "mobile" | "tablet" | "desktop" {
   return "desktop";
 }
 
+/**
+ * One row per session per page. Reloads and back/forward navigation inside the same visit used to
+ * insert a new row every time; this keeps the analytics meaningful and cuts write volume.
+ */
+const SEEN_KEY = "ghs_sv_seen";
+function alreadyLogged(path: string): boolean {
+  try {
+    const seen: string[] = JSON.parse(sessionStorage.getItem(SEEN_KEY) || "[]");
+    if (seen.includes(path)) return true;
+    seen.push(path);
+    sessionStorage.setItem(SEEN_KEY, JSON.stringify(seen.slice(-60)));
+    return false;
+  } catch {
+    return false; // storage blocked → fall back to logging (old behaviour)
+  }
+}
+
 /** Get or create a session id stored in sessionStorage */
 function getSessionId(): string {
   try {
@@ -74,11 +91,13 @@ export function usePageTracker() {
     // wins the network. Errors are still swallowed either way.
     const track = async () => {
       try {
-        // Try to get user from the authenticated client (non-blocking)
+        if (alreadyLogged(path)) return;
+        // getSession() reads the locally stored session — no network round trip.
+        // (getUser() asked the auth server on EVERY page view just to read an id.)
         let userId: string | null = null;
         try {
-          const { data: { user } } = await supabase.auth.getUser();
-          userId = user?.id ?? null;
+          const { data: { session } } = await supabase.auth.getSession();
+          userId = session?.user?.id ?? null;
         } catch {
           // If auth fails, just track without user_id
         }
