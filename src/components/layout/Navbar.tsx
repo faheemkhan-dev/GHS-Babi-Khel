@@ -7,7 +7,7 @@ import {
   Home, Landmark, Mail, Megaphone,
   Trophy, Medal, BookOpen, Library, Images, ClipboardList, HelpCircle,
   Hash, Timer, Command as CommandIcon,
-  Bell, FileSignature, type LucideIcon,
+  Ticket, FileSignature, type LucideIcon,
 } from "lucide-react";
 import { useRollSlipCountdown, compactCountdown, prefetchPublicRolls } from "@/hooks/useRollSlipCountdown";
 import { useResultsCountdown, splitCountdown } from "@/hooks/useResultsCountdown";
@@ -19,7 +19,6 @@ import { useBisepCurrentExam } from "@/hooks/useBisepCurrentExam";
 import { useSchoolSettings, safeMediaUrl, optimizedCloudinaryUrl } from "@/hooks/useSchoolSettings";
 import { useSiteSearch } from "@/hooks/useSiteSearch";
 import { useAuth } from "@/hooks/useAuth";
-import NotificationBell from "@/components/shared/NotificationBell";
 import ThemeSwitcher from "@/components/shared/ThemeSwitcher";
 import ThemeToggleButton from "@/components/shared/ThemeToggleButton";
 import HexagonLogoFrame from "@/components/shared/HexagonLogoFrame";
@@ -1293,7 +1292,6 @@ const Navbar = () => {
           {!authLoading && (
             user ? (
               <>
-                <NotificationBell />
                 <ThemeSwitcher />
                 {isAdmin && (
                   <Link
@@ -1428,8 +1426,18 @@ const Navbar = () => {
               <Trophy className="w-[22px] h-[22px]" fill={location.pathname === "/results" ? "currentColor" : "none"} />
             </Link>
 
-            {/* Notifications — opens the existing NotificationBell panel */}
-            <NotificationBell variant="bottom-bar" />
+            {/* Roll No. Slip */}
+            <Link
+              to="/roll-no-slip"
+              aria-label="Roll No. Slip"
+              data-active={location.pathname === "/roll-no-slip" || undefined}
+              onClick={closeAllMenus}
+              className={`dock-item flex-1 flex flex-col items-center justify-center py-3 ${
+                location.pathname === "/roll-no-slip" ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <Ticket className="w-[22px] h-[22px]" fill={location.pathname === "/roll-no-slip" ? "currentColor" : "none"} />
+            </Link>
 
             {/* Admission */}
             <Link
