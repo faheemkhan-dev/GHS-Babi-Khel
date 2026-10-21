@@ -23,7 +23,7 @@ import { SITE_URL, SITE_NAME } from "./SEO";
 const SiteSchema = () => {
   const { data: settings } = useSchoolSettings();
 
-  const ogImage = `${SITE_URL}/og-image.jpg`;
+  const ogImage = `${SITE_URL}/og-image.png`;
   const logoIcon = `${SITE_URL}/apple-touch-icon.png`;
 
   // ── Live contact data (falls back to real school details) ──

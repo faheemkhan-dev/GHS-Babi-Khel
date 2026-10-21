@@ -3,8 +3,8 @@ import { Helmet } from "react-helmet-async";
 export const SITE_URL  = "https://ghsbabikhel.dpdns.org";
 export const SITE_NAME = "GHS Babi Khel";
 
-// ✅ OG image: actual file is 1200×630 px (public/og-image.jpg)
-const DEFAULT_IMAGE        = `${SITE_URL}/og-image.jpg`;
+// ✅ OG image: actual file is 1200×630 px (public/og-image.png)
+const DEFAULT_IMAGE        = `${SITE_URL}/og-image.png`;
 const DEFAULT_IMAGE_WIDTH  = "1200";
 const DEFAULT_IMAGE_HEIGHT = "630";
 

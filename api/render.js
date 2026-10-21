@@ -2017,7 +2017,7 @@ ${notesChapter.audio_enabled ? `<p class="meta">Audio narration is available for
 <meta property="og:title" content="${esc(title)}" />
 <meta property="og:description" content="${esc(description)}" />
 <meta property="og:url" content="${esc(canonical)}" />
-<meta property="og:image" content="${SITE_URL}/og-image.jpg" />
+<meta property="og:image" content="${SITE_URL}/og-image.png" />
 <meta name="twitter:card" content="summary_large_image" />
 <script type="application/ld+json">${jsonLdFor(route, data, detail, title)}</script>
 <style>${CSS}</style>
