@@ -262,10 +262,11 @@ function ResultsTopStrip() {
   const { data: hasSchool } = useQuery<boolean>({
     queryKey: ["has-published-school-results"],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("results").select("id", { count: "exact", head: true }).eq("is_published", true);
+      // Existence check: fetch ONE row instead of counting every published result row.
+      const { data, error } = await supabase
+        .from("results").select("id").eq("is_published", true).limit(1);
       if (error) throw error;
-      return (count ?? 0) > 0;
+      return (data?.length ?? 0) > 0;
     },
     staleTime: 60 * 1000,
   });
