@@ -1674,7 +1674,7 @@ function ReportsTab() {
   // fired on mount even for an admin who only ever looked at one report.
   const { data: collectionReport = [], isLoading: loadingCollection } = useFeeCollectionReport(year, { enabled: reportType === "collection" });
   const { data: classSummary = [], isLoading: loadingClass } = useClassCollectionSummary(year, { enabled: reportType === "class" });
-  const { data: defaulters = [], isLoading: loadingDefaulters } = useFeeDefaulters({ enabled: reportType === "defaulters" });
+  const { data: defaulters = [], isLoading: loadingDefaulters } = useFeeDefaulters(undefined, { enabled: reportType === "defaulters" });
 
   // PERF: the defaulters table rendered EVERY defaulter at once; large
   // lists now render in pages of 25 with a "Show more" button.
@@ -1682,10 +1682,11 @@ function ReportsTab() {
   const visibleDefaulters = defaulters.slice(0, defaulterLimit);
 
   const handleExportDefaulterList = async () => {
-    let doc: import("jspdf")["default"], autoTable: typeof import("jspdf-autotable")["default"];
+    let jsPDF: typeof import("jspdf")["default"], autoTable: typeof import("jspdf-autotable")["default"];
     try {
-      ([{ default: doc }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]));
+      ([{ default: jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]));
     } catch { toast.error("Could not load the PDF library — check your connection"); return; }
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     doc.setFontSize(14);
     doc.text("Fee Defaulters List", 14, 16);
     doc.setFontSize(9);
