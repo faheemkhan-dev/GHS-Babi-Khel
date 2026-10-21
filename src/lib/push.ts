@@ -77,7 +77,8 @@ function saveTopics(t: PushTopic[]) {
 }
 
 async function post(action: string, body: unknown) {
-  const r = await fetch(`/api/push?action=${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  // 20 s ceiling: a stuck request must fail fast instead of hanging (and being retried) for minutes.
+  const r = await fetch(`/api/push?action=${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
   if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || `Push request failed (${r.status})`);
   return r.json();
 }
@@ -157,16 +158,30 @@ export async function sendTestPush(): Promise<void> {
   if (sub) await post("test", { endpoint: sub.endpoint });
 }
 
-/** Ask the server to push anything newly published (idempotent, throttled server-side). */
+const VISITOR_PING_KEY = "ghs_push_ping_at";
+const VISITOR_PING_GAP_MS = 30 * 60 * 1000;
+
+/**
+ * Ask the server to push anything newly published (idempotent, throttled server-side).
+ * Visitor pings are ALSO throttled here: at most one per device per 30 minutes. The database
+ * already triggers an instant dispatch on every publish, so a visitor ping is only a backup nudge
+ * and 150 students must not each wake a server function on every visit.
+ */
 export function pingDispatch(src: "admin" | "visitor") {
   try {
+    if (src === "visitor") {
+      const last = Number(localStorage.getItem(VISITOR_PING_KEY) || 0);
+      if (Date.now() - last < VISITOR_PING_GAP_MS) return;
+      localStorage.setItem(VISITOR_PING_KEY, String(Date.now()));
+    }
     fetch(`/api/push?action=dispatch&src=${src}`, { method: "POST", keepalive: true }).catch(() => {});
   } catch { /* ignore */ }
 }
 
 /**
  * Keep the server-side subscription healthy. Runs on every visit (cheap): re-validates the
- * key, and re-registers with the server at most every 6 h so a deleted/expired row heals itself.
+ * key, and re-registers with the server at most once a day so a deleted/expired row heals itself
+ * (was every 6 h — four database writes per device per day for no benefit).
  */
 export async function refreshSubscriptionIfNeeded() {
   try {
@@ -178,7 +193,7 @@ export async function refreshSubscriptionIfNeeded() {
     await navigator.serviceWorker.ready;
     const existing = await reg.pushManager.getSubscription();
     const stale = !!existing && keyMismatch(existing, cfg.publicKey);
-    const gap = 6 * 60 * 60 * 1000;
+    const gap = 24 * 60 * 60 * 1000;
     const last = Number(localStorage.getItem("ghs_push_refreshed") || 0);
     if (!stale && existing && Date.now() - last < gap) return;
     // Only auto-(re)subscribe people who already opted in on this device.
