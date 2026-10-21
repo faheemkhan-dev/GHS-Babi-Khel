@@ -1539,8 +1539,9 @@ export function usePublishedSeatingPlans() {
           })),
       })) as SeatingPlanFull[];
     },
-    staleTime: 30 * 1000,
-    refetchInterval: 30 * 1000, // refresh so countdown + auto-publish propagate
+    staleTime: 60 * 1000,
+    refetchInterval: 2 * 60 * 1000, // refresh so countdown + auto-publish propagate (was 30 s)
+    refetchIntervalInBackground: false,
     // Surface the error to the UI so SeatingTab can distinguish "no plans"
     // from "couldn't fetch" instead of always defaulting to [].
     retry: 1,
@@ -1956,7 +1957,9 @@ export function useLiveAttendance(
     // so polling is only a safety net for dropped websocket events — 15 s
     // (was 5 s) still bounds staleness while cutting the full-table refetch
     // load on the wall screen by 3× over a multi-hour exam day.
-    refetchInterval: 15 * 1000,
+    // rev. 10: 30 s and never in a hidden tab (realtime already delivers every change instantly).
+    refetchInterval: 30 * 1000,
+    refetchIntervalInBackground: false,
   });
 
   // Realtime (rev. 9 — burst-proof):
