@@ -153,8 +153,8 @@ export function useFeeStructures(classLevel?: string) {
       if (error) throw error;
       return data ?? [];
     },
-    staleTime: 30 * 1000, // Reduced from 5min → 30sec so new fees appear quickly
-    refetchInterval: 60 * 1000, // Auto-refetch every 60s for real-time updates
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000, // mutations invalidate this query; the poll is only a slow safety net
   });
 }
 
@@ -176,7 +176,7 @@ export function useMyFeeStructures() {
       };
     },
     staleTime: 0,
-    refetchInterval: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: false,  // FIXED: was true — caused page refresh feeling on slow internet
     refetchOnReconnect: false,    // Don't refetch on reconnect — prevents interrupting edits
     refetchOnMount: true,
@@ -274,8 +274,8 @@ export function useFeeVouchers(filters?: {
       if (error) throw error;
       return (data ?? []) as FeeVoucher[];
     },
-    staleTime: 30 * 1000, // Reduced from 2min → 30sec
-    refetchInterval: 60 * 1000, // Auto-refetch every 60s
+    staleTime: 60 * 1000,
+    refetchInterval: 2 * 60 * 1000, // mutations invalidate this query; the poll is only a safety net
   });
 }
 
@@ -295,7 +295,7 @@ export function useStudentVouchers(classLevel?: string | null, studentId?: strin
       };
     },
     staleTime: 0,            // Always fetch fresh — deleted vouchers must disappear immediately
-    refetchInterval: 30 * 1000,  // Auto-refetch every 30s as a safety net
+    refetchInterval: 2 * 60 * 1000,  // safety net (mutations already invalidate)
     refetchOnWindowFocus: false,  // FIXED: was true — caused page refresh feeling on slow internet
     refetchOnReconnect: false,    // Don't refetch on reconnect — prevents interrupting edits
     refetchOnMount: true,
@@ -923,7 +923,7 @@ export function useAllVouchersForStudents(classLevel?: string | null) {
     },
     enabled: !!classLevel,
     staleTime: 0, // Always fetch fresh — deleted vouchers must disappear immediately
-    refetchInterval: 30 * 1000,
+    refetchInterval: 2 * 60 * 1000,
   });
 }
 
