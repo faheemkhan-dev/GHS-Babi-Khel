@@ -13,12 +13,17 @@ function cfg() {
 }
 export const pushConfigured = () => cfg().ok;
 
+// Every Supabase call gets a hard deadline: a stuck request used to hold the whole function open
+// until Vercel killed it (60 s) — overlapping runs then piled up on the Nano database.
+const SB_TIMEOUT_MS = 15000;
+
 async function sb(path, { method = "GET", body, headers = {} } = {}) {
   const { url, key } = cfg();
   const res = await fetch(`${url}/rest/v1/${path}`, {
     method,
     headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(SB_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`${method} ${path.split("?")[0]} → ${res.status} ${(await res.text()).slice(0, 160)}`);
   const t = await res.text();
@@ -145,11 +150,29 @@ const markDirty = () =>
   sb("push_state?on_conflict=key", { method: "POST", headers: { Prefer: "resolution=merge-duplicates" }, body: { key: "dirty", value: { at: nowIso() }, updated_at: nowIso() } }).catch(() => {});
 
 /**
+ * One tiny RPC (migration 12: public.push_signature) returns a hash of everything the dispatcher
+ * watches, the hash stored after the last COMPLETE run, and whether a retry is pending.
+ * Returns null when the RPC is missing / fails → callers fall back to the full run (old behaviour).
+ */
+async function readSignature() {
+  try {
+    const r = await sb("rpc/push_signature", { method: "POST", body: {} });
+    const v = Array.isArray(r) ? r[0] : r;
+    return v && typeof v.cur === "string" ? v : null;
+  } catch { return null; }
+}
+
+/**
  * trusted = cron / database trigger / auto-publisher (no throttle, never loses a signal).
  * Untrusted visitor/admin pings are throttled by minGapMs.
  */
 export async function dispatchChanges({ minGapMs = 10000, trusted = minGapMs === 0 } = {}) {
   if (!cfg().ok) return { skipped: "not-configured" };
+  // EARLY EXIT: nothing published/changed since the last complete run and no retry pending →
+  // return now. No lease, no six table reads, no push_state writes (this is what used to burn
+  // the Disk IO budget every minute).
+  const sig = await readSignature();
+  if (sig && sig.cur === sig.prev && sig.retry === false) return { ok: true, skipped: "unchanged" };
   const lease = trusted ? 60000 : Math.max(minGapMs, 10000);
   if (!(await acquireLease(lease))) {
     // Someone else is mid-run. A trusted signal means "new data exists": leave a marker so the
@@ -161,7 +184,7 @@ export async function dispatchChanges({ minGapMs = 10000, trusted = minGapMs ===
   try {
     for (let i = 0; i < 3; i++) {
       const startedAt = nowIso();
-      reports.push(await runDispatch());
+      reports.push(await runDispatch(i === 0 ? sig : await readSignature()));
       if (!trusted) break;
       const d = (await sb("push_state?select=updated_at&key=eq.dirty").catch(() => []))?.[0];
       if (!d || d.updated_at < startedAt) break;
@@ -172,7 +195,7 @@ export async function dispatchChanges({ minGapMs = 10000, trusted = minGapMs ===
   return { ok: true, report: reports.length === 1 ? reports[0] : reports };
 }
 
-async function runDispatch() {
+async function runDispatch(sig = null) {
   const stRow = (await sb("push_state?select=value&key=eq.seen"))?.[0];
   const seen = stRow?.value || {};
   const next = { ...seen };
@@ -182,12 +205,14 @@ async function runDispatch() {
   // (max 5 tries). Partial success counts as handled so nobody gets duplicates.
   const tries = { ...(seen._tries || {}) };
   next._tries = tries;
+  let retry = false; // true while any announcement still needs another attempt
   const notify = async (topic, payload, key) => {
     const r = (report[key] = await sendToTopic(topic, payload));
     const handled = r.total === 0 || r.sent > 0 || r.failed === r.pruned;
     if (handled) { delete tries[key]; return true; }
     tries[key] = (tries[key] || 0) + 1;
     if (tries[key] >= 5) { delete tries[key]; return true; }
+    retry = true;
     return false;
   };
 
@@ -273,6 +298,7 @@ async function runDispatch() {
             }));
             // Advance only if someone got it (or nobody can) — otherwise retry next run.
             if (out.total === 0 || out.sent > 0 || out.failed === out.pruned) cur[r.reference_no] = r.status;
+            else retry = true;
           }
         }
       }
@@ -280,6 +306,11 @@ async function runDispatch() {
     next.admission = cur;
   } catch (e) { report.admission = { error: String(e).slice(0, 120) }; }
 
+  // Remember the signature ONLY after a clean, complete run — a source error or a pending retry
+  // must never be hidden by the early exit. (The signature was read BEFORE this run, so a change
+  // that lands mid-run simply triggers one more idempotent run next time.)
+  const failed = Object.values(report).some((v) => v && v.error);
+  if (sig && !retry && !failed) next._sig = sig.cur; else delete next._sig;
   await sb("push_state?on_conflict=key", { method: "POST", headers: { Prefer: "resolution=merge-duplicates" }, body: { key: "seen", value: next, updated_at: new Date().toISOString() } });
   return report;
 }
@@ -297,4 +328,5 @@ export async function seedAdmissionRef(ref) {
   const adm = st.admission && typeof st.admission === "object" ? st.admission : {};
   if (adm[ref] === undefined) adm[ref] = rows[0].status;
   await sb("push_state?on_conflict=key", { method: "POST", headers: { Prefer: "resolution=merge-duplicates" }, body: { key: "seen", value: { ...st, admission: adm }, updated_at: new Date().toISOString() } });
-}
+                                          }
+                                                             
