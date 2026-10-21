@@ -46,9 +46,17 @@
     { "source": "/notes/islamiat", "destination": "/notes/islamiat/index.html" },
     { "source": "/notes/pakistan-studies", "destination": "/notes/pakistan-studies/index.html" },
     { "source": "/notes/computer", "destination": "/notes/computer/index.html" },
-    { "source": "/((?!api/|assets/|fonts/|ai-catalog\\.json).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|fonts/|\\.well-known/|ai-catalog\\.json).*)", "destination": "/index.html" }
   ],
   "headers": [
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json; charset=utf-8" },
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    },
     {
       "source": "/fonts/(.*)",
       "headers": [
