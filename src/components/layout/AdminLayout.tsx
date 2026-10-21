@@ -1,11 +1,10 @@
 import { useState, useCallback, useRef, useEffect, memo, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, Menu, X, ExternalLink, Moon, Sun, Search, GraduationCap, BarChart2, Bell, ChevronRight } from "lucide-react";
+import { LogOut, Menu, X, ExternalLink, Moon, Sun, Search, GraduationCap, BarChart2, ChevronRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { pingDispatch } from "@/lib/push";
 import { useAuth } from "@/hooks/useAuth";
 import { useDarkMode } from "@/hooks/useDarkMode";
-import NotificationBell from "@/components/shared/NotificationBell";
 import { cn } from "@/lib/utils";
 
 // ── Emoji icon component ──────────────────────────────────────────────────────
@@ -429,7 +428,6 @@ const AdminLayout = ({ activeTab, onTabChange, children }: AdminLayoutProps) => 
             <h1 className="truncate font-heading font-bold text-foreground text-[15px] sm:text-base leading-tight">{activeLabel}</h1>
           </div>
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
-            <NotificationBell />
             {/* SPA link (NOT <a href>) — a plain anchor here did a FULL
                 document reload of the whole admin panel just to peek at the
                 public site, losing the admin's scroll/forms/tabs. */}
