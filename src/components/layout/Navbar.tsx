@@ -895,7 +895,7 @@ const Navbar = () => {
         try {
           const a = (e.target as HTMLElement | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
           if (a) {
-            const path = new URL(a.href, location.href).pathname.replace(/\/+$/, "") || "/";
+            const path = new URL(a.href, window.location.href).pathname.replace(/\/+$/, "") || "/";
             if (path === "/roll-no-slip") prefetchPublicRolls(qc, rollSlipPrefetchId);
           }
         } catch { /* malformed href — chunk prefetch below is best effort too */ }
@@ -906,7 +906,7 @@ const Navbar = () => {
       onTouchStart: withRollSlipData(base.onTouchStart) as typeof base.onTouchStart,
       onFocus: withRollSlipData(base.onFocus) as typeof base.onFocus,
     };
-  }, [qc, rollSlipPrefetchId, location.href]);
+  }, [qc, rollSlipPrefetchId, location.pathname]);
 
   useEffect(() => { setLogoFailed(false); }, [settings?.logo_url]);
 
