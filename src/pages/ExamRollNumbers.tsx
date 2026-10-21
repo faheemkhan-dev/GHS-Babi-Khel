@@ -708,8 +708,9 @@ function SlipFinder({ session, rolls, loading, schedule }: {
     queryKey: ["slip-my-seat", session.id, seatEntry?.student_id, seatEntry?.exam_roll_no],
     queryFn: () => fetchMySeats(session, seatEntry!),
     enabled: !!seatEntry,
-    staleTime: 60 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000, // a published seat rarely changes; was every 60 s
+    refetchIntervalInBackground: false,
     retry: 1,
   });
   const mySeats = seatQuery.data ?? [];
