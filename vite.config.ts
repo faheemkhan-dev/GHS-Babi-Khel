@@ -29,7 +29,7 @@ async function prerenderPlugin() {
         const libUrl = pathToFileURL(path.resolve(process.cwd(), "scripts/prerender-lib.mjs")).href;
         const { runPrerender } = await import(/* @vite-ignore */ libUrl);
         await runPrerender("vite");
-      } catch (e) {
+      } catch (e: any) {
         // Never fail the build — the site still deploys as a normal SPA.
         console.warn(`Prerender hook failed (${e?.message || e}) — build continues.`);
       }
