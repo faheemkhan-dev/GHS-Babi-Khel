@@ -74,23 +74,23 @@ export function useBisepCurrentExam() {
     // Data is considered stale immediately — the server no longer caches
     // this response (Cache-Control: no-store), so every fetch is live.
     staleTime: 0,
-    // Adaptive polling: normally poll every 15s, but once the countdown is
-    // within 60 seconds of finishing, switch to polling every 1 SECOND so
-    // the new title/live-result state is picked up as close to instantly
-    // as an HTTP poll allows the moment BISEP's countdown hits zero.
+    // Adaptive polling (every visitor runs this via the navbar, so the quiet cadence matters):
+    //   • more than 10 min before the countdown ends (or no countdown) → once a minute
+    //   • last 10 minutes → every 15 s
+    //   • last 90 seconds → every second, to catch the exact moment BISEP flips
     refetchInterval: (query) => {
       const data = query.state.data as BisepCurrentExam | undefined;
       if (data?.countdown_date) {
         const msLeft = new Date(data.countdown_date).getTime() - Date.now();
-        if (msLeft <= 60 * 1000) {
-          return 1000; // final minute: poll every second
-        }
+        if (msLeft <= 90 * 1000) return 1000;
+        if (msLeft <= 10 * 60 * 1000) return 15 * 1000;
       }
-      return 15 * 1000; // default cadence
+      return 60 * 1000;
     },
-    // Keep polling even when the tab isn't focused, so a countdown/title
-    // change is picked up the moment the user comes back to the tab.
-    refetchIntervalInBackground: true,
+    // Never poll a hidden tab. React Query refetches on focus anyway, so a countdown/title change
+    // is picked up the moment the visitor comes back to the tab.
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     // Keep showing the previous data while refetching so the UI never
     // flickers to "loading" mid-session.
     placeholderData: (prev) => prev,
