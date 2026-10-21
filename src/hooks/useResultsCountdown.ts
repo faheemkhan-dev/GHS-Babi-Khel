@@ -63,8 +63,12 @@ export function useResultsCountdown() {
       }
       return Array.from(byPublishAt.values()).sort((a, b) => a.publish_at.localeCompare(b.publish_at));
     },
-    staleTime: 15 * 1000,
-    refetchInterval: 30 * 1000,
+    // The countdown is computed locally from publish_at (useNowTick), and the exact-moment publish
+    // flips this cache itself (armAutoPublish → applyPublishedToCaches). So the server is asked
+    // only occasionally (new schedules) — not every 30 s from every open tab.
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
 
