@@ -131,8 +131,11 @@ export function computeStats(results: NormalizedResult[]): ResultStats {
   const averageMarks = marks.length
     ? Math.round(marks.reduce((a, b) => a + b, 0) / marks.length)
     : 0;
-  const passOnlyMarks = passed.map((r) => r.totalMarks).filter((m) => m > 0);
-  const highestMarks = passOnlyMarks.length ? Math.max(...passOnlyMarks) : 0;
+  // Highest marks = best total among ALL found students (passed or failed).
+  // Boards publish no marks, so our own summed total is used; limiting this
+  // to passed students showed 0 whenever the whole class had failed, which
+  // contradicted the Top Scorer shown right next to it.
+  const highestMarks = marks.length ? Math.max(...marks) : 0;
   // Lowest Marks must reflect the WHOLE class (passed + failed), not just
   // passing students — otherwise the cell just shows the lowest *passing*
   // total and silently hides any student who failed the exam. Use every
