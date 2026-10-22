@@ -211,7 +211,9 @@ const listTitle = (ml: PublishedMeritList) =>
 
 const listMeta = (ml: PublishedMeritList) =>
   `${ml.scope === "school" ? "School" : ml.scope === "school-bise" ? "BISE (Class 9th & 10th)" : `Class ${ml.class}`}` +
-  `${ml.exam_type ? ` · ${examTypeLabel(ml.exam_type)}` : ""} · Year ${ml.year}`;
+  // BISE lists carry the board's own exam name (Annual-I / Annual-II) — never
+  // translated to the school's Mid-Term / Final-Term wording.
+  `${ml.exam_type ? ` · ${ml.scope === "school-bise" ? ml.exam_type : examTypeLabel(ml.exam_type)}` : ""} · Year ${ml.year}`;
 
 // ─── Avatar: tiny optimised thumbnail, graceful fallback ────────────────────
 const MeritAvatar = memo(function MeritAvatar({ photoUrl, fullName, size = "w-8 h-8" }: { photoUrl: string | null; fullName: string; size?: string }) {
