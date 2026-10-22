@@ -268,7 +268,8 @@ export async function generateCombinedReportPDF(opts: CombinedPDFOpts): Promise<
 
   // ═══════════════════════════ PAGE 2 ═══════════════════════════
   doc.addPage();
-  y = drawBand(doc, { eyebrow: "BISE Peshawar · Comparison", title: school, subtitle: examLine });
+  // Page 1 already carries the green title band — page 2 starts straight with content.
+  y = MARGIN + 6;
   const ensure = (h: number) => {
     if (y + h > SAFE_BOTTOM) {
       doc.addPage();
