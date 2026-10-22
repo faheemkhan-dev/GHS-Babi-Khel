@@ -270,7 +270,6 @@ export async function generateResultExcel(
     if (r.found && r.isFail) row.getCell(ncols).font = { name: "Calibri", size: 10.5, bold: true, color: { argb: FAIL } };
   });
 
-  ws2.autoFilter = { from: { row: HEADER_ROW, column: 1 }, to: { row: HEADER_ROW, column: ncols } };
   printSetup(ws2, ncols > 7, `${HEADER_ROW}:${HEADER_ROW}`);
   void PASS_BG; void MUTED; void GREEN_SOFT; // palette kept for future use
 
