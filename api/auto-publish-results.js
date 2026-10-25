@@ -102,36 +102,50 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ── Timing ─────────────────────────────────────────────────────────────
+    // ?at=<publish_at> → this invocation sleeps until ~LEAD_MS before that
+    // instant, then fires the PATCH so the row commit lands at 00:00:00
+    // (the Supabase round-trip itself eats the lead). The cutoff is clamped
+    // to the target, so nothing can ever be published more than ~120 ms early
+    // and never anything scheduled later than `at`.
+    const LEAD_MS = 80;
     const atRaw = req.query && req.query.at ? Date.parse(String(req.query.at)) : NaN;
-    if (Number.isFinite(atRaw)) {
-      const wait = Math.min(Math.max(atRaw - Date.now(), 0), 4000);
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait + 15));
+    const timed = Number.isFinite(atRaw) && atRaw > Date.now();
+    const headers = {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json",
+    };
+
+    // Meta for the client (which exam goes live, is it exam-roll-only?) is
+    // prepared WHILE we wait for the exact instant, so it adds zero latency.
+    // The client uses it to paint the final search box on the very first
+    // frame (no tabs → no tabs-disappear flash). Best-effort: null on error.
+    const metaPromise = timed ? loadPublishMeta(supabaseUrl, headers, atRaw).catch(() => null) : Promise.resolve(null);
+
+    let cutoff = Date.now();
+    if (timed) {
+      const wait = Math.min(atRaw - cutoff - LEAD_MS, 4000);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      cutoff = Math.min(atRaw, Date.now() + LEAD_MS + 40);
     }
-    const nowIso = new Date().toISOString();
+    const nowIso = new Date(cutoff).toISOString();
 
     // Flip is_published -> true AND clear publish_at -> null for every row
     // whose scheduled time has passed and that isn't published yet.
+    // Clearing publish_at in the SAME PATCH "consumes" the schedule so an
+    // admin's later manual Unpublish can never be undone by a stale
+    // publish_at (the old auto-republish loop).
     //
-    // Clearing publish_at in the SAME PATCH is the fix for the
-    // auto-republish loop: once a schedule has fired, the row's publish_at
-    // is consumed (set to null), so this cron won't pick it up again on the
-    // next minute tick — even if admin later manually unpublishes the row.
-    // PostgREST PATCH with `select` returns the updated rows so we can
-    // report how many were published.
+    // `select=id` is the speed fix: the old call asked PostgREST to return
+    // the FULL updated rows (every column incl. the big subject_marks JSON of
+    // every student) just to count them. Only ids come back now.
     const url =
-      `${supabaseUrl}/rest/v1/results?is_published=eq.false&publish_at=not.is.null&publish_at=lte.${encodeURIComponent(nowIso)}`;
+      `${supabaseUrl}/rest/v1/results?select=id&is_published=eq.false&publish_at=not.is.null&publish_at=lte.${encodeURIComponent(nowIso)}`;
 
     const response = await fetch(url, {
       method: "PATCH",
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-      },
-      // is_published=true flips the row to visible; publish_at=null
-      // "consumes" the schedule so this row can never be auto-published
-      // again by this cron or by the in-browser ResultCountdownTimer.
+      headers: { ...headers, Prefer: "return=representation" },
       body: JSON.stringify({ is_published: true, publish_at: null }),
     });
 
@@ -142,28 +156,78 @@ export default async function handler(req, res) {
     }
 
     const updated = await response.json();
+    const count = Array.isArray(updated) ? updated.length : 0;
+    const meta = count > 0 ? await metaPromise : null;
 
-    // Web Push: announce the freshly published results to every subscriber
-    // at the exact moment they go live. Best-effort — never blocks or fails
-    // the publish itself.
-    let push = null;
-    if (Array.isArray(updated) && updated.length > 0) {
+    // Web Push: announce the freshly published results to every subscriber.
+    // It runs AFTER the response is sent (waitUntil keeps the function alive
+    // until it finishes) — the page used to sit on "Publishing Now…" for up
+    // to 2.5 s waiting on this. The DB-side push trigger (migration 09) also
+    // covers it, so this is purely a belt-and-braces call.
+    if (count > 0) {
       const job = (async () => {
         const { dispatchChanges } = await import("./_lib/push-core.js");
         return dispatchChanges({ minGapMs: 0 });
-      })().catch((e) => ({ error: String(e).slice(0, 120) }));
-      // Never let push delivery delay the response (the page is waiting on
-      // it to show the result) — give it at most 2.5 s.
-      push = await Promise.race([job, new Promise((r) => setTimeout(() => r({ pending: true }), 2500))]);
+      })().catch(() => null);
+      try {
+        const { waitUntil } = await import("@vercel/functions");
+        waitUntil(job);
+      } catch { /* not on Vercel runtime: job still runs, just not awaited */ }
     }
 
     res.status(200).json({
-      push,
       ok: true,
-      published_count: Array.isArray(updated) ? updated.length : 0,
+      published_count: count,
+      meta,
       checked_at: nowIso,
     });
   } catch (err) {
     res.status(500).json({ error: "Auto-publish failed", detail: String(err) });
   }
+}
+
+// What the page needs to render the search box correctly at first paint:
+//   latest      → the exam heading ("Result - 1st Semester 2026")
+//   examRollOnly→ true when EVERY published row of that exam has an exam roll
+//                 no. (mirrors useExamRollOnly in Results.tsx)
+async function loadPublishMeta(supabaseUrl, headers, atMs) {
+  const base = `${supabaseUrl}/rest/v1/results`;
+  const atIso = encodeURIComponent(new Date(atMs).toISOString());
+  const get = async (q) => {
+    const r = await fetch(`${base}?${q}`, { headers, signal: AbortSignal.timeout(3000) });
+    if (!r.ok) throw new Error(String(r.status));
+    return r.json();
+  };
+  const [due, published] = await Promise.all([
+    get(`select=exam_type,year,created_at&is_published=eq.false&publish_at=not.is.null&publish_at=lte.${atIso}&order=year.desc,created_at.desc&limit=1`),
+    get(`select=exam_type,year,created_at&is_published=eq.true&order=year.desc,created_at.desc&limit=1`),
+  ]);
+  const a = due?.[0] ?? null;
+  const b = published?.[0] ?? null;
+  const newer = (x, y) => (x.year !== y.year ? x.year > y.year : String(x.created_at) >= String(y.created_at));
+  const latest = a && b ? (newer(a, b) ? a : b) : (a || b);
+  if (!latest) return null;
+
+  const exam = `exam_type=eq.${encodeURIComponent(latest.exam_type)}&year=eq.${Number(latest.year)}`;
+  const count = async (q) => {
+    const r = await fetch(`${base}?select=id&${q}`, {
+      method: "HEAD",
+      headers: { ...headers, Prefer: "count=exact" },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    const m = /\/(\d+)$/.exec(r.headers.get("content-range") || "");
+    return m ? Number(m[1]) : 0;
+  };
+  // After the flip, the published set = already published + the due rows.
+  const [missingPub, missingDue, totalDue, totalPub] = await Promise.all([
+    count(`${exam}&is_published=eq.true&exam_roll_no=is.null`),
+    count(`${exam}&is_published=eq.false&publish_at=not.is.null&publish_at=lte.${atIso}&exam_roll_no=is.null`),
+    count(`${exam}&is_published=eq.false&publish_at=not.is.null&publish_at=lte.${atIso}`),
+    count(`${exam}&is_published=eq.true`),
+  ]);
+  return {
+    latest: { exam_type: latest.exam_type, year: Number(latest.year), created_at: latest.created_at },
+    examRollOnly: totalDue + totalPub > 0 && missingPub + missingDue === 0,
+  };
 }
