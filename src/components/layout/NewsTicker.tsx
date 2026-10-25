@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { cachedOrDirect } from "@/lib/publicData";
 import { useRollSlipCountdown } from "@/hooks/useRollSlipCountdown";
 import { useAdmissionSettings } from "@/hooks/useAdmission";
-import { examTypeLabel } from "@/utils/examTypeLabel";
+import { resultTermLabel } from "@/utils/examTerm";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NewsTicker — slim green headline strip under the school name.
@@ -89,7 +89,7 @@ function useLatestResults() {
   const seen = new Set<string>();
   const out: ResultRow[] = [];
   for (const r of (data?.results ?? []) as ResultRow[]) {
-    const k = `${r.exam_type}|${r.year}`;
+    const k = `${resultTermLabel(r.exam_type)}|${r.year}`;
     if (!r.exam_type || seen.has(k)) continue;
     seen.add(k);
     out.push({ exam_type: r.exam_type, year: r.year });
@@ -121,7 +121,7 @@ function useTickerItems() {
 
     // 2. Latest results (newest exam first, max 2)
     (results ?? []).slice(0, 2).forEach((r) =>
-      out.push({ key: `r-${r.exam_type}-${r.year}`, label: `${examTypeLabel(r.exam_type)} ${r.year} Result`, to: "/results" }),
+      out.push({ key: `r-${resultTermLabel(r.exam_type)}-${r.year}`, label: `Result ${resultTermLabel(r.exam_type)} ${r.year}`, to: "/results" }),
     );
 
     // 3. Admission
