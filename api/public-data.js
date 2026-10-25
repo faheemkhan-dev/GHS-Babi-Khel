@@ -29,9 +29,9 @@
 //     hard-codes the SAME public filters the browser used before
 //     (is_published = true, …), so the bytes returned are identical to what
 //     anon users could already read. Unpublished/personal rows are never
-//     selected — except `result-schedule`, whose rows are intentionally
-//     public today (results_public_read policy, Plan verified) and contain
-//     only class/exam/year/publish_at, no student data.
+//     RETURNED — except `result-schedule` (class/exam/year/publish_at only)
+//     and `result-rank`, which reads held-back rows of a partially published
+//     class so ranks stay true, but returns only id/student_id/percentage.
 //   • No secrets, no personal data, nothing user-specific in any response.
 //   • Hard 10 s timeout on every Supabase call (a stuck fetch must never
 //     hold the function open — that burned IO on the old dispatcher).
@@ -294,10 +294,18 @@ const FETCHERS = {
   },
 
   // Rank pools for the results page. `scope=class` needs class+exam+year;
-  // `scope=school` needs year only. Same light columns the page fetched.
+  // `scope=school` needs year only.
+  //
+  // RANK ACCURACY WITH "HIDE TOP 3": when the admin holds back a class's
+  // toppers, those rows stay unpublished. A pool made of published rows only
+  // would promote student #4 to "Position 1". So the pool is every row of each
+  // class+exam+year GROUP THAT HAS AT LEAST ONE PUBLISHED ROW (a partially
+  // published class = held-back toppers; a class not published at all stays
+  // out, exactly as before). Only {id, student_id, percentage, created_at} is
+  // returned — no names, marks or publish flags.
   async "result-rank"(q) {
     const scope = q.get("scope") === "school" ? "school" : "class";
-    let p = `results?select=id,student_id,percentage,created_at&is_published=eq.true&limit=5000`;
+    let p = `results?select=id,student_id,percentage,created_at,is_published,class,exam_type,year&limit=5000`;
     if (scope === "class") {
       const cls = safeText(q, "class");
       const exam = safeText(q, "exam");
@@ -311,8 +319,12 @@ const FETCHERS = {
       // capped to the classes that publish together (see the comment there).
       p += `&year=eq.${year}&class=in.("6","7","8","9","10")`;
     }
-    const rows = await sb(p);
-    return rows ?? [];
+    const rows = (await sb(p)) ?? [];
+    const live = new Set();
+    for (const r of rows) if (r.is_published) live.add(`${r.class}|${r.exam_type}|${r.year}`);
+    return rows
+      .filter((r) => live.has(`${r.class}|${r.exam_type}|${r.year}`))
+      .map((r) => ({ id: r.id, student_id: r.student_id, percentage: r.percentage, created_at: r.created_at }));
   },
 
   // Class average via the existing RPC (same call Results.tsx made).
