@@ -38,3 +38,16 @@ export function sessionTermLabel(term: string): string {
   if (slot === 2) return "2nd Semester / Final-Term";
   return term;
 }
+
+/**
+ * Public result title term. Classes 6-8 sit "1st/2nd Semester" and classes 9-10
+ * sit "Mid-Term/Final-Term" in the same slot; the website shows ONE title for
+ * the whole school: slot 1 → "1st Semester", slot 2 → "2nd Semester".
+ * (Display only — database values are unchanged.)
+ */
+export function resultTermLabel(examType: string): string {
+  const slot = termSlot(examType);
+  if (slot === 1) return "1st Semester";
+  if (slot === 2) return "2nd Semester";
+  return examType;
+}
