@@ -24,6 +24,7 @@ import type { Notice } from "@/hooks/useNotices";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { cachedOrDirect } from "@/lib/publicData";
+import { armAutoPublish } from "@/lib/autoPublish";
 import DailyQuoteCard from "@/components/shared/DailyQuoteCard";
 import { useAdmissionSettings } from "@/hooks/useAdmission";
 import AIAssistantWidget from "@/components/shared/AIAssistantWidget";
@@ -693,68 +694,6 @@ function WordOfDaySection() {
   );
 }
 
-// ── Client-side auto-publish trigger ────────────────────────────────────────
-// Fires the instant a homepage visitor's countdown reaches zero, instead of
-// waiting for the Vercel Cron's next scheduled tick. Safe to call from any
-// browser: it can only flip rows whose `publish_at` has ALREADY passed, so
-// calling it early, repeatedly, or from an unauthenticated client does nothing
-// harmful.
-//
-// TWO-PATH PUBLISH (fixes "Publishing now… then nothing happens"):
-//   1. Serverless endpoint  — POST /api/auto-publish-results. Uses the
-//      Supabase service role key if SUPABASE_SERVICE_ROLE_KEY is set on
-//      Vercel, which bypasses RLS and works for anonymous visitors. If that
-//      env var is NOT set, the endpoint falls back to the anon key, which
-//      RLS blocks from UPDATE-ing `results` — so it returns
-//      published_count=0 and publishes nothing.
-//   2. Direct supabase UPDATE from the browser — runs whenever path #1
-//      published 0 rows. Uses the current visitor's supabase session, so it
-//      works for any authenticated admin (RLS allows admin UPDATE on
-//      results). For anonymous visitors it silently updates 0 rows (no
-//      harm). This is the path that actually publishes the result when an
-//      admin has the homepage open in any tab — even if the serverless
-//      function isn't configured with a service role key.
-let homeAutoPublishInFlight = false;
-async function triggerHomeAutoPublish(): Promise<boolean> {
-  if (homeAutoPublishInFlight) return false;
-  homeAutoPublishInFlight = true;
-  try {
-    // ── Path 1: serverless endpoint ──
-    let publishedCount = 0;
-    try {
-      const r = await fetch("/api/auto-publish-results", { method: "POST" });
-      if (r.ok) {
-        const data = await r.json().catch(() => null);
-        if (data?.ok) publishedCount = data.published_count ?? 0;
-      }
-    } catch { /* network error — fall through to direct update */ }
-
-    // ── Path 2: direct browser UPDATE (fallback when #1 published 0) ──
-    // Only matched rows whose publish_at is in the past AND is_published is
-    // still false get flipped — same narrow filter as the serverless
-    // endpoint, so this is safe to run from any browser.
-    if (publishedCount === 0) {
-      const nowIso = new Date().toISOString();
-      const { data: updated, error } = await supabase
-        .from("results")
-        .update({ is_published: true, publish_at: null })
-        .eq("is_published", false)
-        .not("publish_at", "is", null)
-        .lte("publish_at", nowIso)
-        .select("id");
-      if (!error && Array.isArray(updated)) {
-        publishedCount = updated.length;
-      }
-    }
-
-    return publishedCount > 0;
-  } catch {
-    return false;
-  } finally {
-    homeAutoPublishInFlight = false;
-  }
-}
-
 // ── School's own result countdown / live state ───────────────────────────
 // Mirrors the exact logic already used on /results (useHasPublishedSchoolResults
 // + the scheduled-result-publishes query in Results.tsx) so the homepage,
@@ -826,101 +765,20 @@ function useSchoolScheduledPublish() {
   });
 }
 
-// Watches every active schedule and fires the publish trigger the instant
-// one reaches zero. Mounted once on the homepage so publishing happens
-// immediately for whichever visitor's browser hits zero first, without
-// needing anyone to have the admin panel open or waiting for a cron tick.
-//
-// WHY THIS IS NOW BACKOFF-DRIVEN AND PAUSES WHEN HIDDEN
-// ────────────────────────────────────────────────────
-// The original version set a repeating interval that ran every 500ms–2s for
-// the ENTIRE time the homepage was open, whether the next publish was in two
-// seconds or in two weeks. On the low-end Android phones this site is built
-// for that is not a harmless detail: a timer that fires every half second
-// wakes the CPU, competes with rendering and scrolling, and keeps the radio
-// busy — which is a large part of why the homepage felt "stuck and hanging".
-//
-// It is now a self-rescheduling timeout driven by how far away the next
-// publish actually is:
-//   • more than an hour out → check once, then sleep until close to it,
-//   • approaching           → a few seconds apart,
-//   • seconds away          → sub-second, so publishing is still instant,
-//   • tab in the background → no checks at all (resumed on visibilitychange).
-// Same behaviour at the moment that matters, a fraction of the cost the rest
-// of the time.
+// Arms exact-moment publishing for every active schedule while the homepage
+// is open (src/lib/autoPublish.ts): server-clock sync, function pre-warm, the
+// server flips the rows at 00:00:00 and the caches are updated in the same
+// tick. It is the SAME publisher the Navbar strip and /results use — each
+// publish_at is handled exactly once app-wide — so the old per-page polling
+// watcher (raw phone clock + DB polling + blind invalidations, which raced the
+// publisher and made the UI flicker) is gone.
 function useHomeAutoPublishWatcher(schedules: ScheduledGroup[]) {
   const qc = useQueryClient();
+  const key = schedules.map((s) => s.publish_at).join("|");
   useEffect(() => {
-    if (!schedules || schedules.length === 0) return;
-    if (typeof document === "undefined") return;
-
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let cancelled = false;
-
-    const nextPublishIn = (): number => {
-      let soonest = Infinity;
-      for (const s of schedules) {
-        const diff = new Date(s.publish_at).getTime() - Date.now();
-        // Ignore schedules that are already published/past — the server
-        // decides that, we only need to know when to look again.
-        if (diff < 0) continue;
-        if (diff < soonest) soonest = diff;
-      }
-      return soonest;
-    };
-
-    const check = async () => {
-      if (cancelled) return;
-      const dueNow = schedules.some((s) => new Date(s.publish_at).getTime() <= Date.now());
-      if (dueNow) {
-        const publishedSomething = await triggerHomeAutoPublish();
-        if (publishedSomething) {
-          qc.invalidateQueries({ queryKey: ["scheduled-result-publishes-raw"] });
-          qc.invalidateQueries({ queryKey: ["scheduled-result-publishes"] });
-          qc.invalidateQueries({ queryKey: ["has-published-school-results"] });
-          qc.invalidateQueries({ queryKey: ["latest-published-exam"] });
-          qc.invalidateQueries({ queryKey: ["admin-results"] });
-          return; // data changed; the refetch above will restart this effect
-        }
-      }
-      schedule();
-    };
-
-    const delayFor = (ms: number) => {
-      if (cancelled) return;
-      timer = setTimeout(check, ms);
-    };
-
-    const schedule = () => {
-      if (cancelled) return;
-      if (document.hidden) return; // resumed by visibilitychange
-      const diff = nextPublishIn();
-      if (!Number.isFinite(diff)) return; // nothing left to wait for
-      if (diff > 60 * 60 * 1000) delayFor(diff - 60 * 60 * 1000 + 5000); // sleep until it matters
-      else if (diff > 60 * 1000) delayFor(30_000);
-      else if (diff > 10_000) delayFor(5_000);
-      else if (diff > 0) delayFor(1000);
-      else delayFor(500);
-    };
-
-    const onVisibility = () => {
-      if (!document.hidden) {
-        // Coming back from the background: verify immediately, the schedule
-        // may have passed while we were not looking.
-        if (timer) clearTimeout(timer);
-        check();
-      }
-    };
-
-    check(); // verify right away, then fall into the backoff schedule
-    document.addEventListener("visibilitychange", onVisibility);
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [schedules, qc]);
+    if (!key) return;
+    return armAutoPublish(key.split("|"), qc);
+  }, [key, qc]);
 }
 
 function SchoolCountdownText({ targetDate }: { targetDate: string }) {
