@@ -68,7 +68,7 @@ const SB_TIMEOUT_MS = 10000;
 const CACHE = {
   notices:          { s: 30,  swr: 120 },
   notice:           { s: 30,  swr: 120 },
-  ticker:           { s: 30,  swr: 120 },
+  ticker:           { s: 10,  swr: 20 },   // lists published results → near-live
   settings:         { s: 300, swr: 600 },
   "merit-lists":    { s: 30,  swr: 120 },
   "merit-entries":  { s: 120, swr: 300 },
@@ -78,9 +78,9 @@ const CACHE = {
   "all-exam-schedule": { s: 120, swr: 300 },
   library:          { s: 120, swr: 300 },
   "result-years":   { s: 300, swr: 600 },
-  "has-results":    { s: 30,  swr: 120 },
-  "latest-exam":    { s: 60,  swr: 300 },
-  "result-schedule":{ s: 30,  swr: 120 },
+  "has-results":    { s: 5,   swr: 5 },    // Unpublish must show within seconds
+  "latest-exam":    { s: 10,  swr: 10 },
+  "result-schedule":{ s: 5,   swr: 10 },
   "result-rank":    { s: 30,  swr: 120 },
   "class-average":  { s: 30,  swr: 120 },
 };
