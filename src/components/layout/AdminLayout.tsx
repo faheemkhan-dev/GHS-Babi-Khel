@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, memo, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, Menu, X, ExternalLink, Moon, Sun, Search, GraduationCap, BarChart2, ChevronRight } from "lucide-react";
+import { LogOut, Menu, X, ExternalLink, Moon, Sun, GraduationCap, BarChart2, ChevronRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { pingDispatch } from "@/lib/push";
 import { useAuth } from "@/hooks/useAuth";
@@ -85,75 +85,6 @@ const allNavItems: NavItem[] = navSections.flatMap(s => s.items);
 // First few items for the mobile bottom bar quick-access row
 const bottomBarItems: NavItem[] = allNavItems.slice(0, 4);
 
-// Deep search index
-const searchIndex: { label: string; sublabel?: string; tabId: string }[] = [
-  ...allNavItems.map(item => ({ label: item.label, tabId: item.id })),
-  { label: "Analytics",         sublabel: "Site Analytics",          tabId: "site-analytics" },
-  { label: "Page Views",        sublabel: "Site Analytics",          tabId: "site-analytics" },
-  { label: "Visitors",         sublabel: "Site Analytics",          tabId: "site-analytics" },
-  { label: "Merit List",       sublabel: "Notices",        tabId: "announcements" },
-  { label: "Videos",           sublabel: "Library",              tabId: "library" },
-  { label: "Gallery",          sublabel: "Gallery",               tabId: "videos" },
-  { label: "Add Admin",        sublabel: "Admin Access",          tabId: "users" },
-  { label: "Delete Admin",     sublabel: "Admin Access",          tabId: "users" },
-  { label: "Manage Users",     sublabel: "Admin Access",          tabId: "users" },
-  { label: "YouTube",          sublabel: "Library",              tabId: "library" },
-  { label: "Exam Schedule",    sublabel: "Exams · Date Sheet",    tabId: "exam-date-sheet" },
-  { label: "Exam Date Sheet",  sublabel: "Exams · Date Sheet",    tabId: "exam-date-sheet" },
-  { label: "Exam Roll Numbers",sublabel: "Exams · Roll Numbers",  tabId: "exam-rolls" },
-  { label: "Admit Card",       sublabel: "Exams · Roll Numbers",  tabId: "exam-rolls" },
-  { label: "Upload Results",   sublabel: "Manage Results",       tabId: "results" },
-  { label: "Marksheet",        sublabel: "Manage Results",       tabId: "results" },
-  { label: "Class Timetable",  sublabel: "Timetables",           tabId: "timetables" },
-  { label: "Exam Timetable",   sublabel: "Timetables",           tabId: "timetables" },
-  { label: "School Files",     sublabel: "Library",              tabId: "library" },
-  { label: "Fee Structures",   sublabel: "Fee Management",       tabId: "fees" },
-  { label: "Fee Vouchers",     sublabel: "Fee Management",       tabId: "fees" },
-  { label: "Payments",         sublabel: "Fee Management",       tabId: "fees" },
-  { label: "Fee Reports",      sublabel: "Fee Management",       tabId: "fees" },
-  { label: "Defaulters List",  sublabel: "Fee Management",       tabId: "fees" },
-  // ── Exam Seating synonyms ──
-  { label: "Seating",          sublabel: "Exam Seating",         tabId: "exam-seating" },
-  { label: "Seating Plan",     sublabel: "Exam Seating",         tabId: "exam-seating" },
-  { label: "Exam Hall",        sublabel: "Exam Seating",         tabId: "exam-seating" },
-  { label: "Room",             sublabel: "Exam Seating",         tabId: "exam-seating" },
-  { label: "Desk",             sublabel: "Exam Seating",         tabId: "exam-seating" },
-  { label: "Desk Layout",      sublabel: "Exam Seating",         tabId: "exam-seating" },
-  { label: "Desk Map",         sublabel: "Exam Seating",         tabId: "exam-seating" },
-  { label: "Invigilator",      sublabel: "Exam Seating",         tabId: "exam-seating" },
-  { label: "QR Stickers",      sublabel: "Exam Seating",         tabId: "exam-seating" },
-  { label: "Anti-Cheat",       sublabel: "Exam Seating",         tabId: "exam-seating" },
-  // ── Merit List synonyms ──
-  { label: "Merit List",       sublabel: "Merit List",           tabId: "merit-list" },
-  { label: "Toppers",          sublabel: "Merit List",           tabId: "merit-list" },
-  { label: "School Merit",     sublabel: "Merit List",           tabId: "merit-list" },
-  { label: "Position Holders", sublabel: "Merit List",           tabId: "merit-list" },
-  // ── Live Exam Console synonyms (now nested inside Exam Seating → Live Console tab) ──
-  { label: "Console",          sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Live Console",     sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Exam Day",         sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Control Room",     sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Hall Operations",  sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Tally",            sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Absentee",         sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Absentee List",    sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Re-Exam",          sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Invigilation",     sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Paper Countdown",  sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-  { label: "Live Attendance",  sublabel: "Exam Seating · Live Console",    tabId: "exam-seating" },
-];
-
-// Case-insensitive match against a label or any of its known synonyms
-// in searchIndex, so e.g. typing "fee" finds "Fee Management".
-const matchesQuery = (item: NavItem, query: string) => {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  if (item.label.toLowerCase().includes(q)) return true;
-  return searchIndex.some(
-    (e) => e.tabId === item.id && e.label.toLowerCase().includes(q)
-  );
-};
-
 // ── PERFORMANCE: NavBtn + SectionedNav are defined OUTSIDE the parent ────────
 // Previously these were defined INSIDE <AdminLayout>, which meant every
 // render of the parent (e.g. typing in the search box, opening the mobile
@@ -220,105 +151,80 @@ type SectionedNavProps = {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onItemClick?: () => void;
-  query?: string;
 };
-// ── PERFORMANCE: SectionedNav memoizes the filtered sections array so the
-// .map().filter() work only re-runs when `query` actually changes — not on
-// every parent render. Without this, typing in the search box would rebuild
-// the entire navSections-derived array on every keystroke even when the
-// filtered result was identical to the previous render.
-const SectionedNav = memo(({ activeTab, onTabChange, onItemClick, query = "" }: SectionedNavProps) => {
-  const filteredSections = useMemo(() =>
-    navSections
-      .map(section => ({
-        ...section,
-        items: section.items.filter(item => matchesQuery(item, query)),
-      }))
-      .filter(section => section.items.length > 0),
-    [query]
-  );
-
-  if (query.trim() && filteredSections.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground text-center py-6">
-        No matches for "{query.trim()}"
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {filteredSections.map(section => (
-        <div key={section.heading}>
-          <p className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/80 tracking-[0.16em] uppercase px-3 mb-1.5">
-            <span aria-hidden className="h-px w-3 rounded-full bg-gradient-to-r from-[hsl(43_89%_58%/0.7)] to-transparent" />
-            {section.heading}
-          </p>
-          <div className="space-y-1">
-            {section.items.map(item => <NavBtn key={item.id} item={item} activeTab={activeTab} onTabChange={onTabChange} onItemClick={onItemClick} />)}
-          </div>
+const SectionedNav = memo(({ activeTab, onTabChange, onItemClick }: SectionedNavProps) => (
+  <div className="space-y-5">
+    {navSections.map(section => (
+      <div key={section.heading}>
+        <p className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/80 tracking-[0.16em] uppercase px-3 mb-1.5">
+          <span aria-hidden className="h-px w-3 rounded-full bg-gradient-to-r from-[hsl(43_89%_58%/0.7)] to-transparent" />
+          {section.heading}
+        </p>
+        <div className="space-y-1">
+          {section.items.map(item => <NavBtn key={item.id} item={item} activeTab={activeTab} onTabChange={onTabChange} onItemClick={onItemClick} />)}
         </div>
-      ))}
-    </div>
-  );
-});
+      </div>
+    ))}
+  </div>
+));
 SectionedNav.displayName = "SectionedNav";
 
-/* ── Sidebar shell (shared by desktop rail + mobile drawer) ─────────────────── */
+/* ── Footer actions: Main Website + Sign Out on ONE line (desktop + mobile) ─── */
+const SidebarFooter = ({ onItemClick, onSignOut }: { onItemClick?: () => void; onSignOut: () => void }) => (
+  <div className="p-3 border-t border-border/60 bg-card">
+    <div className="grid grid-cols-2 gap-2">
+      <Link
+        to="/"
+        onClick={onItemClick}
+        className="flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-primary/20 bg-primary/5 px-2 py-2.5 text-[13px] font-semibold text-primary transition-colors hover:bg-primary/10"
+      >
+        <ExternalLink className="h-4 w-4 shrink-0" />
+        <span className="truncate">Main Website</span>
+      </Link>
+      <button
+        onClick={onSignOut}
+        className="flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-destructive/20 bg-destructive/5 px-2 py-2.5 text-[13px] font-semibold text-destructive transition-colors hover:bg-destructive/10"
+      >
+        <LogOut className="h-4 w-4 shrink-0" />
+        <span className="truncate">Sign Out</span>
+      </button>
+    </div>
+  </div>
+);
+
+/* ── Sidebar shell (desktop rail) ───────────────────────────────────────────── */
 const SidebarInner = ({
-  activeTab, onTabChange, onItemClick, query, setQuery, onSignOut,
+  activeTab, onTabChange, onItemClick, onSignOut,
 }: {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onItemClick?: () => void;
-  query: string;
-  setQuery: (q: string) => void;
   onSignOut: () => void;
 }) => (
   <>
     {/* Brand */}
-    <div className="relative overflow-hidden border-b border-border/60 p-4">
-      <div aria-hidden className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-primary/10 blur-2xl" />
-      <Link to="/" className="relative flex items-center gap-2.5">
+    <div className="relative overflow-hidden border-b border-border/60 px-5 py-5">
+      <div aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-primary/10 blur-2xl" />
+      <div aria-hidden className="pointer-events-none absolute -left-10 -bottom-10 h-24 w-24 rounded-full bg-[hsl(43_89%_58%/0.10)] blur-2xl" />
+      <Link to="/" className="relative flex items-center gap-3">
         <div className="relative">
-          <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 ring-2 ring-primary/15 shadow-sm">
-            <img src="/icon-512.png" alt="GHS Babi Khel logo" className="w-full h-full object-cover" />
+          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-2xl ring-2 ring-primary/15 shadow-md">
+            <img src="/icon-512.png" alt="GHS Babi Khel logo" className="h-full w-full object-cover" />
           </div>
-          <span aria-hidden className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-emerald-500" />
+          <span aria-hidden className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card bg-emerald-500" />
         </div>
         <div className="min-w-0">
-          <span className="font-heading font-bold text-foreground text-sm leading-tight block truncate">GHS Babi Khel</span>
-          <p className="text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">Admin Panel</p>
+          <span className="block truncate font-heading text-[15px] font-bold leading-tight text-foreground">GHS Babi Khel</span>
+          <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(43_89%_40%)]">Admin Panel</p>
         </div>
       </Link>
     </div>
 
-    {/* Search — filters the menu below in place, never opens a popup */}
-    <div className="px-3 py-2.5 border-b border-border/60">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search anything..."
-          className="w-full h-9 pl-9 pr-3 text-xs rounded-full bg-secondary/70 border border-border/70 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 transition-colors"
-        />
-      </div>
-    </div>
-
-    <nav className="flex-1 p-3 overflow-y-auto admin-nav-scroll">
-      <SectionedNav activeTab={activeTab} onTabChange={onTabChange} onItemClick={onItemClick} query={query} />
+    <nav className="flex-1 overflow-y-auto px-3 py-4 admin-nav-scroll">
+      <SectionedNav activeTab={activeTab} onTabChange={onTabChange} onItemClick={onItemClick} />
     </nav>
 
-    <div className="p-3 border-t border-border/60 space-y-1">
-      <Link to="/" onClick={onItemClick} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-primary hover:bg-primary/10 transition-colors">
-        <ExternalLink className="w-4 h-4" /> View Website
-      </Link>
-      <button onClick={onSignOut} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors">
-        <LogOut className="w-4 h-4" /> Sign Out
-      </button>
-    </div>
+    <SidebarFooter onItemClick={onItemClick} onSignOut={onSignOut} />
   </>
 );
 
@@ -347,8 +253,6 @@ const AdminLayout = ({ activeTab, onTabChange, children }: AdminLayoutProps) => 
     return () => { unsub(); window.clearTimeout(timer); };
   }, [queryClientForPush]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [desktopQuery, setDesktopQuery] = useState("");
-  const [mobileQuery, setMobileQuery] = useState("");
   const mobileNavRef = useRef<HTMLElement>(null);
   const [bottomHidden, setBottomHidden] = useState(false);
   const bottomLastScrollYRef = useRef(0);
@@ -413,7 +317,7 @@ const AdminLayout = ({ activeTab, onTabChange, children }: AdminLayoutProps) => 
       <aside className="hidden lg:flex flex-col w-[264px] bg-card border-r border-border/70 shrink-0 sticky top-0 h-screen">
         <SidebarInner
           activeTab={activeTab} onTabChange={onTabChange}
-          query={desktopQuery} setQuery={setDesktopQuery} onSignOut={handleSignOut}
+          onSignOut={handleSignOut}
         />
       </aside>
 
@@ -428,20 +332,25 @@ const AdminLayout = ({ activeTab, onTabChange, children }: AdminLayoutProps) => 
             <h1 className="truncate font-heading font-bold text-foreground text-[15px] sm:text-base leading-tight">{activeLabel}</h1>
           </div>
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
-            {/* SPA link (NOT <a href>) — a plain anchor here did a FULL
-                document reload of the whole admin panel just to peek at the
-                public site, losing the admin's scroll/forms/tabs. */}
-            <Link to="/" className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-full hover:bg-secondary transition-colors">
-              <ExternalLink className="w-3.5 h-3.5" /> View Website
-            </Link>
-            <button onClick={toggle} className="p-2 rounded-full hover:bg-secondary text-muted-foreground transition-colors" title={isDark ? "Switch to light mode" : "Switch to dark mode"}>
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            <button onClick={toggle} className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary" title={isDark ? "Switch to light mode" : "Switch to dark mode"}>
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            <div className="hidden sm:block h-6 w-px bg-border/70" aria-hidden />
-            <button onClick={handleSignOut} className="flex items-center gap-1.5 text-xs font-medium text-destructive px-3 py-1.5 rounded-full hover:bg-destructive/10 transition-colors">
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Sign Out</span>
+            {/* Sign out lives in the sidebar on desktop; header copy only below lg */}
+            <button onClick={handleSignOut} aria-label="Sign Out" className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 lg:hidden">
+              <LogOut className="h-3.5 w-3.5" />
             </button>
+            {/* Desktop profile chip */}
+            <div className="hidden lg:flex items-center gap-2.5 pl-3 ml-1 border-l border-border/70">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="h-8 w-8 rounded-full object-cover ring-2 ring-primary/15" />
+              ) : (
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary ring-2 ring-primary/15">{initials}</div>
+              )}
+              <div className="min-w-0 leading-tight">
+                <p className="max-w-[160px] truncate text-[13px] font-semibold text-foreground">{profile?.full_name || "Admin"}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Administrator</p>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -502,29 +411,10 @@ const AdminLayout = ({ activeTab, onTabChange, children }: AdminLayoutProps) => 
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="px-3 py-2 border-b border-border/60">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="text"
-                  value={mobileQuery}
-                  onChange={(e) => setMobileQuery(e.target.value)}
-                  placeholder="Search anything..."
-                  className="w-full h-9 pl-9 pr-3 text-xs rounded-full bg-secondary/70 border border-border/70 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 transition-colors"
-                />
-              </div>
-            </div>
-            <nav ref={mobileNavRef} className="flex-1 overflow-y-auto admin-nav-scroll">
-              <SectionedNav activeTab={activeTab} onTabChange={onTabChange} onItemClick={() => setSidebarOpen(false)} query={mobileQuery} />
+            <nav ref={mobileNavRef} className="flex-1 overflow-y-auto px-3 py-4 admin-nav-scroll">
+              <SectionedNav activeTab={activeTab} onTabChange={onTabChange} onItemClick={() => setSidebarOpen(false)} />
             </nav>
-            <div className="p-3 border-t border-border/60 space-y-1">
-              <Link to="/" onClick={() => setSidebarOpen(false)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-primary hover:bg-primary/10 transition-colors">
-                <ExternalLink className="w-4 h-4" /> Main Website
-              </Link>
-              <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors">
-                <LogOut className="w-4 h-4" /> Sign Out
-              </button>
-            </div>
+            <SidebarFooter onItemClick={() => setSidebarOpen(false)} onSignOut={handleSignOut} />
           </div>
         </div>
       )}
