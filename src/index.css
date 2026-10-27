@@ -180,11 +180,11 @@
     --card-foreground: 138 39% 94%;
     --popover: 143 39% 12%;
     --popover-foreground: 138 39% 94%;
-    --primary: 142 69% 58%;
+    --primary: 146 40% 56%;
     --primary-foreground: 147 48% 8%;
-    --primary-dark: 142 71% 45%;
-    --primary-light: 142 77% 73%;
-    --primary-glow: 142 77% 73%;
+    --primary-dark: 148 60% 24%;
+    --primary-light: 146 36% 66%;
+    --primary-glow: 146 36% 66%;
     --secondary: 147 34% 15%;
     --secondary-foreground: 138 39% 94%;
     --muted: 147 34% 15%;
@@ -195,9 +195,9 @@
     --gold-soft: 43 49% 15%;
     --gold-strong: 43 84% 74%;
     --gold-ink: 147 48% 8%;
-    --primary-strong: 142 71% 45%;
-    --azure: 142 69% 58%;
-    --azure-strong: 142 71% 45%;
+    --primary-strong: 148 55% 30%;
+    --azure: 146 40% 56%;
+    --azure-strong: 148 55% 30%;
     --azure-soft: 147 34% 15%;
     --destructive: 0 91% 71%;
     --destructive-foreground: 147 48% 8%;
@@ -206,7 +206,7 @@
     --ring: 43 74% 66%;
     --sidebar-background: 143 39% 12%;
     --sidebar-foreground: 138 39% 94%;
-    --sidebar-primary: 142 69% 58%;
+    --sidebar-primary: 146 40% 56%;
     --sidebar-primary-foreground: 147 48% 8%;
     --sidebar-accent: 147 34% 15%;
     --sidebar-accent-foreground: 138 39% 94%;
@@ -1096,3 +1096,19 @@ main .admin-thin-shadow-none { box-shadow: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .rs-fade-up, .rs-sheet-in, .rs-backdrop-in { animation: none; }
 }
+
+
+/* ─── DARK THEME: calm, deep greens (matches the news ticker) ─────────────
+   Tailwind's stock emerald/green shades are neon on the near-black dark
+   background. In dark mode only, map the bright solid shades to the same
+   deep greens the ticker uses; text shades become a soft sage that stays
+   clearly readable. Light theme is untouched. Opacity variants such as
+   bg-emerald-500/10 are separate classes and keep working as before. */
+.dark .bg-emerald-400, .dark .bg-emerald-500, .dark .bg-green-400, .dark .bg-green-500,
+.dark .dark\:bg-emerald-400, .dark .dark\:bg-emerald-500 { background-color: hsl(148 55% 30%); }
+.dark .bg-emerald-600, .dark .bg-green-600 { background-color: hsl(148 60% 26%); }
+.dark .text-emerald-300, .dark .text-emerald-400, .dark .text-emerald-500,
+.dark .text-green-300, .dark .text-green-400, .dark .text-green-500,
+.dark .dark\:text-emerald-300, .dark .dark\:text-emerald-400,
+.dark .dark\:text-green-300, .dark .dark\:text-green-400 { color: hsl(146 36% 64%); }
+.dark .border-emerald-400, .dark .border-emerald-500, .dark .border-green-500 { border-color: hsl(148 45% 34%); }
