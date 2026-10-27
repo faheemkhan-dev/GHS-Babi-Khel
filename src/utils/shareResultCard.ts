@@ -1801,6 +1801,17 @@ export async function captureNodeAsPngFile(node: HTMLElement, fileName: string):
     const root = document.documentElement;
     const hadDark = root.classList.contains("dark");
     if (hadDark) root.classList.remove("dark");
+    // Temporary branded footer — appears ONLY in the saved/shared image so the
+    // picture carries the school + website, then is removed straight away.
+    const brand = document.createElement("div");
+    brand.setAttribute("data-capture-brand", "true");
+    brand.style.cssText =
+      "padding:10px 16px 12px;text-align:center;background:#f7faf8;border-top:2px solid #E3B341;" +
+      "font-family:'Playfair Display',Georgia,serif;";
+    brand.innerHTML =
+      '<div style="font-size:11px;font-weight:600;letter-spacing:.14em;color:#14532d;text-transform:uppercase">GHS Babi Khel · Official Result</div>' +
+      '<div style="margin-top:2px;font-size:10px;letter-spacing:.08em;color:#8a6508">ghsbabikhel.dpdns.org</div>';
+    node.appendChild(brand);
     try {
       const w0 = node.offsetWidth || node.getBoundingClientRect().width || 0;
       const h0 = node.offsetHeight || 0;
@@ -1822,6 +1833,7 @@ export async function captureNodeAsPngFile(node: HTMLElement, fileName: string):
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       return new File([bytes], fileName, { type: "image/png" });
     } finally {
+      brand.remove();
       if (hadDark) root.classList.add("dark");
     }
   } catch {
