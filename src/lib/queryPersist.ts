@@ -82,6 +82,7 @@ const PERSISTED_KEY_PREFIXES = [
   // Result Card → exam-roll-only flag for that exam, so the search box paints
   // in its final shape (no tabs flash) on a returning visit.
   "exam-roll-only",
+  "result-search-meta",
   // Merit List (public /merit-list page) — the list of published merit
   // lists + each one's ranked student entries. These snapshot the exact
   // published data at publish time (see AdminMeritList.tsx), so caching
