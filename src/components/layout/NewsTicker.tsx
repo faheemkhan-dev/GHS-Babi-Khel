@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { idleAware } from "@/lib/idlePolling";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useNotices } from "@/hooks/useNotices";
@@ -47,7 +48,7 @@ const meritTitle = (m: MeritRow) =>
    visible in the browser console as "[ticker] <source> failed: …". */
 const LIVE = {
   staleTime: 30 * 1000,
-  refetchInterval: 60 * 1000,
+  refetchInterval: idleAware(3 * 60 * 1000, 10 * 60_000), // CDN-cached feed; pauses on idle tabs
   refetchOnWindowFocus: false,
   retry: 1,
 } as const;
