@@ -25,6 +25,7 @@
 // stale snapshot stored on attendance rows.
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { idleAware } from "@/lib/idlePolling";
 import { supabase } from "@/lib/supabase";
 import toast from "react-hot-toast";
 
@@ -735,7 +736,7 @@ export function usePaperTimesFromSeatingPlan(
     // guarantees the Exam Attendance tab picks up the new end-time and
     // unlocks within 10 seconds — instead of staying "locked" until the
     // admin manually refreshes the page.
-    refetchInterval: 10 * 1000,
+    refetchInterval: idleAware(10 * 1000, 15 * 60_000), // scans count as activity; pauses only when truly unattended
     // ── KEEP PREVIOUS DATA DURING REFETCH (fixes "scanner closes itself") ──
     // Every successful scan calls qc.invalidateQueries on related keys, and
     // this query also polls every 10s. WITHOUT this option, a refetch can
