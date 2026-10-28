@@ -185,11 +185,13 @@ const TextStat = ({ value, label, wide }: { value: string; label: string; wide?:
 );
 
 /* ─── Reusable section header ─── */
-const SectionHeader = ({ eyebrow, title, subtitle, center = true }: { eyebrow: string; title: string; subtitle?: string; center?: boolean }) => (
+const SectionHeader = ({ eyebrow, title, subtitle, center = true }: { eyebrow?: string; title: string; subtitle?: string; center?: boolean }) => (
   <div className={`mb-10 md:mb-14 ${center ? "text-center" : ""}`}>
-    <span className="inline-flex items-center gap-2 rounded-full border border-gold/40 bg-gold/10 px-3.5 py-1 eyebrow">
-      <span className="w-1.5 h-1.5 rotate-45 bg-gold" />{eyebrow}
-    </span>
+    {eyebrow && (
+      <span className="inline-flex items-center gap-2 rounded-full border border-gold/40 bg-gold/10 px-3.5 py-1 eyebrow">
+        <span className="w-1.5 h-1.5 rotate-45 bg-gold" />{eyebrow}
+      </span>
+    )}
     <h2 className="section-title">{title}</h2>
     <div className={`mt-4 flex items-center gap-2 ${center ? "justify-center" : ""}`}>
       <span className="h-px w-12 bg-gradient-to-r from-transparent to-gold/70" />
@@ -481,9 +483,7 @@ function WordOfDaySection() {
         <div className="container mx-auto px-4">
           <ScrollReveal>
             <SectionHeader
-              eyebrow="English Learning"
               title="Word of the Day"
-              subtitle="Build your English vocabulary — one word at a time."
             />
           </ScrollReveal>
           <ScrollReveal delay={0.1}>
@@ -513,9 +513,7 @@ function WordOfDaySection() {
         <div className="container mx-auto px-4">
           <ScrollReveal>
             <SectionHeader
-              eyebrow="English Learning"
               title="Word of the Day"
-              subtitle="Build your English vocabulary — one word at a time."
             />
           </ScrollReveal>
           <ScrollReveal delay={0.1}>
@@ -570,121 +568,118 @@ function WordOfDaySection() {
       <div className="container mx-auto px-4">
         <ScrollReveal>
           <SectionHeader
-            eyebrow="English Learning"
             title="Word of the Day"
-            subtitle="Build your English vocabulary — one word at a time. Tap the speaker to hear pronunciation."
           />
         </ScrollReveal>
 
         <ScrollReveal delay={0.1}>
           <div className="max-w-2xl mx-auto">
-            <div className="bg-card border border-gold/40 rounded-3xl overflow-hidden shadow-card">
+            {/* Gold hairline frame */}
+            <div className="rounded-[28px] bg-gradient-to-br from-[#E3B341] via-[#E3B341]/30 to-[#E3B341]/80 p-px shadow-card">
+              <div className="overflow-hidden rounded-[27px] bg-card">
 
-              {/* Top banner */}
-              <div className="bg-gradient-to-r from-primary via-primary to-primary/80 px-5 py-5">
-                {/* Date badge row — top right */}
-                <div className="flex justify-end mb-3">
-                  <span className="text-[11px] bg-white/20 text-white px-3 py-1.5 rounded-full font-bold border border-white/25 flex items-center gap-1.5">
-                    📅 {todayLabel}
+                {/* ── Hero ── */}
+                <div
+                  className="relative overflow-hidden px-5 pb-6 pt-5 sm:px-7 sm:pb-7 sm:pt-6 text-white"
+                  style={{ background: "radial-gradient(120% 90% at 100% 0%, rgba(227,179,65,0.28) 0%, rgba(227,179,65,0) 55%), linear-gradient(135deg, #064e3b 0%, #065f46 55%, #047857 100%)" }}
+                >
+                  {/* oversized watermark letter */}
+                  <span aria-hidden className="pointer-events-none absolute -right-2 -bottom-10 select-none font-heading italic text-[9rem] sm:text-[11rem] leading-none text-white/[0.06]">
+                    {todayEntry.word.charAt(0).toUpperCase()}
                   </span>
-                </div>
 
-                <div className="flex items-center gap-4">
-                  {/* Speaker button — Web Speech API, always works */}
-                  <button
-                    onClick={speakWord}
-                    title="Tap to hear pronunciation"
-                    className={`w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center transition-all duration-200 shadow-lg
-                      bg-white/20 hover:bg-white/35 active:scale-95 cursor-pointer
-                      ${speaking ? "ring-4 ring-white/60 bg-white/30" : ""}`}
-                  >
-                    <Volume2 className={`w-7 h-7 text-white ${speaking ? "animate-pulse" : ""}`} />
-                  </button>
-
-                  {/* Word + phonetic — font scales down for long words */}
-                  <div className="flex-1 min-w-0">
-                    <h3
-                      className={`font-black text-white capitalize leading-tight ${
-                        todayEntry.word.length > 10
-                          ? "text-2xl"
-                          : todayEntry.word.length > 7
-                          ? "text-3xl"
-                          : "text-4xl"
-                      }`}
-                    >
-                      {todayEntry.word}
-                    </h3>
-                    {phonetic && (
-                      <p className="text-white/75 text-sm font-mono mt-1">{phonetic}</p>
-                    )}
-                    <p className="text-white/55 text-[11px] mt-1 flex items-center gap-1">
-                      <Volume2 className="w-3 h-3" /> Tap speaker to hear pronunciation
-                    </p>
+                  <div className="relative flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E3B341]/50 bg-black/15 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-[#FDE68A]">
+                      <span className="h-1.5 w-1.5 rotate-45 bg-[#E3B341]" /> Today
+                    </span>
+                    <span className="text-[11px] font-semibold tracking-wide text-white/80">{todayLabel}</span>
                   </div>
-                </div>
-              </div>
 
-              {/* Part-of-speech tabs */}
-              {(todayEntry.meanings?.length ?? 0) > 1 && (
-                <div className="flex gap-1.5 px-5 pt-4 flex-wrap">
-                  {todayEntry.meanings.map((m, i) => (
+                  <div className="relative mt-5 flex items-center gap-4">
                     <button
-                      key={i}
-                      onClick={() => setActiveMeaning(i)}
-                      className={`px-3 py-1 rounded-full text-[11px] font-bold transition-colors ${
-                        activeMeaning === i
-                          ? "bg-primary text-white"
-                          : "bg-secondary text-muted-foreground hover:bg-secondary/80"
-                      }`}
+                      onClick={speakWord}
+                      aria-label="Hear pronunciation"
+                      title="Tap to hear pronunciation"
+                      className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#FDE68A] to-[#E3B341] text-emerald-900 shadow-lg shadow-black/25 transition-transform active:scale-95 ${speaking ? "ring-4 ring-[#E3B341]/40" : ""}`}
                     >
-                      {m.partOfSpeech}
+                      {speaking && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-[#E3B341]/40" />}
+                      <Volume2 className={`relative h-6 w-6 ${speaking ? "animate-pulse" : ""}`} />
                     </button>
-                  ))}
-                </div>
-              )}
 
-              {/* Definitions */}
-              {meaning && (
-                <div className="px-5 py-4 space-y-3">
-                  {meaning.definitions.slice(0, 3).map((def, i) => (
-                    <div key={i} className={`${i > 0 ? "border-t border-border/50 pt-3" : ""}`}>
-                      <div className="flex gap-3">
-                        <span className="w-5 h-5 rounded-full bg-azure-soft text-azure-strong dark:text-azure text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
-                        <div className="space-y-1.5 flex-1 min-w-0">
-                          <p className="text-sm text-foreground leading-relaxed">{def.definition}</p>
-                          {def.example && (
-                            <p className="text-xs text-muted-foreground italic bg-secondary/50 rounded-lg px-3 py-1.5">
-                              <span className="not-italic font-semibold text-azure-strong dark:text-azure">Example:</span> "{def.example}"
-                            </p>
-                          )}
-                          {def.synonyms?.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {def.synonyms.slice(0, 4).map((s) => (
-                                <span key={s} className="text-[10px] bg-azure-soft text-azure-strong dark:text-azure px-2 py-0.5 rounded-full font-medium">{s}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                    <div className="min-w-0 flex-1">
+                      <h3
+                        className={`font-heading italic font-bold capitalize leading-[1.05] tracking-tight break-words text-white ${
+                          todayEntry.word.length > 12 ? "text-3xl sm:text-4xl"
+                          : todayEntry.word.length > 8 ? "text-4xl sm:text-5xl"
+                          : "text-5xl sm:text-6xl"
+                        }`}
+                      >
+                        {todayEntry.word}
+                      </h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {phonetic && <span className="font-heading text-[15px] italic text-[#FDE68A]">{phonetic}</span>}
+                        {meaning?.partOfSpeech && (
+                          <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/90">{meaning.partOfSpeech}</span>
+                        )}
                       </div>
                     </div>
-                  ))}
+                  </div>
                 </div>
-              )}
 
-              {/* Footer hint */}
-              <div className="px-5 pb-4">
-                <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-xl px-4 py-2.5 flex items-center gap-2">
-                  <BookMarked className="w-4 h-4 text-indigo-500 shrink-0" />
-                  <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">
-                    <span className="font-bold">Pro tip:</span> Double-click any English word on this website to instantly see its definition!
+                {/* ── Part-of-speech tabs ── */}
+                {(todayEntry.meanings?.length ?? 0) > 1 && (
+                  <div className="flex flex-wrap gap-1.5 px-5 pt-5 sm:px-7">
+                    {todayEntry.meanings.map((m, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setActiveMeaning(i)}
+                        className={`rounded-full border px-3.5 py-1 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                          activeMeaning === i
+                            ? "border-emerald-700 bg-emerald-800 text-white"
+                            : "border-border bg-background text-muted-foreground hover:border-[#E3B341]/60"
+                        }`}
+                      >
+                        {m.partOfSpeech}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Definitions ── */}
+                {meaning && (
+                  <div className="space-y-4 px-5 py-5 sm:px-7">
+                    {meaning.definitions.slice(0, 3).map((def, i) => (
+                      <div key={i} className={i > 0 ? "border-t border-border/60 pt-4" : ""}>
+                        <div className="flex gap-3">
+                          <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E3B341]/15 font-heading text-[12px] font-bold text-[#8a6508] dark:text-[#E3B341]">{i + 1}</span>
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <p className="text-[15px] leading-relaxed text-foreground">{def.definition}</p>
+                            {def.example && (
+                              <p className="border-l-2 border-[#E3B341] pl-3 font-heading text-[14px] italic leading-relaxed text-muted-foreground">
+                                “{def.example}”
+                              </p>
+                            )}
+                            {def.synonyms?.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                {def.synonyms.slice(0, 4).map((syn) => (
+                                  <span key={syn} className="rounded-full border border-emerald-600/25 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800 dark:text-emerald-300">{syn}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Footer ── */}
+                <div className="flex items-center gap-2 border-t border-border/60 bg-muted/30 px-5 py-3 sm:px-7">
+                  <BookMarked className="h-4 w-4 shrink-0 text-[#B8860B]" />
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    <span className="font-semibold text-foreground">Tip:</span> double-click any English word on this site to see its meaning. A new word every day.
                   </p>
                 </div>
-              </div>
-
-              <div className="px-5 pb-3">
-                <p className="text-[9px] text-muted-foreground/40 text-center">
-                  A new word every day · Pronunciation via your device's built-in speech engine
-                </p>
               </div>
             </div>
           </div>
