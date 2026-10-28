@@ -130,6 +130,7 @@ export function applyPublishedToCaches(qc: QueryClient, meta?: PublishMeta | nul
     "results-countdown-strip", "has-published-school-results",
     "latest-published-exam", "navbar-latest-school-result",
     "admin-results", "home-school-toppers",
+    "result-search-meta",
   ];
   // Cancel in-flight fetches so a stale "0 published rows" answer that
   // started before the flip can't land after it and undo it. cancelQueries
@@ -140,6 +141,10 @@ export function applyPublishedToCaches(qc: QueryClient, meta?: PublishMeta | nul
   qc.setQueryData(["scheduled-result-publishes-raw"], []);
   qc.setQueryData(["results-countdown-strip"], []);
   qc.setQueryData(["has-published-school-results"], true);
+  // Search shape (Exam Roll vs Class tabs + which classes exist) must never be
+  // served from an older cache: wipe it and refetch right now, so the box is
+  // correct the instant the countdown ends — no waiting for a cache to expire.
+  void qc.resetQueries({ queryKey: ["result-search-meta"] });
   if (meta?.latest) {
     qc.setQueryData(["latest-published-exam"], meta.latest);
     qc.setQueryData(["exam-roll-only", meta.latest.exam_type, meta.latest.year], meta.examRollOnly);
