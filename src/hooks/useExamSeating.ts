@@ -12,6 +12,7 @@
 //   {"t":"seat","pid":planId,"rid":roomId,"sl":seatLabel,"stid":studentId,"rn":examRollNo}
 
 import { useEffect, useMemo, useRef } from "react";
+import { idleAware } from "@/lib/idlePolling";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, supabasePublic } from "@/lib/supabase";
 import toast from "react-hot-toast";
@@ -1540,7 +1541,7 @@ export function usePublishedSeatingPlans() {
       })) as SeatingPlanFull[];
     },
     staleTime: 60 * 1000,
-    refetchInterval: 2 * 60 * 1000, // refresh so countdown + auto-publish propagate (was 30 s)
+    refetchInterval: idleAware(2 * 60 * 1000, 10 * 60_000), // refresh so countdown + auto-publish propagate (was 30 s)
     refetchIntervalInBackground: false,
     // Surface the error to the UI so SeatingTab can distinguish "no plans"
     // from "couldn't fetch" instead of always defaulting to [].
@@ -1958,7 +1959,7 @@ export function useLiveAttendance(
     // (was 5 s) still bounds staleness while cutting the full-table refetch
     // load on the wall screen by 3× over a multi-hour exam day.
     // rev. 10: 30 s and never in a hidden tab (realtime already delivers every change instantly).
-    refetchInterval: 30 * 1000,
+    refetchInterval: idleAware(30 * 1000, 30 * 60_000), // wall screen: realtime does the work; blind poll pauses after 30 idle min
     refetchIntervalInBackground: false,
   });
 
