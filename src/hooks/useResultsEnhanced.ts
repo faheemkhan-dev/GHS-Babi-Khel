@@ -182,21 +182,35 @@ export function useResultYears() {
 
 // ─── 3.4 Grading Schemes CRUD ───────────────────────────────────────────────
 
+let gradingTableMissing = false;
+
 export function useGradingSchemes() {
   return useQuery<GradingScheme[]>({
     queryKey: ["grading-schemes"],
     queryFn: async () => {
+      // The `grading_schemes` table is optional. If it was never created, ask
+      // once per session and never again (it used to 404 on every admin visit).
+      if (gradingTableMissing) return [] as GradingScheme[];
       const { data, error } = await supabase
         .from("grading_schemes")
         .select("*")
         .order("created_at", { ascending: true });
-      if (error) throw error;
+      if (error) {
+        const code = (error as { code?: string }).code;
+        if (code === "PGRST205" || code === "42P01" || /not find the table|does not exist|404/i.test(error.message)) {
+          gradingTableMissing = true;
+          return [] as GradingScheme[];
+        }
+        throw error;
+      }
       // Set the active scheme in memory
       const active = (data ?? []).find((s: GradingScheme) => s.is_active);
       if (active) setActiveScheme(active);
       return (data ?? []) as GradingScheme[];
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -263,4 +277,3 @@ export function useDeleteGradingScheme() {
     },
   });
 }
-
