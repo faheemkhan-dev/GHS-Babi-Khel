@@ -226,7 +226,7 @@ const ResultsSeoContent = () => {
 
           <p className="leading-relaxed">
             For school-specific exam results — internal class tests, mid-term exams, send-up exams
-            and school-internal Mid-Term/Final-Term exams for Classes 6 to 10 at GHS Babi Khel — use the same
+            and school-internal 1st Semester/2nd Semester exams for Classes 6 to 10 at GHS Babi Khel — use the same
             search box above with your school exam roll number. Your result appears
             there once it is published by the admin office.
           </p>
