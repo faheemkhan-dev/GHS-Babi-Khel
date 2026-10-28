@@ -291,8 +291,14 @@ const FETCHERS = {
     const exam = safeText(q, "exam");
     const year = num(q.get("year"), 1990, 2100, 0);
     if (!exam || !year) return { mode: "both", classes: [] };
+    // Classes 6-8 store "1st/2nd Semester", 9-10 store "Annual-I/II" for the same
+    // exam slot — match BOTH or one group of classes vanishes from the picker.
+    const lo = exam.trim().toLowerCase();
+    const variants = /1st|first|annual-i$/.test(lo) ? ["1st Semester", "Annual-I"]
+      : /2nd|second|annual-ii$/.test(lo) ? ["2nd Semester", "Annual-II"] : [exam];
+    const typeFilter = `exam_type=in.(${variants.map(v => `"${v}"`).map(enc).join(",")})`;
     const rows = await sb(
-      `results?select=class,exam_roll_no&is_published=eq.true&exam_type=eq.${enc(exam)}&year=eq.${year}&limit=2000`,
+      `results?select=class,exam_roll_no&is_published=eq.true&${typeFilter}&year=eq.${year}&limit=2000`,
     );
     const list = rows ?? [];
     const withRoll = list.filter(r => r.exam_roll_no && String(r.exam_roll_no).trim()).length;
