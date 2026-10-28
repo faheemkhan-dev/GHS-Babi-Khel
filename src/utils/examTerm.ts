@@ -31,11 +31,11 @@ export function termForClass(cls: string, term: string): string {
   return slot === 1 ? (upper ? "Annual-I" : "1st Semester") : (upper ? "Annual-II" : "2nd Semester");
 }
 
-/** Label for a whole session, e.g. "1st Semester / Mid-Term". */
+/** Label for a whole session, e.g. "1st Semester". */
 export function sessionTermLabel(term: string): string {
   const slot = termSlot(term);
-  if (slot === 1) return "1st Semester / Mid-Term";
-  if (slot === 2) return "2nd Semester / Final-Term";
+  if (slot === 1) return "1st Semester";
+  if (slot === 2) return "2nd Semester";
   return term;
 }
 
@@ -50,4 +50,17 @@ export function resultTermLabel(examType: string): string {
   if (slot === 1) return "1st Semester";
   if (slot === 2) return "2nd Semester";
   return examType;
+}
+
+/**
+ * Every raw exam_type value that belongs to the same slot, e.g.
+ * "1st Semester" -> ["1st Semester", "Annual-I"]. Classes 6-8 store the first
+ * form and 9-10 the second, so any public lookup of "the current exam" must
+ * match both or it silently drops one group of classes.
+ */
+export function examTypeVariants(examType: string): string[] {
+  const slot = termSlot(examType);
+  if (slot === 1) return ["1st Semester", "Annual-I"];
+  if (slot === 2) return ["2nd Semester", "Annual-II"];
+  return [examType];
 }
