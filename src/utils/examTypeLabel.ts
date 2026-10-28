@@ -5,11 +5,11 @@
 // at school-result display boundaries. Queries, localStorage keys, and writes
 // must continue using the raw values.
 //
-// Classes 6-8 ("1st Semester" / "2nd Semester") pass through unchanged.
+// Every class is shown as "1st Semester" / "2nd Semester" (6-8 stored as-is).
 
 const DISPLAY_LABELS: Record<string, string> = {
-  "Annual-I": "Mid-Term",
-  "Annual-II": "Final-Term",
+  "Annual-I": "1st Semester",
+  "Annual-II": "2nd Semester",
 };
 
 /** Converts an internal school exam_type value to its user-facing label. */
@@ -20,6 +20,6 @@ export function examTypeLabel(examType: string): string {
 /** Converts Annual-I/II occurrences inside a longer school-result label. */
 export function examTypeLabelInText(text: string): string {
   return text
-    .replace(/\bAnnual-I\b/g, "Mid-Term")
-    .replace(/\bAnnual-II\b/g, "Final-Term");
+    .replace(/\bAnnual-II\b/g, "2nd Semester")
+    .replace(/\bAnnual-I\b/g, "1st Semester");
 }
