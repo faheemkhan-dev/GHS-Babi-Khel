@@ -761,17 +761,20 @@ function useResultSearchMeta(exam: { exam_type: string; year: number } | null | 
     queryKey: ["result-search-meta", exam?.exam_type, exam?.year],
     enabled: !!exam,
     staleTime: 2 * 60 * 1000,
-    queryFn: async (): Promise<SearchMeta> => {
-      const { data, error } = await supabase.from("results").select("class,exam_roll_no")
-        .eq("is_published", true).eq("exam_type", exam!.exam_type).eq("year", exam!.year).limit(2000);
-      if (error) throw error;
-      const rows = data ?? [];
-      const withRoll = rows.filter(r => r.exam_roll_no && String(r.exam_roll_no).trim()).length;
-      const classes = Array.from(new Set(rows.map(r => String(r.class ?? "").trim()).filter(Boolean)))
-        .sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
-      const mode: SearchMeta["mode"] = rows.length === 0 ? "both" : withRoll === rows.length ? "exam" : withRoll === 0 ? "class" : "both";
-      return { mode, classes };
-    },
+    queryFn: () => cachedOrDirect<SearchMeta>(
+      "result-search-meta", { exam: exam!.exam_type, year: exam!.year },
+      async (): Promise<SearchMeta> => {
+        const { data, error } = await supabase.from("results").select("class,exam_roll_no")
+          .eq("is_published", true).eq("exam_type", exam!.exam_type).eq("year", exam!.year).limit(2000);
+        if (error) throw error;
+        const rows = data ?? [];
+        const withRoll = rows.filter(r => r.exam_roll_no && String(r.exam_roll_no).trim()).length;
+        const classes = Array.from(new Set(rows.map(r => String(r.class ?? "").trim()).filter(Boolean)))
+          .sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+        const mode: SearchMeta["mode"] = rows.length === 0 ? "both" : withRoll === rows.length ? "exam" : withRoll === 0 ? "class" : "both";
+        return { mode, classes };
+      },
+    ),
   });
   return { meta: data, metaReady: data !== undefined || isError };
 }
