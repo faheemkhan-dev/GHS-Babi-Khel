@@ -80,6 +80,7 @@ const CACHE = {
   "result-years":   { s: 300, swr: 600 },
   "has-results":    { s: 5,   swr: 5 },    // Unpublish must show within seconds
   "latest-exam":    { s: 10,  swr: 10 },
+  "result-search-meta": { s: 20, swr: 20 }, // class list + exam-roll shape of one exam
   "result-schedule":{ s: 5,   swr: 10 },
   "result-rank":    { s: 30,  swr: 120 },
   "class-average":  { s: 30,  swr: 120 },
@@ -281,6 +282,24 @@ const FETCHERS = {
       `results?select=exam_type,year,created_at&is_published=eq.true&order=year.desc,created_at.desc&limit=1`,
     );
     return rows?.[0] ?? null;
+  },
+
+  // Search shape of ONE published exam: which classes exist and whether rows
+  // carry an Exam Roll No. Aggregated here, so no student data leaves the DB
+  // and the browser downloads ~100 bytes instead of every row.
+  async "result-search-meta"(q) {
+    const exam = safeText(q, "exam");
+    const year = num(q.get("year"), 1990, 2100, 0);
+    if (!exam || !year) return { mode: "both", classes: [] };
+    const rows = await sb(
+      `results?select=class,exam_roll_no&is_published=eq.true&exam_type=eq.${enc(exam)}&year=eq.${year}&limit=2000`,
+    );
+    const list = rows ?? [];
+    const withRoll = list.filter(r => r.exam_roll_no && String(r.exam_roll_no).trim()).length;
+    const classes = Array.from(new Set(list.map(r => String(r.class ?? "").trim()).filter(Boolean)))
+      .sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+    const mode = list.length === 0 ? "both" : withRoll === list.length ? "exam" : withRoll === 0 ? "class" : "both";
+    return { mode, classes };
   },
 
   // Upcoming scheduled publishes (public by design today — powers every
