@@ -1,5 +1,6 @@
 import { Suspense, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { startActivityTracking } from "@/lib/idlePolling";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { HelmetProvider } from "react-helmet-async";
@@ -167,6 +168,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+startActivityTracking(queryClient);
 
 const App = () => (
   <ErrorBoundary>
