@@ -20,7 +20,7 @@ const useAdminStats = () =>
       const head = { count: "exact" as const, head: true };
       const [
         teachers, notices, library, albums, users, results,
-        pendingUsers, admissions, pendingAdmissions, notes,
+        pendingUsers, admissions, pendingAdmissions,
       ] = await Promise.all([
         supabase.from("teachers").select("id", head),
         supabase.from("notices").select("id", head),
@@ -31,7 +31,6 @@ const useAdminStats = () =>
         supabase.from("profiles").select("id", head).eq("status", "pending"),
         supabase.from("admissions").select("id", head),
         supabase.from("admissions").select("id", head).eq("status", "pending"),
-        supabase.from("notes").select("id", head),
       ]);
       return {
         teachers: teachers.count ?? 0,
@@ -43,10 +42,10 @@ const useAdminStats = () =>
         pendingUsers: pendingUsers.count ?? 0,
         admissions: admissions.count ?? 0,
         pendingAdmissions: pendingAdmissions.count ?? 0,
-        notes: notes.count ?? 0,
       };
     },
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
 const useRecentActivity = () =>
@@ -214,7 +213,6 @@ const AdminOverview = () => {
   ];
   const contentTiles = [
     { to: "/admin?tab=announcements", label: "Notices",        value: stats?.notices, icon: Bell,       tone: TONES.amber },
-    { to: "/admin?tab=notes",         label: "Study Notes",    value: stats?.notes,   icon: BookMarked, tone: TONES.teal },
     { to: "/admin?tab=library",       label: "Library Files",  value: stats?.library, icon: BookOpen,   tone: TONES.cyan },
     { to: "/admin?tab=videos",        label: "Gallery Albums", value: stats?.albums,  icon: ImageIcon,  tone: TONES.pink },
   ];
