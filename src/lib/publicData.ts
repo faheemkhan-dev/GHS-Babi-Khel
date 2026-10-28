@@ -15,7 +15,7 @@
 // • Hard 12 s client timeout: a hanging function must never freeze a page
 //   that can answer from Supabase directly.
 //
-// PUBLISH-BUST (results-day exactness)
+// PUBLISH-BUST (results-day exactness, shared key)
 //   When a scheduled result flips to published, autoPublish.applyPublishedToCaches
 //   calls markPublishBust(). For the next 75 s, "results family" kinds append a
 //   `_=<ms>` param — a fresh CDN cache key — so every student's post-publish
@@ -30,6 +30,7 @@ const RESULTS_FAMILY = new Set([
   "class-average",
   "has-results",
   "latest-exam",
+  "result-search-meta",
   "result-schedule",
   "result-years",
   "merit-lists",
@@ -62,9 +63,12 @@ function buildUrl(kind: string, params: Record<string, string | number | boolean
     q.set(k, String(v));
   }
   if (bustUntil > Date.now() && RESULTS_FAMILY.has(kind)) {
-    // Unique URL ⇒ unique CDN cache key ⇒ guaranteed origin read. See the
-    // header comment in api/public-data.js ("FRESHNESS AT THE EXACT…").
-    q.set("_", String(Date.now()));
+    // New cache key ⇒ guaranteed origin read, so the just-published rows are
+    // never served from a pre-publish copy. The key is a 10-second BUCKET shared by
+    // every visitor (not a per-request timestamp): the first student's request
+    // fills the edge cache and the other ~150 share it, so the burst costs a
+    // few database reads per kind instead of one per student. No added delay.
+    q.set("_", String(Math.floor(Date.now() / 10_000)));
   }
   return `/api/public-data?${q.toString()}`;
 }
