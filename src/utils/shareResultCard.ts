@@ -115,7 +115,7 @@ export interface Top3ShareEntry {
 }
 
 export interface Top3ShareData {
-  examLabel: string;            // e.g. "BISE (Class 9th & 10th) · Mid-Term · Year 2026"
+  examLabel: string;            // e.g. "BISE (Class 9th & 10th) · 1st Semester · Year 2026"
   entries: Top3ShareEntry[];    // exactly the top 1–3 entries, in rank order
 }
 
