@@ -303,6 +303,89 @@ export function useStudentVouchers(classLevel?: string | null, studentId?: strin
   });
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Class lists — sourced from the imported Exam Roll Numbers
+// (Exam Roll Numbers → Class Arrangement import). There is no separate
+// "manage students" list any more.
+// ═══════════════════════════════════════════════════════════════
+
+export interface RosterStudent {
+  class_roll_no: string;
+  student_name: string;
+  father_name: string | null;
+  exam_roll_no: string | null;
+}
+
+/** Newest imported class list for one class, one row per class roll no. */
+export async function fetchClassRoster(classLevel: string): Promise<RosterStudent[]> {
+  const { data, error } = await supabase
+    .from("exam_roll_numbers")
+    .select("session_id, student_name, father_name, class_roll_no, exam_roll_no, created_at")
+    .eq("class", classLevel)
+    .order("created_at", { ascending: false })
+    .limit(3000);
+  if (error) throw error;
+  const rows = data ?? [];
+  if (!rows.length) return [];
+  const newest = rows[0].session_id;
+  const seen = new Set<string>();
+  const out: RosterStudent[] = [];
+  for (const r of rows) {
+    if (r.session_id !== newest) continue;
+    const roll = String(r.class_roll_no ?? "").trim();
+    if (!roll || seen.has(roll)) continue;
+    seen.add(roll);
+    out.push({
+      class_roll_no: roll,
+      student_name: String(r.student_name ?? "").trim(),
+      father_name: r.father_name ?? null,
+      exam_roll_no: r.exam_roll_no ?? null,
+    });
+  }
+  return out.sort((a, b) => a.class_roll_no.localeCompare(b.class_roll_no, undefined, { numeric: true }));
+}
+
+export function useClassRoster(classLevel: string) {
+  return useQuery<RosterStudent[]>({
+    queryKey: ["fee-class-roster", classLevel],
+    queryFn: () => fetchClassRoster(classLevel),
+    enabled: !!classLevel,
+    staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * Fee vouchers are stored against an internal student id. This finds (or
+ * silently creates) that id for each class-roll on the list — the same way
+ * the Results import does. Existing records are never renamed or edited.
+ */
+export async function ensureStudentAnchors(
+  classLevel: string,
+  roster: RosterStudent[]
+): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  if (!roster.length) return map;
+  const rows = roster.map((r) => ({
+    full_name: r.student_name || `Roll ${r.class_roll_no}`,
+    father_name: r.father_name,
+    class: classLevel,
+    roll_number: r.class_roll_no,
+    is_active: true,
+  }));
+  const { error: upErr } = await supabase
+    .from("students")
+    .upsert(rows, { onConflict: "roll_number,class", ignoreDuplicates: true });
+  if (upErr) throw upErr;
+  const { data, error } = await supabase
+    .from("students")
+    .select("id, roll_number")
+    .eq("class", classLevel)
+    .in("roll_number", roster.map((r) => r.class_roll_no));
+  if (error) throw error;
+  (data ?? []).forEach((s) => { map[s.roll_number] = s.id; });
+  return map;
+}
+
 export function useGenerateVouchers() {
   const qc = useQueryClient();
 
@@ -315,18 +398,18 @@ export function useGenerateVouchers() {
       dueDate: string;
       lateFee?: number;
       bankDetails?: FeeVoucher["bank_details"];
-      optionalFees?: string[]; // fee_types to include for all (like transport)
+      optionalFees?: string[]; // fee_types the admin chose to charge to everyone
     }) => {
-      // 1. Get all active students in the class
-      const { data: students, error: stuErr } = await supabase
-        .from("students")
-        .select("id, class")
-        .eq("class", params.classLevel)
-        .eq("is_active", true);
-      if (stuErr) throw stuErr;
-      if (!students?.length) throw new Error("No active students found in this class");
+      // 1. The class list comes from the imported Exam Roll Numbers
+      //    (Class Arrangement import) — NOT from a manually managed students list.
+      const roster = await fetchClassRoster(params.classLevel);
+      if (!roster.length) {
+        throw new Error(
+          `No class list found for Class ${params.classLevel}. Import the class arrangement in Exam Roll Numbers first.`
+        );
+      }
 
-      // 2. Get fee structures for this class
+      // 2. Fee structures for this class
       const { data: structures, error: structErr } = await supabase
         .from("fee_structures")
         .select("*")
@@ -334,14 +417,15 @@ export function useGenerateVouchers() {
         .eq("is_active", true);
       if (structErr) throw structErr;
 
-      // 3. Filter fee items based on period
-      const feeItems: FeeItem[] = structures
+      // 3. Fee items for the chosen period. Optional fees are charged ONLY
+      //    when the admin ticked them.
+      const chosen = new Set(params.optionalFees ?? []);
+      const feeItems: FeeItem[] = (structures ?? [])
         .filter((s) => {
-          if (s.frequency === "one_time") return false; // skip one_time for monthly/quarterly
-          if (params.feePeriod === "monthly" && s.frequency === "monthly") return true;
-          if (params.feePeriod === "quarterly" && (s.frequency === "quarterly" || s.frequency === "monthly"))
-            return true;
-          return false;
+          if (s.frequency === "one_time" || s.frequency === "annual") return false;
+          if (s.is_optional && !chosen.has(s.fee_type)) return false;
+          if (params.feePeriod === "monthly") return s.frequency === "monthly";
+          return s.frequency === "quarterly" || s.frequency === "monthly";
         })
         .map((s) => ({
           fee_type: s.fee_type,
@@ -350,57 +434,55 @@ export function useGenerateVouchers() {
           is_optional: s.is_optional,
         }));
 
-      // Include optional fees that admin selected
-      if (params.optionalFees?.length) {
-        params.optionalFees.forEach((ft) => {
-          const existing = feeItems.find((f) => f.fee_type === ft);
-          if (!existing) {
-            const struct = structures.find((s) => s.fee_type === ft);
-            if (struct) {
-              feeItems.push({
-                fee_type: struct.fee_type,
-                label: struct.label,
-                amount: struct.amount,
-                is_optional: struct.is_optional,
-              });
-            }
-          }
-        });
-      }
+      const monthlyTotal = feeItems.reduce((sum, f) => sum + Number(f.amount), 0);
+      if (monthlyTotal === 0) throw new Error("No fee amounts are set for this class. Add them in Fee Setup first.");
+      // Quarterly vouchers bill 3 months of the monthly items.
+      const multiplier = params.feePeriod === "quarterly" ? 3 : 1;
+      const items: FeeItem[] = feeItems.map((f) => {
+        const isMonthly = (structures ?? []).find((s) => s.fee_type === f.fee_type)?.frequency === "monthly";
+        return isMonthly && multiplier > 1
+          ? { ...f, label: `${f.label} (x${multiplier} months)`, amount: Number(f.amount) * multiplier }
+          : f;
+      });
+      const totalAmount = items.reduce((sum, f) => sum + Number(f.amount), 0);
 
-      const totalAmount = feeItems.reduce((sum, f) => sum + Number(f.amount), 0);
-      if (totalAmount === 0) throw new Error("No fee items with amounts configured for this class");
+      // 4. Resolve an internal id for every student on the class list
+      const anchors = await ensureStudentAnchors(params.classLevel, roster);
 
-      // 4. Generate voucher number
-      const voucherPrefix = `FV-${params.year}-${String(params.month).padStart(2, "0")}`;
+      // 5. One voucher per student. The number is built from class + class
+      //    roll so it is stable and unique.
+      const prefix = params.feePeriod === "quarterly" ? "FQ" : "FV";
+      const mm = String(params.month).padStart(2, "0");
+      const vouchers = roster
+        .filter((r) => anchors[r.class_roll_no])
+        .map((r) => ({
+          voucher_number: `${prefix}-${params.year}-${mm}-C${params.classLevel}-${String(r.class_roll_no).padStart(3, "0")}`,
+          student_id: anchors[r.class_roll_no],
+          class: params.classLevel,
+          month: params.month,
+          year: params.year,
+          fee_period: params.feePeriod,
+          fee_items: items,
+          total_amount: totalAmount,
+          due_date: params.dueDate,
+          bank_details: params.bankDetails || {},
+          status: "unpaid" as const,
+          late_fee: params.lateFee || 0,
+          paid_amount: 0,
+        }));
 
-      // 5. Create vouchers for each student
-      const vouchers = students.map((stu, idx) => ({
-        voucher_number: `${voucherPrefix}-${String(idx + 1).padStart(3, "0")}`,
-        student_id: stu.id,
-        class: params.classLevel,
-        month: params.month,
-        year: params.year,
-        fee_period: params.feePeriod,
-        fee_items: feeItems,
-        total_amount: totalAmount,
-        due_date: params.dueDate,
-        bank_details: params.bankDetails || {},
-        status: "unpaid" as const,
-        late_fee: params.lateFee || 0,
-        paid_amount: 0,
-      }));
-
-      // 6. Insert (upsert on conflict)
+      // 6. Insert only the missing ones. Vouchers that already exist keep
+      //    their payments and status — they are never reset.
       const { data, error } = await supabase
         .from("fee_vouchers")
         .upsert(vouchers, {
           onConflict: "student_id,month,year,fee_period",
-          ignoreDuplicates: false,
+          ignoreDuplicates: true,
         })
         .select();
       if (error) throw error;
-      return data;
+      const created = data?.length ?? 0;
+      return { created, skipped: vouchers.length - created, total: vouchers.length };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fee-vouchers"] });
@@ -409,6 +491,7 @@ export function useGenerateVouchers() {
       qc.invalidateQueries({ queryKey: ["fee-dashboard"] });
       qc.invalidateQueries({ queryKey: ["fee-defaulters"] });
       qc.invalidateQueries({ queryKey: ["fee-collection-report"] });
+      qc.invalidateQueries({ queryKey: ["class-collection-summary"] });
     },
   });
 }
@@ -928,84 +1011,18 @@ export function useAllVouchersForStudents(classLevel?: string | null) {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Resolve the student's DB record ID from their auth user ID
-// This is needed because fee_vouchers.student_id references
-// students.id (auto-generated UUID), NOT auth.uid().
-// ═══════════════════════════════════════════════════════════════
-
-export function useMyStudentRecord(authUserId?: string | null) {
-  return useQuery<{
-    id: string;
-    full_name: string;
-    class: string;
-    roll_number: string;
-  } | null>({
-    queryKey: ["my-student-record", authUserId],
-    queryFn: async () => {
-      if (!authUserId) return null;
-      // First try matching by user_id column (proper link)
-      const { data, error } = await supabase
-        .from("students")
-        .select("id, full_name, class, roll_number")
-        .eq("user_id", authUserId)
-        .limit(1);
-      if (error) throw error;
-      if (data && data.length > 0) return data[0];
-
-      // Fallback: match by profile's full_name + class
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name, class")
-        .eq("id", authUserId)
-        .single();
-
-      if (profile?.full_name && profile?.class) {
-        const { data: students } = await supabase
-          .from("students")
-          .select("id, full_name, class, roll_number")
-          .ilike("full_name", profile.full_name)
-          .eq("class", profile.class)
-          .limit(1);
-        if (students && students.length > 0) {
-          // Backfill user_id so future lookups are fast
-          await supabase
-            .from("students")
-            .update({ user_id: authUserId })
-            .eq("id", students[0].id);
-          return students[0];
-        }
-      }
-      return null;
-    },
-    enabled: !!authUserId,
-    staleTime: 2 * 60 * 1000,
-  });
-}
-
+/** Class list for pickers — comes from the imported Exam Roll Numbers. */
 export function useStudentsByClass(classLevel: string) {
-  return useQuery<{
-    id: string;
-    full_name: string;
-    roll_number: string;
-    photo_url: string | null;
-    father_name: string | null;
-    contact_number: string | null;
-  }[]>({
-    queryKey: ["students-by-class", classLevel],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("students")
-        .select("id, full_name, roll_number, photo_url, father_name, contact_number")
-        .eq("class", classLevel)
-        .eq("is_active", true)
-        .order("roll_number");
-      if (error) throw error;
-      return data ?? [];
-    },
-    enabled: !!classLevel,
-    staleTime: 5 * 60 * 1000,
-  });
+  const q = useClassRoster(classLevel);
+  return {
+    ...q,
+    data: (q.data ?? []).map((r) => ({
+      id: r.class_roll_no,
+      full_name: r.student_name,
+      roll_number: r.class_roll_no,
+      father_name: r.father_name,
+    })),
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1015,7 +1032,9 @@ export function useStudentsByClass(classLevel: string) {
 // ═══════════════════════════════════════════════════════════════
 
 export interface CustomFeeParams {
-  studentId: string;
+  studentId?: string;
+  rollNumber?: string;
+  fatherName?: string | null;
   studentName: string;
   className: string;
   feeLabel: string;          // "Absence Fee - June 2026", "Library Fine", etc.
@@ -1028,6 +1047,18 @@ export function useAddCustomFee() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (params: CustomFeeParams) => {
+      let studentId = params.studentId;
+      if (!studentId) {
+        if (!params.rollNumber) throw new Error("Student not selected");
+        const ids = await ensureStudentAnchors(params.className, [{
+          class_roll_no: params.rollNumber,
+          student_name: params.studentName,
+          father_name: params.fatherName ?? null,
+          exam_roll_no: null,
+        }]);
+        studentId = ids[params.rollNumber];
+        if (!studentId) throw new Error("Could not resolve the student record");
+      }
       // Generate a unique voucher number: CF-YYYY-MM-XXXX
       const now = new Date();
       const y = now.getFullYear();
@@ -1039,7 +1070,7 @@ export function useAddCustomFee() {
         .from("fee_vouchers")
         .insert({
           voucher_number: voucherNumber,
-          student_id: params.studentId,
+          student_id: studentId,
           class: params.className,
           month: now.getMonth() + 1,
           year: y,
@@ -1072,3 +1103,4 @@ export function useAddCustomFee() {
     },
   });
 }
+ 
