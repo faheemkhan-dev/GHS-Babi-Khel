@@ -72,7 +72,8 @@ export default function CustomFeeModal({ open, onClose, defaultClass = "6" }: Pr
     if (!canSubmit) return;
     try {
       await addFee.mutateAsync({
-        studentId: selectedStudent!.id,
+        rollNumber: selectedStudent!.roll_number,
+        fatherName: students.find(x => x.id === selectedStudent!.id)?.father_name ?? null,
         studentName: selectedStudent!.full_name,
         className,
         feeLabel: finalLabel,
