@@ -52,7 +52,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Trophy, Download, Send, School, BookOpen, Clock, Plus, Trash2,
   Calendar, EyeOff, Eye, CheckCircle2, Loader2, Search, Users, Award,
-  TrendingUp, Target, Sparkles, Crown, Medal, ShieldCheck, ListFilter, RefreshCw,
+  TrendingUp, Target, Sparkles, Crown, Medal, ShieldCheck, ListFilter, RefreshCw, X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import jsPDF from "jspdf";
@@ -434,127 +434,208 @@ function useDeleteMeritList() {
   });
 }
 
-// ─── Professional PDF helpers (unchanged minimal palette) ────────────────────
+// ─── Premium PDF (shared by School + BISE merit lists) ───────────────────────
+type RGB = [number, number, number];
 const PDF_COLOR = {
-  ink:    [10, 10, 10] as [number, number, number],
-  head:   [31, 31, 31] as [number, number, number],
-  sub:    [82, 82, 82] as [number, number, number],
-  muted:  [120, 120, 120] as [number, number, number],
-  altRow: [246, 247, 248] as [number, number, number],
-  pass:   [15, 81, 50] as [number, number, number],
-  fail:   [139, 0, 0] as [number, number, number],
-  white:  [255, 255, 255] as [number, number, number],
-  rule:   [180, 180, 180] as [number, number, number],
+  ink:      [26, 26, 26] as RGB,
+  sub:      [92, 92, 92] as RGB,
+  muted:    [128, 128, 128] as RGB,
+  green:    [20, 83, 45] as RGB,      // single brand accent
+  greenSoft:[214, 232, 221] as RGB,
+  gold:     [168, 130, 40] as RGB,
+  goldTint: [251, 245, 226] as RGB,
+  altRow:   [248, 248, 246] as RGB,
+  grid:     [220, 220, 216] as RGB,
+  pass:     [20, 83, 45] as RGB,
+  fail:     [150, 30, 30] as RGB,
+  white:    [255, 255, 255] as RGB,
+};
+const setC = (doc: jsPDF, kind: "text" | "draw" | "fill", c: RGB) => {
+  if (kind === "text") doc.setTextColor(c[0], c[1], c[2]);
+  else if (kind === "draw") doc.setDrawColor(c[0], c[1], c[2]);
+  else doc.setFillColor(c[0], c[1], c[2]);
 };
 
-function drawPDFHeader(doc: jsPDF, title: string, subtitle: string, w: number) {
-  doc.setDrawColor(PDF_COLOR.ink[0], PDF_COLOR.ink[1], PDF_COLOR.ink[2]);
-  doc.setLineWidth(1.0);
-  doc.line(14, 10, w - 14, 10);
-  doc.setTextColor(PDF_COLOR.ink[0], PDF_COLOR.ink[1], PDF_COLOR.ink[2]);
-  doc.setFontSize(13);
-  doc.setFont("helvetica", "bold");
+function drawFirstPageHeader(doc: jsPDF, w: number, title: string, subtitle: string, entries: MeritEntry[]): number {
+  // Brand band
+  setC(doc, "fill", PDF_COLOR.green);
+  doc.rect(0, 0, w, 36, "F");
+  setC(doc, "fill", PDF_COLOR.gold);
+  doc.rect(0, 36, w, 1.2, "F");
+  setC(doc, "text", PDF_COLOR.white);
+  doc.setFont("times", "bold");
+  doc.setFontSize(19);
   doc.text("GOVERNMENT HIGH SCHOOL BABI KHEL", w / 2, 17, { align: "center" });
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
+  setC(doc, "text", [208, 228, 216]);
+  doc.text("DISTRICT MOHMAND   ·   KHYBER PAKHTUNKHWA   ·   EST. 2018", w / 2, 25, { align: "center" });
+
+  // Title block
+  setC(doc, "text", PDF_COLOR.ink);
+  doc.setFont("times", "bold");
+  doc.setFontSize(22);
+  doc.text("MERIT LIST", w / 2, 50, { align: "center" });
+  setC(doc, "text", PDF_COLOR.green);
+  doc.setFont("times", "italic");
+  doc.setFontSize(11.5);
+  doc.text(title, w / 2, 57, { align: "center", maxWidth: w - 40 });
+  setC(doc, "draw", PDF_COLOR.gold);
+  doc.setLineWidth(0.6);
+  doc.line(w / 2 - 14, 61, w / 2 + 14, 61);
+  setC(doc, "text", PDF_COLOR.sub);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(PDF_COLOR.sub[0], PDF_COLOR.sub[1], PDF_COLOR.sub[2]);
-  doc.text("District Mohmand, Khyber Pakhtunkhwa  |  Established 2018", w / 2, 22, { align: "center" });
-  doc.setDrawColor(PDF_COLOR.rule[0], PDF_COLOR.rule[1], PDF_COLOR.rule[2]);
-  doc.setLineWidth(0.25);
-  doc.line(14, 25, w - 14, 25);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(PDF_COLOR.ink[0], PDF_COLOR.ink[1], PDF_COLOR.ink[2]);
-  doc.text(title, w / 2, 31, { align: "center" });
   doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(PDF_COLOR.sub[0], PDF_COLOR.sub[1], PDF_COLOR.sub[2]);
-  doc.text(subtitle, w / 2, 36, { align: "center" });
-  doc.setDrawColor(PDF_COLOR.ink[0], PDF_COLOR.ink[1], PDF_COLOR.ink[2]);
-  doc.setLineWidth(1.0);
-  doc.line(14, 39, w - 14, 39);
+  doc.text(subtitle, w / 2, 66.5, { align: "center" });
+
+  // Stat cards
+  const passing = entries.filter(e => e.is_pass).length;
+  const avg = entries.length ? entries.reduce((s, e) => s + e.percentage, 0) / entries.length : 0;
+  const highest = entries.length ? Math.max(...entries.map(e => e.percentage)) : 0;
+  const passRate = entries.length ? Math.round((passing / entries.length) * 100) : 0;
+  const cards: [string, string][] = [
+    ["STUDENTS", String(entries.length)],
+    ["PASS RATE", `${passRate}%`],
+    ["HIGHEST", `${highest.toFixed(1)}%`],
+    ["AVERAGE", `${avg.toFixed(1)}%`],
+  ];
+  const margin = 14, gap = 4, top = 72, ch = 15;
+  const cw = (w - margin * 2 - gap * (cards.length - 1)) / cards.length;
+  cards.forEach(([label, value], i) => {
+    const x = margin + i * (cw + gap);
+    setC(doc, "fill", PDF_COLOR.altRow);
+    setC(doc, "draw", PDF_COLOR.grid);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x, top, cw, ch, 1.5, 1.5, "FD");
+    setC(doc, "text", PDF_COLOR.muted);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.text(label, x + cw / 2, top + 5.2, { align: "center" });
+    setC(doc, "text", PDF_COLOR.green);
+    doc.setFont("times", "bold");
+    doc.setFontSize(13.5);
+    doc.text(value, x + cw / 2, top + 11.7, { align: "center" });
+  });
+  return top + ch + 7; // table startY
 }
 
-function drawPDFStats(doc: jsPDF, entries: MeritEntry[], y: number, w: number) {
-  // Trust is_pass as-is — it already reflects manual_pass_fail overrides.
-  const passing = entries.filter(e => e.is_pass);
-  const avg = Math.round(entries.reduce((s, e) => s + e.percentage, 0) / entries.length);
-  const highest = Math.max(...entries.map(e => e.percentage));
-  const passRate = entries.length ? Math.round((passing.length / entries.length) * 100) : 0;
-  doc.setFontSize(7.5);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(PDF_COLOR.sub[0], PDF_COLOR.sub[1], PDF_COLOR.sub[2]);
-  doc.text(
-    `Total: ${entries.length}    Passed: ${passing.length}    Failed: ${entries.length - passing.length}    Highest: ${highest.toFixed(1)}%    Average: ${avg}%    Pass Rate: ${passRate}%`,
-    w / 2, y, { align: "center" }
-  );
+function drawRunningHeader(doc: jsPDF, w: number, title: string) {
+  setC(doc, "fill", PDF_COLOR.green);
+  doc.rect(0, 0, w, 11, "F");
+  setC(doc, "fill", PDF_COLOR.gold);
+  doc.rect(0, 11, w, 0.7, "F");
+  setC(doc, "text", PDF_COLOR.white);
+  doc.setFont("times", "bold");
+  doc.setFontSize(10);
+  doc.text(`GHS BABI KHEL  ·  ${title}`, w / 2, 7.2, { align: "center", maxWidth: w - 28 });
 }
 
 function drawPDFFooter(doc: jsPDF, w: number, h: number, pageNum: number, totalPages: number) {
-  doc.setDrawColor(PDF_COLOR.rule[0], PDF_COLOR.rule[1], PDF_COLOR.rule[2]);
+  setC(doc, "draw", PDF_COLOR.grid);
   doc.setLineWidth(0.25);
-  doc.line(14, h - 12, w - 14, h - 12);
-  doc.setTextColor(PDF_COLOR.muted[0], PDF_COLOR.muted[1], PDF_COLOR.muted[2]);
-  doc.setFontSize(6.5);
+  doc.line(14, h - 13, w - 14, h - 13);
+  setC(doc, "text", PDF_COLOR.muted);
   doc.setFont("helvetica", "normal");
-  doc.text("GHS Babi Khel  —  Official Merit List", 14, h - 7);
-  doc.text(`Generated: ${format(new Date(), "dd/MM/yyyy")}`, w / 2, h - 7, { align: "center" });
-  doc.text(`Page ${pageNum} / ${totalPages}`, w - 14, h - 7, { align: "right" });
+  doc.setFontSize(7);
+  doc.text("GHS Babi Khel  ·  Official Merit List", 14, h - 8);
+  doc.text(`Page ${pageNum} of ${totalPages}`, w / 2, h - 8, { align: "center" });
+  doc.text(format(new Date(), "dd MMM yyyy"), w - 14, h - 8, { align: "right" });
 }
 
-function generateAllClassesPDF(byClass: Record<string, MeritEntry[]>, year: number, title?: string | null) {
-  const sortedClasses = Object.keys(byClass).sort();
-  if (!sortedClasses.length) { toast.error("No data to export"); return; }
-  const allStudents: MeritEntry[] = [];
-  for (const cls of sortedClasses) allStudents.push(...(byClass[cls] || []));
-  allStudents.sort((a, b) => b.percentage - a.percentage);
-  if (!allStudents.length) { toast.error("No data to export"); return; }
+function generateMeritPDF(opts: {
+  byClass: Record<string, MeritEntry[]>;
+  year: number;
+  title?: string | null;
+  kind: "school" | "bise";
+  examLabel?: string;
+}) {
+  const { byClass, year, kind } = opts;
+  const all: MeritEntry[] = [];
+  for (const c of Object.keys(byClass).sort()) all.push(...(byClass[c] || []));
+  all.sort((a, b) => b.percentage - a.percentage);
+  if (!all.length) { toast.error("No data to export"); return; }
+
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const w = doc.internal.pageSize.getWidth();
   const h = doc.internal.pageSize.getHeight();
-  drawPDFHeader(doc, title || "WHOLE SCHOOL MERIT LIST", `Year ${year}  |  All Classes Combined  |  ${allStudents.length} Students`, w);
-  drawPDFStats(doc, allStudents, 44, w);
+  const classes = Object.keys(byClass).sort();
+  const title = (opts.title && opts.title.trim())
+    || (kind === "bise" ? `BISE Peshawar Board Results ${year}` : `Whole School ${year}`);
+  const subtitle = kind === "bise"
+    ? `${opts.examLabel ? opts.examLabel + "   |   " : ""}Year ${year}   |   Class ${classes.join(" & ")}   |   ${all.length} Students`
+    : `Year ${year}   |   All Classes Combined   |   ${all.length} Students`;
+
+  const startY = drawFirstPageHeader(doc, w, title, subtitle, all);
+
   autoTable(doc, {
-    startY: 49,
-    head: [["Rank", "Class", "Roll No", "Student Name", "Marks", "%", "Grade", "Status"]],
-    body: allStudents.map((e, i) => [
-      medalLabel(i + 1), `Cls ${e.class}`, e.roll_number, e.full_name,
+    startY,
+    theme: "grid",
+    head: [["Rank", "Class", "Roll No", "Student Name", "Marks", "Percentage", "Grade", "Result"]],
+    body: all.map((e, i) => [
+      String(i + 1), e.class, e.roll_number, e.full_name,
       `${e.obtained_marks} / ${e.total_marks}`,
       `${Number(e.percentage).toFixed(1)}%`, e.grade,
-      e.is_pass ? "Pass" : "Fail", // trust is_pass — respects manual override
+      e.is_pass ? "Pass" : "Fail", // is_pass already reflects manual overrides
     ]),
-    headStyles: { fillColor: PDF_COLOR.head, textColor: PDF_COLOR.white, fontStyle: "bold", fontSize: 8, halign: "center", valign: "middle", cellPadding: 3 },
-    bodyStyles: { fontSize: 8, cellPadding: 2.8, textColor: PDF_COLOR.ink, valign: "middle", fontStyle: "normal" },
+    styles: {
+      font: "helvetica", fontSize: 8.5, halign: "center", valign: "middle",
+      cellPadding: { top: 2.7, bottom: 2.7, left: 1.5, right: 1.5 },
+      textColor: PDF_COLOR.ink, lineColor: PDF_COLOR.grid, lineWidth: 0.15,
+    },
+    headStyles: {
+      fillColor: PDF_COLOR.green, textColor: PDF_COLOR.white, fontStyle: "bold",
+      fontSize: 8, halign: "center", valign: "middle", lineColor: PDF_COLOR.green,
+      cellPadding: { top: 3.2, bottom: 3.2, left: 1.5, right: 1.5 },
+    },
     alternateRowStyles: { fillColor: PDF_COLOR.altRow },
     columnStyles: {
-      0: { halign: "center", cellWidth: 13 },
-      1: { halign: "center", cellWidth: 16 },
-      2: { halign: "center", cellWidth: 20 },
-      3: { halign: "center", cellWidth: 58, overflow: "linebreak" },
-      4: { halign: "center", cellWidth: 26 },
-      5: { halign: "center", cellWidth: 18 },
-      6: { halign: "center", cellWidth: 14 },
-      7: { halign: "center", cellWidth: 14 },
+      0: { cellWidth: 14 }, 1: { cellWidth: 14 }, 2: { cellWidth: 20 },
+      3: { cellWidth: 56, overflow: "linebreak" }, 4: { cellWidth: 26 },
+      5: { cellWidth: 22 }, 6: { cellWidth: 14 }, 7: { cellWidth: 16 },
     },
-    didParseCell: (data) => {
-      if (data.section === "body") {
-        if (data.column.index === 0 && data.row.index < 3) data.cell.styles.fontStyle = "bold";
-        if (data.column.index === 7) {
-          const val = String(data.cell.raw);
-          data.cell.styles.textColor = val === "Pass" ? PDF_COLOR.pass : PDF_COLOR.fail;
-          data.cell.styles.fontStyle = "bold";
-        }
+    didParseCell: (d) => {
+      if (d.section !== "body") return;
+      const top3 = d.row.index < 3;
+      if (top3) { d.cell.styles.fillColor = PDF_COLOR.goldTint; }
+      if (d.column.index === 0) {
+        d.cell.styles.fontStyle = "bold";
+        d.cell.styles.font = "times";
+        d.cell.styles.fontSize = 10;
+        if (top3) d.cell.styles.textColor = PDF_COLOR.gold;
+      }
+      if (d.column.index === 3) {
+        d.cell.styles.font = "times";
+        d.cell.styles.fontSize = 10;
+        d.cell.styles.fontStyle = top3 ? "bold" : "normal";
+      }
+      if (d.column.index === 5) d.cell.styles.fontStyle = "bold";
+      if (d.column.index === 7) {
+        d.cell.styles.fontStyle = "bold";
+        d.cell.styles.textColor = String(d.cell.raw) === "Pass" ? PDF_COLOR.pass : PDF_COLOR.fail;
       }
     },
-    margin: { left: 14, right: 14, bottom: 18 },
-    didDrawPage: (data) => {
-      const pc = (doc as any).internal.getNumberOfPages();
-      drawPDFFooter(doc, w, h, data.pageNumber, pc);
-    },
+    margin: { top: 18, left: 14, right: 14, bottom: 18 },
+    didDrawPage: (d) => { if (d.pageNumber > 1) drawRunningHeader(doc, w, title); },
   });
+
+  // Signature block (kept on the last page; moves to a new page if no room)
+  let y = ((doc as any).lastAutoTable?.finalY ?? 100) + 22;
+  if (y > h - 28) { doc.addPage(); drawRunningHeader(doc, w, title); y = 50; }
+  setC(doc, "draw", PDF_COLOR.sub);
+  doc.setLineWidth(0.3);
+  doc.line(20, y, 74, y);
+  doc.line(w - 74, y, w - 20, y);
+  setC(doc, "text", PDF_COLOR.sub);
+  doc.setFont("times", "italic");
+  doc.setFontSize(9.5);
+  doc.text("Examination Incharge", 47, y + 5, { align: "center" });
+  doc.text("Principal", w - 47, y + 5, { align: "center" });
+
   const totalPages = (doc as any).internal.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) { doc.setPage(p); drawPDFFooter(doc, w, h, p, totalPages); }
-  doc.save(`School_MeritList_${year}.pdf`);
+  doc.save(kind === "bise"
+    ? `BISE_MeritList_${opts.examLabel || "Exam"}_${year}.pdf`
+    : `School_MeritList_${year}.pdf`);
 }
 
 // ─── Countdown helper ────────────────────────────────────────────────────────
@@ -1016,251 +1097,224 @@ function PublishDialog({
   if (!open) return null;
 
   const selectedTheme = THEME_PRESETS.find(t => t.id === theme) || THEME_PRESETS[0];
+  const sectionLabel = "mb-2 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
+  const chip = "inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground";
+  const quick = "inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-foreground/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
       <div
-        className="bg-card border border-border/60 rounded-2xl shadow-elevated max-w-4xl w-full max-h-[94vh] flex flex-col overflow-hidden"
+        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-border/60 bg-card shadow-elevated sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header with gradient accent */}
-        <div className={`p-6 sm:p-8 border-b border-border bg-gradient-to-br ${selectedTheme.from} ${selectedTheme.to} text-white shrink-0`}>
-          <h3 className="font-heading font-bold text-xl sm:text-2xl flex items-center gap-3">
-            <span className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/15 flex items-center justify-center shrink-0">
-              <Send className="w-5 h-5" />
-            </span>
-            {isMultiClass ? `Publish ${scopeNoun} Merit List` : `Publish Class ${cls} Merit List`}
-          </h3>
-          <p className="text-sm sm:text-base text-white/85 mt-2.5 leading-relaxed">
-            {visibleCount} of {totalStudents} students will be visible to the public.
-            {" "}{isMultiClass ? "All classes combined." : `${examTypeLabel(examType)} · ${year}`}
-            {hiddenIds.size > 0 && (
-              <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs font-semibold align-middle">
-                <EyeOff className="w-3 h-3" /> {hiddenIds.size} hidden
-              </span>
-            )}
-          </p>
+        {/* Accent line follows the selected theme */}
+        <div className={`h-1.5 shrink-0 bg-gradient-to-r ${selectedTheme.from} ${selectedTheme.to}`} />
+
+        {/* Header */}
+        <div className="flex shrink-0 items-start gap-3 border-b border-border/60 px-5 py-4 sm:px-6">
+          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${selectedTheme.from} ${selectedTheme.to} text-white shadow-sm`}>
+            <Trophy className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-heading text-lg font-bold leading-tight text-foreground sm:text-xl">
+              {isMultiClass ? `Publish ${scopeNoun} Merit List` : `Publish Class ${cls} Merit List`}
+            </h3>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <span className={chip}>{isMultiClass ? "All classes" : `${examTypeLabel(examType)}`}</span>
+              <span className={chip}>{year}</span>
+              <span className={chip}><Users className="h-3 w-3" /> {visibleCount} of {totalStudents} visible</span>
+              {hiddenIds.size > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/70 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-300">
+                  <EyeOff className="h-3 w-3" /> {hiddenIds.size} hidden
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="p-6 sm:p-8 space-y-7 overflow-y-auto flex-1">
-          {/* Title */}
-          <div>
-            <Label className="text-sm font-semibold mb-2 block">Title (shown to students)</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. 1st Semester 2026 Toppers"
-              className="text-sm h-11"
-            />
+        {/* Body */}
+        <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+          {/* Title + notes */}
+          <div className="space-y-4">
+            <div>
+              <Label className={sectionLabel}>Title</Label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. 1st Semester 2026 Toppers"
+                className="h-11 rounded-xl text-sm"
+              />
+            </div>
+            <div>
+              <Label className={sectionLabel}>Note <span className="font-normal normal-case tracking-normal">(optional)</span></Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="A short message shown above the list"
+                className="min-h-[68px] rounded-xl text-sm"
+              />
+            </div>
           </div>
 
-          {/* Notes */}
+          {/* Theme */}
           <div>
-            <Label className="text-sm font-semibold mb-2 block">Notes (optional, shown to students)</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Congratulations to all toppers!"
-              className="text-sm min-h-[72px]"
-            />
-          </div>
-
-          {/* Theme picker */}
-          <div>
-            <Label className="text-sm font-semibold mb-2.5 block">Visual theme</Label>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+            <Label className={sectionLabel}>Theme</Label>
+            <div className="flex flex-wrap gap-2">
               {THEME_PRESETS.map(t => (
                 <button
                   key={t.id}
                   onClick={() => setTheme(t.id)}
-                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+                  aria-pressed={theme === t.id}
+                  className={`inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3.5 text-xs font-semibold transition-all ${
                     theme === t.id
-                      ? "border-foreground bg-foreground/5"
-                      : "border-border hover:border-foreground/30"
+                      ? "border-foreground/70 bg-foreground/5 text-foreground"
+                      : "border-border/70 text-muted-foreground hover:border-foreground/30"
                   }`}
                 >
-                  <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${t.from} ${t.to} shadow-sm`} />
-                  <span className="text-[10px] font-medium text-muted-foreground leading-tight text-center">{t.label}</span>
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br ${t.from} ${t.to}`}>
+                    {theme === t.id && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                  </span>
+                  {t.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* ── Student Visibility — premium panel ────────────────────────── */}
-          {/* Not applicable to BISE Peshawar merit: those results are the
-              board's own official public merit list, so hiding toppers or
-              individual students has no place here — only School Merit
-              (class or whole-school) gets this panel. */}
+          {/* Student visibility (not for BISE — that is the board's own public list) */}
           {scope !== "school-bise" && (
-          <div className="rounded-2xl border-2 border-amber-200 dark:border-amber-800/60 bg-gradient-to-br from-amber-50/70 via-card to-yellow-50/40 dark:from-amber-950/20 dark:via-card dark:to-yellow-950/10 overflow-hidden">
-            <div className="p-4 sm:p-5 pb-3 sm:pb-4 border-b border-amber-200/70 dark:border-amber-800/40">
-              <div className="flex items-center gap-2">
-                <span className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center shrink-0 shadow-sm">
-                  <ShieldCheck className="w-4 h-4 text-white" />
-                </span>
-                <div>
-                  <Label className="text-sm font-bold block leading-tight">Student Visibility</Label>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Uncheck anyone you don't want revealed yet — e.g. keep toppers a surprise for the program.
-                  </p>
+            <div className="overflow-hidden rounded-2xl border border-border/70">
+              <div className="space-y-3 border-b border-border/60 bg-muted/30 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                    <ShieldCheck className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-tight text-foreground">Student visibility</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      Untick a student to keep them hidden. Hidden students appear as blank rows at their rank, and their
+                      name, roll number and marks are not published.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button onClick={() => hideTopNOverall(3)} className={quick}>
+                    <Crown className="h-3.5 w-3.5 text-amber-600" /> Hide top 3
+                  </button>
+                  {isMultiClass && (
+                    <button onClick={() => hideTopNPerClass(3)} className={quick}>
+                      <ListFilter className="h-3.5 w-3.5 text-amber-600" /> Hide top 3 per class
+                    </button>
+                  )}
+                  {hiddenIds.size > 0 && (
+                    <button onClick={showAll} className={quick}>
+                      <Eye className="h-3.5 w-3.5" /> Show all
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={visSearch}
+                    onChange={(e) => setVisSearch(e.target.value)}
+                    placeholder="Search name, roll number or class"
+                    className="h-9 rounded-full bg-card pl-8 text-xs shadow-none"
+                  />
                 </div>
               </div>
 
-              {/* Quick actions — only two, as requested. Each HIDES the
-                  toppers described (everyone else stays visible), rather
-                  than showing only the toppers. */}
-              <div className="flex flex-wrap gap-1.5 mt-3.5">
-                <button
-                  onClick={() => hideTopNOverall(3)}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:brightness-105 transition-all"
-                >
-                  <Crown className="w-3.5 h-3.5" /> Hide top 3 students
-                </button>
-                {isMultiClass && (
-                  <button
-                    onClick={() => hideTopNPerClass(3)}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:brightness-105 transition-all"
-                  >
-                    <ListFilter className="w-3.5 h-3.5" /> Hide top 3 of each class
-                  </button>
-                )}
-                {hiddenIds.size > 0 && (
-                  <button
-                    onClick={showAll}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border border-border bg-secondary text-muted-foreground hover:brightness-95 transition-all"
-                  >
-                    <Eye className="w-3.5 h-3.5" /> Reveal all
-                  </button>
-                )}
-              </div>
-
-              {/* Search */}
-              <div className="relative mt-3">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={visSearch}
-                  onChange={(e) => setVisSearch(e.target.value)}
-                  placeholder="Search by name, roll no, or class..."
-                  className="h-9 pl-8 text-xs rounded-full border-border/60 bg-card shadow-none"
-                />
+              <div className="max-h-64 divide-y divide-border/60 overflow-y-auto">
+                {filteredForVisibility.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">No students match that search.</p>
+                ) : filteredForVisibility.map(e => {
+                  const isHidden = hiddenIds.has(e.student_id);
+                  return (
+                    <label
+                      key={e.student_id}
+                      className={`flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors ${
+                        isHidden ? "bg-muted/40 opacity-60" : "hover:bg-muted/40"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!isHidden}
+                        onChange={() => toggleOne(e.student_id)}
+                        className="h-4 w-4 shrink-0 cursor-pointer rounded accent-primary"
+                      />
+                      <span className={`w-8 shrink-0 text-center text-xs font-bold tabular-nums ${e.position <= 3 ? "text-amber-600" : "text-muted-foreground"}`}>
+                        {e.position}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{e.full_name}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {isMultiClass && <>Class {e.class} · </>}Roll {e.roll_number} · {Number(e.percentage).toFixed(1)}%
+                        </p>
+                      </div>
+                      {isHidden ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+                          <EyeOff className="h-3 w-3" /> Hidden
+                        </span>
+                      ) : e.position <= 3 ? (
+                        <Crown className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                      ) : null}
+                    </label>
+                  );
+                })}
               </div>
             </div>
-
-            {/* Student list — scrollable, checkbox per row */}
-            <div className="max-h-72 overflow-y-auto divide-y divide-border/60">
-              {filteredForVisibility.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-6">No students match that search.</p>
-              ) : filteredForVisibility.map(e => {
-                const isHidden = hiddenIds.has(e.student_id);
-                return (
-                  <label
-                    key={e.student_id}
-                    className={`flex items-center gap-3 px-4 sm:px-5 py-2.5 cursor-pointer transition-colors ${
-                      isHidden ? "bg-muted/40 opacity-60" : "hover:bg-amber-50/50 dark:hover:bg-amber-950/10"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!isHidden}
-                      onChange={() => toggleOne(e.student_id)}
-                      className="w-4 h-4 rounded accent-amber-500 shrink-0 cursor-pointer"
-                    />
-                    <span className={`text-xs font-bold tabular-nums w-7 shrink-0 text-center ${
-                      e.position <= 3 ? "text-amber-600" : "text-muted-foreground"
-                    }`}>
-                      #{e.position}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{e.full_name}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {isMultiClass && <>Cls {e.class} · </>}Roll {e.roll_number} · {Number(e.percentage).toFixed(1)}%
-                      </p>
-                    </div>
-                    {isHidden ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground shrink-0">
-                        <EyeOff className="w-3 h-3" /> Hidden
-                      </span>
-                    ) : e.position <= 3 ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 shrink-0">
-                        <Crown className="w-3 h-3" /> Topper
-                      </span>
-                    ) : null}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
           )}
 
-          {/* Publish mode */}
+          {/* Release */}
           <div>
-            <Label className="text-sm font-semibold mb-2.5 block">When should it go live?</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <button
-                onClick={() => setPublishMode("now")}
-                className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-colors ${
-                  publishMode === "now"
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:bg-secondary"
-                }`}
-              >
-                <Send className="w-4 h-4 shrink-0" /> Publish now
-              </button>
-              <button
-                onClick={() => setPublishMode("schedule")}
-                className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-colors ${
-                  publishMode === "schedule"
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:bg-secondary"
-                }`}
-              >
-                <Clock className="w-4 h-4 shrink-0" /> Schedule with countdown
-              </button>
+            <Label className={sectionLabel}>Release</Label>
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-border/70 bg-muted/40 p-1">
+              {([
+                ["now", "Publish now", Send],
+                ["schedule", "Schedule", Clock],
+              ] as const).map(([mode, label, Icon]) => (
+                <button
+                  key={mode}
+                  onClick={() => setPublishMode(mode)}
+                  aria-pressed={publishMode === mode}
+                  className={`flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+                    publishMode === mode
+                      ? "bg-card text-foreground shadow-sm ring-1 ring-border/70"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" /> {label}
+                </button>
+              ))}
             </div>
-          </div>
-
-          {/* Schedule datetime picker */}
-          {publishMode === "schedule" && (
-            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-4">
-              <Label className="text-sm font-semibold mb-2 block text-amber-800 dark:text-amber-300">Publish at (date & time)</Label>
-              <Input
-                type="datetime-local"
-                value={scheduleAt}
-                onChange={(e) => setScheduleAt(e.target.value)}
-                className="text-sm h-11 bg-card"
-              />
-              <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 shrink-0" />
-                Students will see a live countdown on their dashboard until this moment.
-              </p>
-            </div>
-          )}
-
-          {/* Snapshot notice */}
-          <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 p-4">
-            <p className="text-xs text-emerald-700 dark:text-emerald-400 flex items-start gap-2 leading-relaxed">
-              <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>
-                <strong>Permanent snapshot:</strong> Once published, this merit list
-                is decoupled from the results table. Deleting results in
-                "Manage Result" will <strong>not</strong> affect this merit list.
-                {hiddenIds.size > 0 && (
-                  <> Hidden students appear only as blank dash rows at their official
-                  positions — their names, roll numbers and marks are <strong>not</strong> sent
-                  to the server. Publish an updated list later with everyone visible to
-                  reveal them.</>
-                )}
-              </span>
-            </p>
+            {publishMode === "schedule" && (
+              <div className="mt-3 space-y-2">
+                <Input
+                  type="datetime-local"
+                  value={scheduleAt}
+                  onChange={(e) => setScheduleAt(e.target.value)}
+                  className="h-11 rounded-xl bg-card text-sm"
+                />
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                  A live countdown is shown to students until this time.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="border-t border-border/60 p-4 sm:p-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end shrink-0">
-          <Button variant="outline" onClick={onClose} className="h-9 min-w-0 gap-1.5 whitespace-nowrap rounded-full px-4 text-xs font-semibold shadow-none w-full sm:w-auto">Cancel</Button>
-          <Button onClick={handleSave} disabled={saveMut.isPending} className="h-9 min-w-0 gap-1.5 whitespace-nowrap rounded-full px-4 text-xs font-semibold shadow-none w-full sm:w-auto">
-            {saveMut.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-            {publishMode === "now" ? "Publish Now" : "Schedule Publish"}
+        {/* Footer */}
+        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border/60 bg-card px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+          <Button variant="outline" onClick={onClose} className="h-10 w-full rounded-full px-5 text-sm font-semibold shadow-none sm:w-auto">Cancel</Button>
+          <Button onClick={handleSave} disabled={saveMut.isPending} className="h-10 w-full gap-2 rounded-full px-6 text-sm font-semibold shadow-none sm:w-auto">
+            {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : publishMode === "now" ? <Send className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+            {publishMode === "now" ? "Publish" : "Schedule"}
           </Button>
         </div>
       </div>
@@ -1492,7 +1546,7 @@ function SchoolMeritTab() {
       {!isLoading && totalStudents > 0 && (
         <div className="space-y-2.5">
           <div className="flex gap-2 flex-wrap items-center">
-            <Button onClick={() => generateAllClassesPDF(byClass, year, existing?.title)} variant="outline" className="h-9 min-w-0 gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold shadow-none border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-500/40 dark:text-blue-300 dark:hover:bg-blue-950/30">
+            <Button onClick={() => generateMeritPDF({ byClass, year, title: existing?.title, kind: "school" })} variant="outline" className="h-9 min-w-0 gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold shadow-none border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-500/40 dark:text-blue-300 dark:hover:bg-blue-950/30">
               <Download className="w-3.5 h-3.5" /> Download PDF
             </Button>
             <Button onClick={() => setPublishOpen(true)} className="h-9 min-w-0 gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold shadow-none">
@@ -1688,6 +1742,9 @@ function BiseMeritTab() {
       {!isLoading && totalStudents > 0 && (
         <div className="space-y-2.5">
           <div className="flex gap-2 flex-wrap items-center">
+            <Button onClick={() => generateMeritPDF({ byClass: biseByClass, year, title: existing?.title, kind: "bise", examLabel: examType })} variant="outline" className="h-9 min-w-0 gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold shadow-none border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-500/40 dark:text-blue-300 dark:hover:bg-blue-950/30">
+              <Download className="w-3.5 h-3.5" /> Download PDF
+            </Button>
             <Button onClick={() => setPublishOpen(true)} className="h-9 min-w-0 gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold shadow-none">
               <Plus className="w-3.5 h-3.5" />
               {existing ? "Update BISE Merit List" : "Publish BISE Merit List"}
@@ -1767,7 +1824,7 @@ const AdminMeritList = () => {
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground leading-relaxed rounded-2xl bg-secondary/40 border border-border/60 px-3 py-2.5">
               Live lists are visible to students now; scheduled ones show a countdown until the publish time.
-              Each published list is a <strong>permanent snapshot</strong> — deleting results in Manage Results won't affect it.
+
             </p>
             <PublishedList records={records} />
           </div>
