@@ -72,7 +72,7 @@ const CACHE = {
   settings:         { s: 300, swr: 600 },
   "merit-lists":    { s: 30,  swr: 120 },
   "merit-entries":  { s: 120, swr: 300 },
-  "roll-sessions":  { s: 30,  swr: 120 },
+  "roll-sessions":  { s: 3,   swr: 3 },   // Go Live / Unpublish must reach students within seconds
   "roll-roster":    { s: 120, swr: 300 },
   "exam-schedule":  { s: 120, swr: 300 },
   "all-exam-schedule": { s: 120, swr: 300 },
