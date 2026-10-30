@@ -1140,7 +1140,7 @@ function SlipFinder({ session, rolls, loading, schedule }: {
                       role="radio"
                       aria-checked={active}
                       onClick={() => { setSelectedClass(cls); resetFinder(); }}
-                      className={`h-11 w-11 shrink-0 rounded-lg border text-[15px] font-extrabold touch-manipulation transition-colors ${
+                      className={`h-9 w-9 shrink-0 rounded-md border text-sm font-extrabold touch-manipulation transition-colors ${
                         active
                           ? "border-gold bg-primary text-primary-foreground shadow-sm"
                           : "border-border bg-background text-muted-foreground active:bg-muted hover:border-gold/50"
