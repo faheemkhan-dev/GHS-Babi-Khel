@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense } from "react";
-import { BarChart3, Receipt, FileText, Wallet, TrendingUp, CircleDollarSign } from "lucide-react";
+import { BarChart3, Receipt, FileText, Wallet, TrendingUp, CircleDollarSign, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import OverviewTab from "./fees/OverviewTab";
 
@@ -8,9 +8,11 @@ const VouchersTab = lazy(() => import("./fees/VouchersTab"));
 const PaymentsTab = lazy(() => import("./fees/PaymentsTab"));
 const SetupTab = lazy(() => import("./fees/SetupTab"));
 const ReportsTab = lazy(() => import("./fees/ReportsTab"));
+const StudentsTab = lazy(() => import("./fees/StudentsTab"));
 
 const TABS = [
   { v: "overview", label: "Overview", icon: BarChart3 },
+  { v: "students", label: "Students", icon: Users },
   { v: "vouchers", label: "Vouchers", icon: FileText },
   { v: "payments", label: "Payments", icon: Wallet },
   { v: "setup", label: "Fee Setup", icon: Receipt },
@@ -28,7 +30,7 @@ const AdminFees = () => {
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="font-heading text-[15px] font-bold leading-tight tracking-tight text-foreground sm:text-xl">Fee Management</h2>
-          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground sm:text-sm">Class lists come from Exam Roll Numbers</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground sm:text-sm">Students, vouchers and payments</p>
         </div>
       </div>
 
@@ -51,6 +53,7 @@ const AdminFees = () => {
 
       <Suspense fallback={<Skeleton className="h-64 rounded-2xl" />}>
         {tab === "overview" && <OverviewTab />}
+        {tab === "students" && <StudentsTab />}
         {tab === "vouchers" && <VouchersTab />}
         {tab === "payments" && <PaymentsTab />}
         {tab === "setup" && <SetupTab />}
