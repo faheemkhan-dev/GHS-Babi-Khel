@@ -78,9 +78,8 @@ export function useRollSlipCountdown() {
   const { data: sessions = [], isLoading } = useQuery<RollSlipSession[]>({
     queryKey: ["roll-slip-countdown"],
     queryFn: async () =>
-      // Phase 5: cached public read (s-maxage 30 s) — every visitor's Navbar
-      // chip shares one DB read per half-minute. The countdown itself flips
-      // locally at the boundary (useBoundaryNow), so 30 s freshness is plenty.
+      // Cached public read (a few seconds at the edge) — every visitor's
+      // Navbar chip shares one DB read.
       cachedOrDirect<RollSlipSession[]>("roll-sessions", {}, async () => {
         const { data, error } = await supabase
           .from("exam_roll_sessions")
@@ -90,9 +89,16 @@ export function useRollSlipCountdown() {
         if (error) throw error;
         return data ?? [];
       }),
-    // Countdown flips locally at the boundary (useBoundaryNow), so no 30 s polling is needed.
-    staleTime: 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    // The countdown flips locally at its boundary, but an admin can press
+    // "Go Live" early. While a countdown is running, re-check every 5 s so
+    // students see the slips seconds after the release (the read is cached
+    // for 3 s at the edge, so this costs the database almost nothing).
+    staleTime: 15 * 1000,
+    refetchInterval: (query) => {
+      const rows = (query.state.data as RollSlipSession[] | undefined) ?? [];
+      const counting = rows.some((s) => s.publish_at && new Date(s.publish_at).getTime() > Date.now());
+      return counting ? 5 * 1000 : 5 * 60 * 1000;
+    },
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
