@@ -281,10 +281,6 @@ function CountdownPanel({ session }: { session: ExamSession }) {
           {session.countdown_label && (
             <p className="text-xs text-muted-foreground mt-6 italic max-w-md mx-auto">"{session.countdown_label}"</p>
           )}
-          <p className="inline-flex items-center gap-2 mt-6 text-[11px] font-semibold text-amber-700 dark:text-amber-500 bg-amber-600/10 border border-amber-600/20 rounded-full px-4 py-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
-            Slips open here automatically — no refresh needed
-          </p>
         </div>
       </div>
   );
@@ -1134,7 +1130,7 @@ function SlipFinder({ session, rolls, loading, schedule }: {
                 <span className="grid h-5 w-5 place-items-center rounded-full border border-gold/60 text-[10px] font-bold text-gold-strong">1</span>
                 Select your class
               </p>
-              <div className="grid grid-cols-5 gap-1.5" role="radiogroup" aria-label="Class">
+              <div className="flex flex-wrap justify-center gap-2" role="radiogroup" aria-label="Class">
                 {classes.map(cls => {
                   const active = selectedClass === cls;
                   return (
@@ -1144,7 +1140,7 @@ function SlipFinder({ session, rolls, loading, schedule }: {
                       role="radio"
                       aria-checked={active}
                       onClick={() => { setSelectedClass(cls); resetFinder(); }}
-                      className={`h-10 w-full min-w-0 rounded-lg border text-[15px] font-extrabold touch-manipulation transition-colors ${
+                      className={`h-11 w-11 shrink-0 rounded-lg border text-[15px] font-extrabold touch-manipulation transition-colors ${
                         active
                           ? "border-gold bg-primary text-primary-foreground shadow-sm"
                           : "border-border bg-background text-muted-foreground active:bg-muted hover:border-gold/50"
