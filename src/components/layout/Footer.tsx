@@ -144,9 +144,9 @@ const Footer = () => {
 
           {/* ── Quick Links ── */}
           <div>
-            <h4 className="font-heading font-semibold text-sm uppercase tracking-wider mb-3 text-[hsl(43_74%_66%)]">
+            <h3 className="font-heading font-semibold text-sm uppercase tracking-wider mb-3 text-[hsl(43_74%_66%)]">
               Quick Links
-            </h4>
+            </h3>
             <ul className="space-y-2">
               {footerLinks.quickLinks.map((link) => (
                 <li key={link.to + link.label}>
@@ -163,9 +163,9 @@ const Footer = () => {
 
           {/* ── Resources ── */}
           <div>
-            <h4 className="font-heading font-semibold text-sm uppercase tracking-wider mb-3 text-[hsl(43_74%_66%)]">
+            <h3 className="font-heading font-semibold text-sm uppercase tracking-wider mb-3 text-[hsl(43_74%_66%)]">
               Resources
-            </h4>
+            </h3>
             <ul className="space-y-2">
               {footerLinks.resources.map((link, i) => (
                 <li key={i}>
