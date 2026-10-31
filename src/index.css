@@ -49,6 +49,26 @@
   src: url('/fonts/playfair-var.woff2') format('woff2');
 }
 
+/* PERF (CLS): metric-matched local fallbacks. While the self-hosted woff2
+   loads, text is laid out with these (size-adjust / ascent / descent tuned to
+   Inter and Playfair Display), so the swap does not move anything. */
+@font-face {
+  font-family: 'Inter Fallback';
+  src: local('Arial'), local('Helvetica Neue'), local('Roboto');
+  size-adjust: 107.4%;
+  ascent-override: 90.2%;
+  descent-override: 22.5%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Playfair Fallback';
+  src: local('Georgia'), local('Times New Roman');
+  size-adjust: 96%;
+  ascent-override: 108%;
+  descent-override: 26%;
+  line-gap-override: 0%;
+}
+
 /* GPU compositing note: content-visibility removed from img/video —
    causes texture corruption glitch on Android Chrome during scroll/animation */
 
@@ -140,9 +160,9 @@
     --sidebar-border: 129 21% 87%;
     --sidebar-ring: 43 89% 38%;
 
-    --font-heading: 'Playfair Display', ui-serif, Georgia, serif;
-    --font-body: 'Inter', sans-serif;
-    --font-display: 'Playfair Display', ui-serif, Georgia, serif;
+    --font-heading: 'Playfair Display', 'Playfair Fallback', ui-serif, Georgia, serif;
+    --font-body: 'Inter', 'Inter Fallback', system-ui, sans-serif;
+    --font-display: 'Playfair Display', 'Playfair Fallback', ui-serif, Georgia, serif;
     --font-urdu: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif;
 
     /* Heritage-gold signature accent — the honour tone of the Green & Gold
@@ -424,7 +444,7 @@
 
   /* ─── Section eyebrow label (unified) — heritage gold, institutional ─── */
   .eyebrow {
-    @apply text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] text-gold;
+    @apply text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] text-gold-strong dark:text-gold;
   }
 
   /* ─── Section heading (unified hierarchy) ─── */
