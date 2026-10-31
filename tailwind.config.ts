@@ -20,9 +20,9 @@ export default {
       fontFamily: {
         // Green & Gold type system — Playfair Display for headings/display
         // (scholarly serif), Inter for UI/body, Nastaliq for Urdu script.
-        heading: ['Playfair Display', 'ui-serif', 'Georgia', 'serif'],
-        body: ['Inter', 'sans-serif'],
-        display: ['Playfair Display', 'ui-serif', 'Georgia', 'serif'],
+        heading: ['Playfair Display', 'Playfair Fallback', 'ui-serif', 'Georgia', 'serif'],
+        body: ['Inter', 'Inter Fallback', 'system-ui', 'sans-serif'],
+        display: ['Playfair Display', 'Playfair Fallback', 'ui-serif', 'Georgia', 'serif'],
       },
       colors: {
         gold: {
