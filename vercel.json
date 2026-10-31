@@ -82,6 +82,12 @@
       ]
     },
     {
+      "source": "/(.*)\\.(jpg|jpeg|webp|avif|svg)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=2592000, stale-while-revalidate=86400" }
+      ]
+    },
+    {
       "source": "/og-image.png",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, stale-while-revalidate=86400" }
