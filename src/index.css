@@ -458,37 +458,6 @@
   /* intentionally empty — kept as class for backward compat */
 }
 
-/* ─── KaTeX Formula Styles ──────────────────────────────────────────────────────
-   KaTeX CSS is loaded from CDN by KaTeXRenderer.tsx.
-   These overrides ensure formulas display properly inside Tailwind Typography prose. */
-.notes-content .katex-display {
-  margin: 1.5em 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 0.5em 0;
-  -webkit-overflow-scrolling: touch;
-}
-.notes-content .katex-display > .katex {
-  text-align: center;
-}
-.notes-content .katex {
-  font-size: 1.1em;
-  line-height: 1.8;
-}
-.notes-content .katex .base {
-  margin: 0 0.1em;
-}
-/* Mobile: allow horizontal scroll for wide formulas */
-@media (max-width: 640px) {
-  .notes-content .katex-display {
-    margin: 1em -0.5em;
-    padding: 0.5em;
-  }
-  .notes-content .katex {
-    font-size: 1em;
-  }
-}
-
 /* Print styles */
 @media print {
   /* Hide all app chrome. The admin layout uses <aside> for its sidebar and
