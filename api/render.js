@@ -184,7 +184,7 @@ async function fetchSchoolProfile() {
     tagline: s.tagline || "Excellence in Education",
     description:
       s.description ||
-      "Official website of Government High School Babi Khel — online admissions, exam results, notices, free study notes and more for classes 6 to 10.",
+      "Official website of Government High School Babi Khel — online admissions, exam results, notices, digital library and more for classes 6 to 10.",
     // Real statistics from the admin dashboard (shown to AI crawlers so they
     // never read misleading "0+" placeholders — only values the school set).
     total_students: typeof s.total_students === "number" ? s.total_students : null,
@@ -507,56 +507,6 @@ async function fetchGallery(limit = 10) {
   };
 }
 
-// ── Notes (public subjects + published chapters — the /notes section) ───────
-// Previously /notes and /notes/<subject> had NO fetcher: AI tools never saw
-// the real subject list or any chapter, even though teachers publish both.
-async function fetchNotes() {
-  const subjects = await safeQuery("note_subjects", (sb) =>
-    sb
-      .from("note_subjects")
-      .select("id, name, slug, emoji, description, class_level, display_order")
-      .eq("is_visible", true)
-      .order("display_order", { ascending: true })
-      .limit(30)
-  );
-  const chapters = await safeQuery("note_chapters", (sb) =>
-    sb
-      .from("note_chapters")
-      .select("id, subject_id, title, slug, description, chapter_number, read_time_mins, difficulty, is_published")
-      .eq("is_published", true)
-      .order("chapter_number", { ascending: true })
-      .limit(300)
-  );
-  const chaptersBySubject = new Map();
-  for (const c of chapters) {
-    if (!chaptersBySubject.has(c.subject_id)) chaptersBySubject.set(c.subject_id, []);
-    chaptersBySubject.get(c.subject_id).push(c);
-  }
-  return {
-    subjects: subjects.map((s) => {
-      const list = chaptersBySubject.get(s.id) || [];
-      return {
-        id: s.id,
-        name: s.name,
-        slug: s.slug,
-        description: s.description || null,
-        class_level: s.class_level || null,
-        chapter_count: list.length,
-        url: `${SITE_URL}/notes/${s.slug}`,
-      };
-    }),
-    chapters: chapters.map((c) => ({
-      subject_id: c.subject_id,
-      title: c.title,
-      slug: c.slug,
-      description: c.description || null,
-      chapter_number: c.chapter_number ?? null,
-      read_time_mins: c.read_time_mins ?? null,
-      difficulty: c.difficulty || null,
-    })),
-  };
-}
-
 async function fetchExamInfo() {
   // Which exams exist (names + years only — NO student rows, NO marks).
   // The results table is PII-sensitive; this metadata alone is safe and is
@@ -617,7 +567,6 @@ const SECTION_FETCHERS = {
   rollSlips: () => fetchRollSlipSessions(10),
   exams: fetchExamInfo,
   gallery: () => fetchGallery(10),
-  notes: fetchNotes,
 };
 
 // Which sections each public route needs. PER-ROUTE FETCHING (2026-08):
@@ -635,21 +584,16 @@ const ROUTE_SECTIONS = {
   "/teachers":        ["school", "teachers"],
   "/gallery":         ["school", "gallery"],
   "/library":         ["school", "library"],
-  "/notes":           ["school", "notes"],
   "/faq":             ["school"],
   "/about":           ["school"],
   "/contact":         ["school"],
-  // every /notes/<subject> and /notes/<subject>/<chapter> route
-  __notes:            ["school", "notes"],
   // notice detail pages
   __detail:           ["school"],
 };
 
-/** Sections required for a route. Notes routes and detail routes fall back to
- *  their family defaults. */
+/** Sections required for a route. Detail routes fall back to a family default. */
 function sectionsForRoute(route) {
   if (ROUTE_SECTIONS[route]) return ROUTE_SECTIONS[route];
-  if (route.startsWith("/notes/")) return ROUTE_SECTIONS.__notes;
   return ROUTE_SECTIONS.__detail; // detail pages (notices/<id>)
 }
 
@@ -701,7 +645,6 @@ async function getLiveSiteData(sections) {
   data.rollSlips = data.rollSlips || [];
   data.exams = data.exams || { published_exams: [], grading: {} };
   data.gallery = data.gallery || { albums: [], photos: [] };
-  data.notes = data.notes || { subjects: [], chapters: [] };
   data.faq = { categories: FAQ_CATEGORIES, items: FAQ_ITEMS };
   return data;
 }
@@ -761,22 +704,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const STATIC_ROUTES = new Set([
   "/", "/about", "/contact", "/admission", "/notices", "/results",
   "/merit-list", "/roll-no-slip", "/teachers", "/gallery", "/library",
-  "/notes", "/notes/math", "/notes/physics",
-  "/notes/chemistry", "/notes/biology", "/notes/english", "/notes/urdu",
-  "/notes/islamiat", "/notes/pakistan-studies", "/notes/computer", "/faq",
+  "/faq",
 ]);
-
-// Legacy subject aliases that older sitemapes/links used before the site
-// stored real subject slugs in the database (e.g. "math" → "mathematics",
-// "chemistry" → "chemistry6"). A crawler (or a human) opening one of these
-// old URLs now receives the content of the REAL subject instead of a 404 or
-// a redirect loop — mirrors what the React app does, but crawler-friendly.
-const SUBJECT_SLUG_ALIASES = {
-  math: "mathematics",
-  chemistry: "chemistry6",
-  biology: "biology",
-  computer: "computer",
-};
 
 // ── Minimal inline styling — for the rare human eye; bots read the text ─────
 const CSS = `
@@ -867,11 +796,7 @@ function admissionFilesHtml(admissionFiles) {
 /** Route-specific LIVE sections appended after the static blocks. */
 function liveSections(route, data) {
   const parts = [];
-  const { admission, admissionFiles, notices, exams, teachers, library, meritLists, rollSlips, gallery, notes, school } = data;
-
-  // Notes subject / chapter pages are handled by their own builders below.
-  const isNotesSubject = route.startsWith("/notes/") && route.split("/").filter(Boolean).length === 2;
-  const isNotesChapter = route.startsWith("/notes/") && route.split("/").filter(Boolean).length === 3;
+  const { admission, admissionFiles, notices, exams, teachers, library, meritLists, rollSlips, gallery, school } = data;
 
   switch (true) {
     case route === "/": {
@@ -1055,7 +980,7 @@ function liveSections(route, data) {
             .join("")}</ul>`
         );
       } else {
-        parts.push(`<p class="meta">No downloadable materials have been added to the library yet. When the school uploads books, past papers, notes or admission forms they will be listed here.</p>`);
+        parts.push(`<p class="meta">No downloadable materials have been added to the library yet. When the school uploads books, past papers or admission forms they will be listed here.</p>`);
       }
       break;
     }
@@ -1083,32 +1008,6 @@ ${captions}
       }
       break;
     }
-    case isNotesSubject: {
-      const slug = route.split("/")[2];
-      parts.push(notesSubjectHtml(slug, data));
-      break;
-    }
-    case route === "/notes": {
-      // Live subject directory — the static block above lists the nine
-      // canonical subjects; this adds the real, current DB list with chapter
-      // counts and links so crawlers always see today's subjects.
-      if (notes.subjects.length) {
-        parts.push("<h2>Current subjects (live)</h2>");
-        parts.push(
-          `<ul>${notes.subjects
-            .map(
-              (s) =>
-                `<li><a href="/notes/${esc(s.slug)}">${esc(s.name)}</a> — Classes ${esc(s.class_level || "6–10")} · ${s.chapter_count} published chapter${s.chapter_count === 1 ? "" : "s"}${s.description ? `<br><span class="meta">${esc(s.description)}</span>` : ""}</li>`
-            )
-            .join("")}</ul>`
-        );
-      }
-      break;
-    }
-    case isNotesChapter: {
-      // Chapter pages build their own full content in renderHandler.
-      break;
-    }
     case route === "/faq": {
       // Grouped Q&A — the full FAQ with every answer inline.
       const byCat = new Map();
@@ -1133,35 +1032,6 @@ ${captions}
       break;
   }
   return parts.join("\n");
-}
-
-/** Live section for a notes SUBJECT page (/notes/<slug>). */
-function notesSubjectHtml(slug, data) {
-  const { notes } = data;
-  const subject =
-    notes.subjects.find((s) => s.slug === slug) ||
-    notes.subjects.find((s) => s.slug === (SUBJECT_SLUG_ALIASES[slug] || "\u0000"));
-  if (!subject) {
-    return `<h2>Available note subjects (live)</h2>${linkList(
-      notes.subjects.map((s) => [s.name, `/notes/${s.slug}`, `Class ${s.class_level || "6–10"} · ${s.chapter_count} chapter${s.chapter_count === 1 ? "" : "s"}`]),
-      "Subjects will be listed here as teachers publish them."
-    )}`;
-  }
-  const chapters = data.notes.chapters.filter((c) => c.subject_id === subject.id);
-  const chapterList = chapters.length
-    ? `<h2>Chapters (live)</h2>
-<ol>${chapters
-        .map(
-          (c) =>
-            `<li><a href="/notes/${esc(subject.slug)}/${esc(c.slug)}">${esc(c.title)}</a>${c.read_time_mins ? ` — ${esc(String(c.read_time_mins))} min read` : ""}${c.difficulty ? ` · ${esc(c.difficulty)}` : ""}${c.description ? `<br><span class="meta">${esc(c.description)}</span>` : ""}</li>`
-        )
-        .join("")}</ol>`
-    : `<p class="meta">No chapters have been published for this subject yet.</p>`;
-  return `<h2>${esc(subject.name)} — live subject details</h2>
-<p>${esc(subject.description || `Study notes for ${subject.name} at Government High School Babi Khel.`)}</p>
-<p class="meta">Classes: ${esc(subject.class_level || "6–10")} · ${subject.chapter_count} published chapter${subject.chapter_count === 1 ? "" : "s"}</p>
-${chapterList}
-<p class="meta">Every chapter page contains the full chapter notes, and many include a practice quiz with questions written by the school's teachers.</p>`;
 }
 
 /** The live "School at a glance" list, shared by the __stats block and the
@@ -1192,30 +1062,6 @@ function injectLiveStats(html, school, route) {
   return html
     .replace(/<ul data-ghs-stats><\/ul>/, replacement)
     .replace(/\s*<p data-ghs-stats-empty>[\s\S]*?<\/p>/, "");
-}
-
-/** Strip HTML/style/script from a chapter's stored HTML content and return a
- *  plain-text excerpt (content is authored HTML with embedded <style>). */
-function chapterTextExcerpt(html, maxChars = 2200) {
-  if (!html) return "";
-  let text = String(html)
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|h[1-6]|tr|table|ul|ol)>/gi, "\n")
-    .replace(/<[^>]+>/g, " ");
-  // decode common entities
-  text = text
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-  text = text.replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n+/g, "\n\n").trim();
-  if (text.length > maxChars) text = text.slice(0, maxChars).trimEnd() + "…";
-  return text;
 }
 
 // ── Developer attribution (machine-readable layer ONLY — never visible UI) ──
@@ -1343,8 +1189,7 @@ function jsonLdFor(route, data, detail, pageName) {
   //    route to its section + page name; detail routes use the item's title.
   //    Drives BreadcrumbList schema for /about, /contact, /notices,
   //    /results, /merit-list, /roll-no-slip, /teachers, /library,
-  //    /gallery, /faq, /admission, /notes, /notes/<subj>,
-  //    /notes/<subj>/<chapter>, /notices/<id>.
+  //    /gallery, /faq, /admission, /notices/<id>.
   const BREADCRUMB_MAP = {
     "/about":        ["Our School",      "About"],
     "/contact":      ["Our School",      "Contact"],
@@ -1355,7 +1200,6 @@ function jsonLdFor(route, data, detail, pageName) {
     "/merit-list":   ["Results",         "Merit List"],
     "/roll-no-slip": ["Results",         "Roll No. Slip"],
     "/admission":    ["Admissions",      "Apply for Admission"],
-    "/notes":        ["Academics",       "Study Notes"],
     "/teachers":     ["Our School",      "Teachers"],
     "/library":      ["Academics",       "Library"],
   };
@@ -1366,26 +1210,6 @@ function jsonLdFor(route, data, detail, pageName) {
       { name: "Home", url: SITE_URL },
       { name: section, url: `${SITE_URL}${route}` },
       { name: page, url: `${SITE_URL}${route}` },
-    ];
-  } else if (route.startsWith("/notes/") && !route.split("/")[3]) {
-    // /notes/<subject> — try to find the subject name from the live data
-    const slug = route.split("/")[2];
-    const subj = data.notes?.subjects?.find((s) => s.slug === slug);
-    breadcrumbItems = [
-      { name: "Home", url: SITE_URL },
-      { name: "Academics", url: `${SITE_URL}/notes` },
-      { name: "Study Notes", url: `${SITE_URL}/notes` },
-      { name: subj?.name || "Subject", url: `${SITE_URL}${route}` },
-    ];
-  } else if (route.startsWith("/notes/")) {
-    // /notes/<subject>/<chapter> — chapter page
-    const slug = route.split("/")[2];
-    const subj = data.notes?.subjects?.find((s) => s.slug === slug);
-    breadcrumbItems = [
-      { name: "Home", url: SITE_URL },
-      { name: "Academics", url: `${SITE_URL}/notes` },
-      { name: subj?.name || "Subject", url: `${SITE_URL}/notes/${slug}` },
-      { name: pageName || "Chapter", url: `${SITE_URL}${route}` },
     ];
   } else if (route.startsWith("/notices/") && detail) {
     breadcrumbItems = [
@@ -1408,52 +1232,6 @@ function jsonLdFor(route, data, detail, pageName) {
 
   if (route === "/faq") graph.push(buildFaqJsonLd());
 
-  // Notes index → subject directory; subject page → chapter list. This is
-  // how AI/search crawlers discover every published study chapter.
-  if (route === "/notes" && data.notes?.subjects?.length) {
-    graph.push({
-      "@type": "ItemList",
-      name: "Study note subjects — GHS Babi Khel",
-      itemListElement: data.notes.subjects.slice(0, 30).map((s, i) => ({
-        "@type": "ListItem",
-        position: i + 1,
-        name: s.name,
-        url: s.url,
-      })),
-    });
-  }
-  if (route.startsWith("/notes/") && !route.split("/")[3] && data.notes?.subjects?.length) {
-    const slug = route.split("/")[2];
-    const subject =
-      data.notes.subjects.find((s) => s.slug === slug) ||
-      data.notes.subjects.find((s) => s.slug === (SUBJECT_SLUG_ALIASES[slug] || "\u0000"));
-    if (subject) {
-      const chapters = data.notes.chapters.filter((c) => c.subject_id === subject.id);
-      if (chapters.length) {
-        graph.push({
-          "@type": "ItemList",
-          name: `${subject.name} chapters — GHS Babi Khel`,
-          itemListElement: chapters.slice(0, 60).map((c, i) => ({
-            "@type": "ListItem",
-            position: i + 1,
-            name: c.title,
-            url: `${SITE_URL}/notes/${subject.slug}/${c.slug}`,
-          })),
-        });
-      }
-    }
-  }
-  if (route.startsWith("/notes/") && route.split("/")[3]) {
-    // Chapter page → Article-like schema so it can surface as a learning
-    // resource answer.
-    graph.push({
-      "@type": "Article",
-      headline: detail?.title || pageName || "Study notes chapter",
-      isPartOf: { "@type": "WebSite", name: "GHS Babi Khel — Study Notes", url: `${SITE_URL}/notes` },
-      about: "Study notes chapter",
-      mainEntityOfPage: `${SITE_URL}${route}`,
-    });
-  }
   if (route === "/gallery" && data.gallery?.albums?.length) {
     graph.push({
       "@type": "ImageGallery",
@@ -1503,8 +1281,7 @@ const PAGES_GUIDE = [
   { path: "/roll-no-slip", purpose: "Exam roll number slips — a student picks their class and types their full name to view, download (PDF with QR code) or share their own slip; a live countdown shows while a release is scheduled" },
   { path: "/notices", purpose: "Official notices — exams, holidays, fee deadlines, parent-teacher meetings" },
   { path: "/teachers", purpose: "Teaching staff directory" },
-  { path: "/notes", purpose: "Free study notes for 9 subjects, classes 6–10, with quizzes and flashcards. Subject pages at /notes/<subject-slug> and individual chapters at /notes/<subject-slug>/<chapter-slug>" },
-  { path: "/library", purpose: "Downloadable books, notes and past papers (each item links to its file)" },
+  { path: "/library", purpose: "Downloadable books and past papers (each item links to its file)" },
   { path: "/gallery", purpose: "Photo albums of school events — sports day, science fair, study tours, national days" },
   { path: "/contact", purpose: "Contact details, map, WhatsApp and contact form" },
   { path: "/about", purpose: "School history, mission and vision" },
@@ -1556,7 +1333,7 @@ async function aiDataHandler(req, res) {
     meta: {
       name: "GHS Babi Khel — AI data feed",
       description:
-        "Live, machine-readable snapshot of Government High School Babi Khel (District Mohmand, KPK, Pakistan): school profile with real statistics, admission status and procedure, results info, published merit lists, roll-number-slip sessions, latest notices, teachers, library files, study notes subjects and chapters, photo gallery albums, and the full FAQ. Generated on request from the school's own database — safe to quote.",
+        "Live, machine-readable snapshot of Government High School Babi Khel (District Mohmand, KPK, Pakistan): school profile with real statistics, admission status and procedure, results info, published merit lists, roll-number-slip sessions, latest notices, teachers, library files, photo gallery albums, and the full FAQ. Generated on request from the school's own database — safe to quote.",
       generated_at: new Date().toISOString(),
       generated_at_display: `${nowInSchoolTz()} (PKT)`,
       timezone: "Asia/Karachi",
@@ -1668,17 +1445,6 @@ async function aiDataHandler(req, res) {
       sessions: data.rollSlips,
     },
 
-    // ── Study notes (live subjects + published chapters) ───────────────────
-    // Each subject lists its real slug + chapter count; chapter URLs follow
-    // the pattern /notes/<subject-slug>/<chapter-slug> and are fully
-    // crawlable (live-rendered for AI/search crawlers).
-    notes: {
-      index_url: "https://ghsbabikhel.dpdns.org/notes",
-      subjects: data.notes.subjects,
-      chapters: data.notes.chapters,
-      chapter_url_pattern: "https://ghsbabikhel.dpdns.org/notes/<subject-slug>/<chapter-slug>",
-    },
-
     // ── Photo gallery (live albums + recent photos) ────────────────────────
     gallery: {
       page_url: "https://ghsbabikhel.dpdns.org/gallery",
@@ -1727,13 +1493,6 @@ async function renderHandler(req, res) {
   let detail = null;
   let detailKind = null;
 
-  // Notes routes: /notes/<subject> and /notes/<subject>/<chapter>
-  const notesMatch = route.match(/^\/notes\/([^/]+)(?:\/([^/]+))?$/);
-  let notesSubject = null; // resolved subject (or null → render /notes index)
-  let notesChapter = null; // resolved chapter row (chapter routes only)
-  let notesEffectiveRoute = route; // canonical route after alias resolution
-  let notesEarlyData = null; // snapshot fetched during notes resolution
-
   if (detailMatch) {
     detailKind = detailMatch[1];
     const id = detailMatch[2];
@@ -1744,45 +1503,6 @@ async function renderHandler(req, res) {
     if (!detail) {
       return res.status(404).setHeader("Content-Type", "text/html; charset=utf-8").send(notFoundHtml(route));
     }
-  } else if (notesMatch) {
-    // ⚠ Previously ANY /notes/<x> URL that wasn't in the hardcoded list got a
-    // 404 here — including REAL chapter pages (/notes/<subject>/<chapter>)
-    // that the React app serves. AI crawlers following chapter links from the
-    // Notes pages hit dead ends. Now subjects and chapters are resolved
-    // against the live database (with legacy alias support).
-    const slug = notesMatch[1].toLowerCase();
-    const chapterSlug = notesMatch[2] ? decodeURIComponent(notesMatch[2]) : null;
-    const notesData = await getLiveSiteData(["school", "notes"]);
-    const subjects = notesData.notes.subjects;
-    const subject =
-      subjects.find((s) => s.slug === slug) ||
-      subjects.find((s) => s.slug === (SUBJECT_SLUG_ALIASES[slug] || "\u0000"));
-    if (subject) {
-      notesSubject = subject;
-      notesEffectiveRoute = `/notes/${subject.slug}`;
-      if (chapterSlug) {
-        const chapterRow = await safeQuery(`note-chapter:${subject.id}:${chapterSlug}`, (sb) =>
-          sb
-            .from("note_chapters")
-            .select("id, subject_id, title, slug, description, content, chapter_number, read_time_mins, difficulty, is_published, audio_enabled, pdf_url")
-            .eq("subject_id", subject.id)
-            .eq("slug", chapterSlug)
-            .eq("is_published", true)
-            .limit(1)
-        );
-        const chapter = chapterRow[0] || null;
-        if (chapter) {
-          notesChapter = chapter;
-          notesEffectiveRoute = `/notes/${subject.slug}/${chapter.slug}`;
-        }
-        // unknown chapter → fall back to the subject page (mirrors the SPA)
-      }
-    } else {
-      // unknown subject → render the /notes index (mirrors the SPA redirect)
-      notesEffectiveRoute = "/notes";
-    }
-    // Reuse the data we already fetched — render continues below.
-    notesEarlyData = notesData;
   } else if (!STATIC_ROUTES.has(route)) {
     // Strict allow-list — anything else is a 404 for crawlers.
     return res.status(404).setHeader("Content-Type", "text/html; charset=utf-8").send(notFoundHtml(route));
@@ -1790,7 +1510,7 @@ async function renderHandler(req, res) {
 
   // Per-route live snapshot — only the sections this page renders. (Detail
   // pages need just school facts; /faq needs none of the dynamic tables.)
-  const data = notesEarlyData || await getLiveSiteData(sectionsForRoute(route));
+  const data = await getLiveSiteData(sectionsForRoute(route));
 
   // ── Live BISE Peshawar exam title / countdown (for /results only) ──────────
   // Crawlers (Google, AI tools) previously got a static "no results published"
@@ -1829,21 +1549,6 @@ async function renderHandler(req, res) {
       (detail.content || "").replace(/\s+/g, " ").trim().slice(0, 155) ||
       `${detailKind === "notices" ? "Official notice" : "News article"} from Government High School Babi Khel, District Mohmand.`;
     h1 = detail.title;
-  } else if (notesSubject && notesChapter) {
-    title = `${notesChapter.title} — ${notesSubject.name} Notes | GHS Babi Khel`;
-    description =
-      (notesChapter.description || chapterTextExcerpt(notesChapter.content, 150)).replace(/\s+/g, " ").trim().slice(0, 155) ||
-      `${notesSubject.name} chapter notes from Government High School Babi Khel.`;
-    h1 = notesChapter.title;
-  } else if (notesSubject) {
-    const meta = getPageMeta(notesEffectiveRoute) || getPageMeta(`/notes/${notesSubject.slug}`);
-    title = `${notesSubject.name} Notes (Classes ${notesSubject.class_level || "6–10"}) — GHS Babi Khel`;
-    description =
-      (notesSubject.description || meta?.description || `Free ${notesSubject.name} notes for classes 6–10 of GHS Babi Khel.`)
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 155);
-    h1 = `${notesSubject.name} Notes`;
   } else if (route === "/results" && bisep && bisep.exam_title) {
     // Live BISE Peshawar exam is the more specific, more searched-for thing
     // on this page right now — lead the title/H1/description with it. Exact
@@ -1857,12 +1562,12 @@ async function renderHandler(req, res) {
       ? `${examTitle} results are LIVE. Search your BISE Peshawar SSC/HSSC result by roll number on GHS Babi Khel's results page — fetched live from the official board portal.`
       : `${examTitle} results — check the live countdown and search by roll number as soon as BISE Peshawar announces them, on GHS Babi Khel's results page.`;
   } else {
-    const meta = getPageMeta(notesEffectiveRoute);
+    const meta = getPageMeta(route);
     title = meta?.title || `${SITE_NAME}`;
     description = meta?.description || "";
     h1 = meta?.h1 || SITE_NAME;
   }
-  const canonical = `${SITE_URL}${notesEffectiveRoute === "/" ? "/" : notesEffectiveRoute}`;
+  const canonical = `${SITE_URL}${route === "/" ? "/" : route}`;
 
   // ── Body content ───────────────────────────────────────────────────────────
   let contentHtml;
@@ -1872,25 +1577,9 @@ async function renderHandler(req, res) {
     }${detail.is_urgent ? " · <strong>URGENT</strong>" : ""}</p>
 ${detail.content ? detail.content.split(/\n{2,}|\n/).map((p) => `<p>${esc(p)}</p>`).join("") : "<p class=\"meta\">(No further text — see the page for details or contact the school.)</p>"}
 <p><a href="/${detailKind}">← All ${detailKind}</a></p>`;
-  } else if (notesSubject && notesChapter) {
-    // Chapter page — full study notes as text excerpt + context.
-    const excerpt = chapterTextExcerpt(notesChapter.content, 4000);
-    const metaLine = [];
-    if (notesChapter.chapter_number != null) metaLine.push(`Chapter ${notesChapter.chapter_number}`);
-    if (notesChapter.read_time_mins) metaLine.push(`${notesChapter.read_time_mins} min read`);
-    if (notesChapter.difficulty) metaLine.push(`difficulty: ${notesChapter.difficulty}`);
-    contentHtml = `<p class="meta">${esc(notesSubject.name)}${metaLine.length ? ` · ${esc(metaLine.join(" · "))}` : ""}</p>
-${notesChapter.description ? `<p><strong>${esc(notesChapter.description)}</strong></p>` : ""}
-${excerpt
-  ? excerpt.split(/\n+/).filter(Boolean).map((p) => `<p>${esc(p)}</p>`).join("\n")
-  : "<p class=\"meta\">The full chapter notes are on the page (some chapters also include interactive quizzes and audio).</p>"}
-${notesChapter.pdf_url ? `<p><a href="${esc(notesChapter.pdf_url)}">Download this chapter as PDF</a></p>` : ""}
-${notesChapter.audio_enabled ? `<p class="meta">Audio narration is available for this chapter on the website.</p>` : ""}
-<p><a href="/notes/${esc(notesSubject.slug)}">← All ${esc(notesSubject.name)} chapters</a></p>`;
   } else {
     // Static blocks from the shared content module + LIVE sections appended.
-    const effectiveRoute = notesEffectiveRoute !== route ? notesEffectiveRoute : route;
-    const meta = getPageMeta(effectiveRoute) || getPageMeta(route);
+    const meta = getPageMeta(route);
     const staticBlocks = (meta?.blocks || [])
       .map((block) => {
         const parts = [];
@@ -1914,10 +1603,10 @@ ${notesChapter.audio_enabled ? `<p class="meta">Audio narration is available for
         // `links: {source}` markers are BUILD-TIME placeholders — the live
         // sections below always carry fresh lists with their own headings.
         // Previously the placeholder's bare <h2> ("Recent notices",
-        // "Latest library items", "Current subjects and chapters") was still
+        // "Latest library items") was still
         // emitted, producing EMPTY heading sections followed by a second,
         // differently-titled live heading — a content-quality smell on
-        // /notices, /notes and /library that reads as thin/duplicated
+        // /notices and /library that reads as thin/duplicated
         // structure to crawlers. Skip the whole placeholder block here.
         if (block.links?.source) return "";
         if (block.h2) parts.push(`<h2>${esc(block.h2)}</h2>`);
