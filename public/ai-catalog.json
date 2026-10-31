@@ -61,16 +61,12 @@
   "tools": [
     {
       "name": "AI Assistant Chat",
-      "description": "Streaming chat endpoint backed by a GLM model with school-grounded context. Accepts a conversation message history and returns server-sent-event token stream. Use for answering natural-language questions about the school, study help, and notes assistance.",
+      "description": "Streaming chat endpoint backed by a GLM model with school-grounded context. Accepts a conversation message history and returns server-sent-event token stream. Use for answering natural-language questions about the school.",
       "method": "POST",
       "url": "https://ghsbabikhel.dpdns.org/api/ai-chat",
       "requestContentType": "application/json",
       "requestSchema": {
-        "messages": "array of { role: 'user'|'assistant'|'system', content: string }",
-        "mode": "optional string (e.g. 'notes')",
-        "subject": "optional string",
-        "chapterTitle": "optional string",
-        "chapterSnippet": "optional string"
+        "messages": "array of { role: 'user'|'assistant'|'system', content: string }"
       },
       "responseContentType": "text/event-stream",
       "responseFormat": "SSE frames: data: {\"token\":\"…\"} repeated, then data: {\"done\":true} or data: {\"error\":\"…\"}"
@@ -84,7 +80,6 @@
     { "path": "/merit-list", "description": "Published merit lists of top-performing students" },
     { "path": "/roll-no-slip", "description": "Roll number slip download for board exams" },
     { "path": "/notices", "description": "Latest school notices" },
-    { "path": "/notes", "description": "Study notes organised by subject" },
     { "path": "/library", "description": "Digital library of books and resources" },
     { "path": "/gallery", "description": "Photo gallery of school events" },
     { "path": "/teachers", "description": "Faculty and teaching staff" },
