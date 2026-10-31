@@ -439,15 +439,8 @@ const Gallery = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center"
-            onClick={(e) => {
-              // Only close when the tap/click lands on the backdrop itself —
-              // never when it bubbles up from the video/image/iframe content
-              // (native <video> controls and embedded iframes can dispatch
-              // events in ways that stopPropagation on the inner wrapper
-              // doesn't always catch on mobile browsers, which was closing
-              // the viewer while someone was just tapping play/pause/seek).
-              if (e.target === e.currentTarget) closeLightbox();
-            }}
+            // Closes ONLY via the X button (or Esc) — tapping outside or on the
+            // media must never dismiss the viewer.
             role="dialog"
             aria-modal="true"
             aria-label="Media viewer"
