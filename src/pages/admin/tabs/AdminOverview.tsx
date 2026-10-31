@@ -8,7 +8,7 @@ import {
   Users, GraduationCap, Bell, BookOpen, Image as ImageIcon,
   UserCog, ClipboardList, Calendar, CheckCircle, AlertCircle, Activity,
   ArrowUpRight, FileText, BookMarked, MapPin, Landmark, Phone, Mail, Hash,
-  Settings, RefreshCw, CalendarDays, Wallet, Trophy, BarChart3, Sparkles,
+  Settings, RefreshCw, CalendarDays, Wallet, Trophy, Sparkles,
 } from "lucide-react";
 
 /* ─── Data hooks ─────────────────────────────────────────────────
@@ -223,7 +223,6 @@ const AdminOverview = () => {
     { tab: "fees",            label: "Fees",        hint: "Collection & dues",     icon: Wallet },
     { tab: "exam-date-sheet", label: "Date Sheet",  hint: "Exam schedule",         icon: Calendar },
     { tab: "merit-list",      label: "Merit List",  hint: "Top performers",        icon: Trophy },
-    { tab: "site-analytics",  label: "Analytics",   hint: "Website visitors",      icon: BarChart3 },
     { tab: "settings",        label: "Settings",    hint: "School profile",        icon: Settings },
   ];
 
