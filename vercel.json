@@ -4,6 +4,8 @@
   "redirects": [
     { "source": "/result-card", "destination": "/results", "permanent": true },
     { "source": "/duty", "destination": "/", "permanent": true },
+    { "source": "/notes", "destination": "/library", "permanent": true },
+    { "source": "/notes/:path*", "destination": "/library", "permanent": true },
     {
       "source": "/((?!sitemap\\.xml|robots\\.txt|\\.well-known/).*)",
       "has": [{ "type": "host", "value": "(.*\\.)?indevs\\.in" }],
@@ -36,16 +38,6 @@
     { "source": "/gallery", "destination": "/gallery/index.html" },
     { "source": "/library", "destination": "/library/index.html" },
     { "source": "/faq", "destination": "/faq/index.html" },
-    { "source": "/notes", "destination": "/notes/index.html" },
-    { "source": "/notes/math", "destination": "/notes/math/index.html" },
-    { "source": "/notes/physics", "destination": "/notes/physics/index.html" },
-    { "source": "/notes/chemistry", "destination": "/notes/chemistry/index.html" },
-    { "source": "/notes/biology", "destination": "/notes/biology/index.html" },
-    { "source": "/notes/english", "destination": "/notes/english/index.html" },
-    { "source": "/notes/urdu", "destination": "/notes/urdu/index.html" },
-    { "source": "/notes/islamiat", "destination": "/notes/islamiat/index.html" },
-    { "source": "/notes/pakistan-studies", "destination": "/notes/pakistan-studies/index.html" },
-    { "source": "/notes/computer", "destination": "/notes/computer/index.html" },
     { "source": "/((?!api/|assets/|fonts/|\\.well-known/|ai-catalog\\.json).*)", "destination": "/index.html" }
   ],
   "headers": [
