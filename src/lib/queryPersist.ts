@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Offline data cache — Homepage, About, Contact, Notices,
-// Results, Admission, Notes, Merit List, Roll No. Slip
+// Results, Admission, Merit List, Roll No. Slip
 // ─────────────────────────────────────────────────────────────────────────────
 // Persists the React Query cache for these public pages' data (notices,
 // teachers, school settings, results, the homepage's
 // "School Rank #1" toppers section, the homepage's admission-banner
-// settings, and the Notes subject + chapter lists) into IndexedDB, so
+// settings) into IndexedDB, so
 // that when a page loads with no internet, it can paint instantly from
 // the last-seen data instead of showing empty/loading states. When the
 // network is back, React Query's normal background refetch (staleTime)
@@ -26,9 +26,7 @@
 // "home-school-toppers" key — persisted so the #1-per-class cards render
 // offline. The homepage's admission CTA uses "admission-settings" —
 // persisted so the "Admissions Open/Closed" banner shows the correct
-// state offline. Notes uses "note-subjects" (the subject grid on /notes)
-// and "note-chapters" (the chapter list inside a subject); both are
-// persisted so students can browse notes offline after their first visit.
+// state offline.
 //
 // Deliberately scoped to a small allow-list of query keys (not the whole
 // app) so this cannot interfere with admin/dashboard data, which must
@@ -62,14 +60,6 @@ const PERSISTED_KEY_PREFIXES = [
   // banner paint with the correct open/closed state offline instead of
   // falling through to the closed-CTA fallback.
   "admission-settings",
-  // Notes → subject grid on /notes + chapter list inside a subject.
-  // Lets students browse the subject list and any previously-visited
-  // subject's chapter list offline. Chapter content text comes from
-  // Supabase in the same query, so it travels with the cache too; PDF /
-  // audio files are served from Cloudinary and are cached separately by
-  // the service worker (see public/sw.js).
-  "note-subjects",
-  "note-chapters",
   // Gallery → album grid on /gallery + photos inside an album.
   // Lets students view previously-visited gallery albums and photos offline.
   "gallery-albums",
