@@ -46,12 +46,11 @@ export interface BisepCurrentExam {
   degraded?: boolean;
 }
 
-// Build-time fallback — kept for resilience. Update this when BISEP
-// announces a new exam, but the live proxy should usually override it
-// within an hour of BISEP's homepage changing.
-const FALLBACK_TITLE =
-  (import.meta.env.VITE_BISEP_EXAM_TITLE as string | undefined)?.trim() ||
-  "SSC Annual-I 2026";
+// Neutral display label used ONLY as a heading when the board has not told us
+// which exam is current. It deliberately names NO exam and NO year — the old
+// hardcoded "SSC Annual-I 2026" made the page show a result that was never
+// announced. Whether an exam is really known is `exam_title !== null`.
+const FALLBACK_TITLE = "BISE Peshawar Result";
 
 // ── Last known good board state (survives refetches AND reloads) ───────────
 // Only the display fields are remembered — never ok/error/timestamps.
