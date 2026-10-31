@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, memo, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, Menu, X, ExternalLink, Moon, Sun, GraduationCap, BarChart2, ChevronRight } from "lucide-react";
+import { LogOut, Menu, X, ExternalLink, Moon, Sun, GraduationCap, ChevronRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { pingDispatch } from "@/lib/push";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,8 +33,6 @@ const navSections: NavSection[] = [
     items: [
       { id: "overview",         label: "Overview",              emoji: "📊" },
       { id: "settings",         label: "School Settings",       emoji: "⚙️" },
-      { id: "site-analytics",   label: "Site Analytics",        emoji: "📈",
-        lucideIcon: BarChart2,  lucideColor: "text-violet-500" },
     ],
   },
   {
