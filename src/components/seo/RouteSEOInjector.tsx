@@ -90,23 +90,6 @@ const admissionFAQSchema = {
   ],
 };
 
-/** Course schema for the Notes section */
-const notesCourseSchema = {
-  "@context": "https://schema.org",
-  "@type": "Course",
-  name: "GHS Babi Khel Study Notes",
-  description:
-    "Subject-wise and chapter-wise study notes for all classes — Mathematics, Physics, Chemistry, Biology, English, Urdu, Islamiyat, Pakistan Studies and Computer Science.",
-  provider: {
-    "@type": "HighSchool",
-    "@id": `${SITE_URL}#organization`,
-    name: "Government High School Babi Khel",
-  },
-  url: `${SITE_URL}/notes`,
-  educationalLevel: "Secondary",
-  isAccessibleForFree: true,
-};
-
 /** Library schema */
 const librarySchema = {
   "@context": "https://schema.org",
@@ -376,10 +359,10 @@ const ROUTES: RouteSEO[] = [
   },
   {
     pattern: "/library",
-    title: "Digital Library — GHS Babi Khel | Books, Notes & Past Papers",
+    title: "Digital Library — GHS Babi Khel | Books & Past Papers",
     description:
-      "Access the digital library of GHS Babi Khel — books, study notes, past papers and educational resources for all classes.",
-    keywords: "school library, digital library, study notes, past papers, books, GHS Babi Khel library",
+      "Access the digital library of GHS Babi Khel — books, past papers and educational resources for all classes.",
+    keywords: "school library, digital library, past papers, books, GHS Babi Khel library",
     breadcrumbs: () => [baseBreadcrumb, { name: "Library", path: "/library" }],
     jsonLd: () => librarySchema,
   },
@@ -469,7 +452,7 @@ const ROUTES: RouteSEO[] = [
     pattern: "/faq",
     title: "FAQ — Frequently Asked Questions | GHS Babi Khel",
     description:
-      "Frequently asked questions about GHS Babi Khel: admission procedure and documents, application tracking, results and grading, BISE Peshawar board exams, study notes, library, contact details and how to install the website as an app.",
+      "Frequently asked questions about GHS Babi Khel: admission procedure and documents, application tracking, results and grading, BISE Peshawar board exams, library, contact details and how to install the website as an app.",
     keywords:
       "GHS Babi Khel FAQ, school admission questions, how to apply GHS Babi Khel, admission documents, result check roll number, BISE Peshawar result, school contact Mohmand, GHS Babi Khel help",
     breadcrumbs: () => [baseBreadcrumb, { name: "FAQ", path: "/faq" }],
@@ -477,69 +460,6 @@ const ROUTES: RouteSEO[] = [
     // dataset (src/data/faqData.mjs) the AI feed and crawler HTML use. One source,
     // zero drift: if a Q&A is edited there, this schema updates too.
     jsonLd: () => buildFaqJsonLd(),
-  },
-  {
-    pattern: "/notes",
-    title: "Study Notes — GHS Babi Khel | Subject-wise Notes & Resources",
-    description:
-      "Access subject-wise study notes, summaries and chapter resources for all classes at GHS Babi Khel — interactive learning made easy.",
-    keywords: "study notes, subject notes, chapter notes, school notes Pakistan, GHS Babi Khel notes",
-    breadcrumbs: () => [baseBreadcrumb, { name: "Notes", path: "/notes" }],
-    // ✅ Course schema for the notes hub
-    jsonLd: () => notesCourseSchema,
-  },
-  {
-    pattern: "/notes/:subject",
-    title: "Subject Notes — GHS Babi Khel | Chapter-wise Study Material",
-    description:
-      "Browse chapter-wise notes and lessons for the selected subject. Comprehensive study material curated for GHS Babi Khel students.",
-    keywords: "subject notes, chapters, lessons, study material",
-    breadcrumbs: (p) => [
-      baseBreadcrumb,
-      { name: "Notes", path: "/notes" },
-      { name: p.subject || "Subject", path: `/notes/${p.subject}` },
-    ],
-    // ✅ Course schema per subject
-    jsonLd: (p) => ({
-      "@context": "https://schema.org",
-      "@type": "Course",
-      name: `${(p.subject || "Subject").charAt(0).toUpperCase() + (p.subject || "subject").slice(1)} Notes — GHS Babi Khel`,
-      description: `Chapter-wise study notes for ${p.subject || "the subject"} — comprehensive learning material for GHS Babi Khel students.`,
-      provider: {
-        "@type": "HighSchool",
-        "@id": `${SITE_URL}#organization`,
-        name: "Government High School Babi Khel",
-      },
-      url: `${SITE_URL}/notes/${p.subject}`,
-      educationalLevel: "Secondary",
-      isAccessibleForFree: true,
-    }),
-  },
-  {
-    pattern: "/notes/:subject/:chapter",
-    title: "Chapter Notes — Detailed Study Material",
-    description:
-      "Read detailed chapter notes, examples and revision content. Interactive study resources for GHS Babi Khel students.",
-    keywords: "chapter notes, detailed notes, study material, revision",
-    type: "article",
-    breadcrumbs: (p) => [
-      baseBreadcrumb,
-      { name: "Notes", path: "/notes" },
-      { name: p.subject || "Subject", path: `/notes/${p.subject}` },
-      { name: p.chapter || "Chapter", path: `/notes/${p.subject}/${p.chapter}` },
-    ],
-    // ✅ Article schema for chapter pages
-    jsonLd: (p) => ({
-      "@context": "https://schema.org",
-      "@type": "Article",
-      headline: `${p.chapter || "Chapter"} Notes — ${p.subject || "Subject"} | GHS Babi Khel`,
-      description: `Detailed notes for ${p.chapter || "chapter"} in ${p.subject || "subject"} — GHS Babi Khel study material.`,
-      url: `${SITE_URL}/notes/${p.subject}/${p.chapter}`,
-      author: { "@id": `${SITE_URL}#organization` },
-      publisher: { "@id": `${SITE_URL}#organization` },
-      educationalLevel: "Secondary",
-      inLanguage: "ur",
-    }),
   },
   // ── Private / noindex pages ──
   { pattern: "/auth/signin",         title: "Sign In — Student, Teacher & Admin Login",    description: "Sign in to your GHS Babi Khel account.",            noIndex: true },
@@ -586,12 +506,7 @@ const RouteSEOInjector = () => {
   }
   if (!matched) matched = NOT_FOUND;
 
-  // Dynamic title for /notes/:subject — capitalize subject param
-  let titleOut = matched.title;
-  if (matched.pattern === "/notes/:subject" && matchedParams.subject) {
-    const subj = matchedParams.subject.charAt(0).toUpperCase() + matchedParams.subject.slice(1);
-    titleOut = `${subj} Notes — GHS Babi Khel | Chapter-wise Study Material`;
-  }
+  const titleOut = matched.title;
 
   const breadcrumbs = matched.breadcrumbs ? matched.breadcrumbs(matchedParams) : undefined;
   const extraJsonLd = matched.jsonLd ? matched.jsonLd(matchedParams, path) : undefined;
