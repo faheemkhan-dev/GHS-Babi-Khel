@@ -212,7 +212,9 @@ export const PushOptIn = ({
 };
 
 /* ── Route-aware bar for PageLayout ───────────────────────────────────── */
-// Floats (fixed) above the bottom dock as a thin glass strip, so it NEVER
+// Floats (fixed) above the bottom dock AND above the AI-assistant launcher
+// (which sits at the bottom-right) so neither can ever cover its buttons;
+// on desktop it sits bottom-left. Floats as a thin glass strip, so it NEVER
 // takes space in the page or pushes the hero / banner down.
 const CTX_DISMISS_KEY = "ghs_push_ctx_dismissed";
 const CTX_DISMISS_MS = 3 * 24 * 60 * 60 * 1000;
@@ -239,7 +241,7 @@ export const PushContextBar = () => {
 
   if (!hit || !visible) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-3 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] z-[55] mx-auto max-w-md animate-in fade-in slide-in-from-bottom-3 duration-500 lg:inset-x-auto lg:bottom-6 lg:right-6 lg:mx-0 lg:w-[26rem]">
+    <div className="pointer-events-none fixed inset-x-3 bottom-[calc(8.75rem+env(safe-area-inset-bottom,0px))] z-[50] mx-auto max-w-md animate-in fade-in slide-in-from-bottom-3 duration-500 lg:inset-x-auto lg:bottom-6 lg:left-6 lg:right-auto lg:mx-0 lg:w-[26rem]">
       <PushOptIn context={hit[1]} onDismiss={dismiss} className="pointer-events-auto" />
     </div>
   );
@@ -287,7 +289,7 @@ export const PushPrompt = () => {
 
   if (!show) return null;
   return (
-    <div className="fixed inset-x-3 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] z-[60] mx-auto max-w-md animate-in fade-in slide-in-from-bottom-3 duration-500 lg:inset-x-auto lg:right-6 lg:bottom-6 lg:mx-0 lg:w-[26rem]">
+    <div className="fixed inset-x-3 bottom-[calc(8.75rem+env(safe-area-inset-bottom,0px))] z-[50] mx-auto max-w-md animate-in fade-in slide-in-from-bottom-3 duration-500 lg:inset-x-auto lg:left-6 lg:right-auto lg:bottom-6 lg:mx-0 lg:w-[26rem]">
       <PushOptIn context="results" title="Get instant school alerts" text="Results, notices, merit lists & more" onDismiss={dismiss} />
     </div>
   );
