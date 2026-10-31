@@ -30,7 +30,6 @@ const PAGE_INDEX: { to: string; label: string; icon: any; keywords: string[] }[]
   { to: "/notices",   label: "Notices",             icon: Bell,         keywords: ["notice", "notices", "announcements", "alerts", "circular"] },
   { to: "/results",   label: "Results",             icon: BarChart3,    keywords: ["results", "exams", "grades", "marks", "report", "scorecard"] },
   { to: "/roll-no-slip", label: "Roll No. Slip",    icon: Hash,         keywords: ["roll", "roll no", "roll number", "exam roll numbers", "admit card", "slip"] },
-  { to: "/notes",     label: "Notes",               icon: BookOpen,     keywords: ["notes", "study", "material", "chapters", "lessons", "subjects"] },
   { to: "/gallery",   label: "Gallery",             icon: Image,        keywords: ["gallery", "photos", "pictures", "images", "media"] },
   { to: "/admission", label: "Admission",           icon: GraduationCap,keywords: ["admission", "admissions", "apply", "enroll", "register", "form"] },
   { to: "/teachers",  label: "Teachers",            icon: Users,        keywords: ["teachers", "staff", "faculty", "educators"] },
