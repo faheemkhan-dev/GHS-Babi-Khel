@@ -22,7 +22,7 @@
 //     parse it cleanly.
 //   • Every paragraph is real, human-readable content — no keyword stuffing,
 //     no hidden text. Google penalises both, and rightly so.
-//   • Internal links to /admission, /notes help
+//   • Internal links to /admission help
 //     Google understand the site's content graph and pass PageRank to the
 //     result-related pages.
 //
@@ -342,25 +342,10 @@ const ResultsSeoContent = () => {
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
             Once you have checked your BISE Peshawar result, the following school resources may be
-            useful — including your exam schedule, study notes and the
+            useful — including your exam schedule and the
             admissions portal for new enrollment.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Link
-              to="/notes"
-              className="group bg-card border border-border rounded-2xl p-4 shadow-card hover:shadow-elevated transition-shadow flex items-start gap-3"
-            >
-              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-heading font-semibold text-foreground group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug">
-                  Subject-wise Study Notes
-                </h3>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Free chapter-wise notes for Mathematics, Physics, Chemistry, Biology, English,
-                  Urdu, Islamiyat, Pakistan Studies and Computer Science — Classes 6 to 10.
-                </p>
-              </div>
-            </Link>
             <Link
               to="/admission"
               className="group bg-card border border-border rounded-2xl p-4 shadow-card hover:shadow-elevated transition-shadow flex items-start gap-3"
