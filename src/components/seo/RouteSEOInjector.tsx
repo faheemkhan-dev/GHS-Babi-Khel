@@ -94,7 +94,7 @@ const admissionFAQSchema = {
 const librarySchema = {
   "@context": "https://schema.org",
   "@type": "Library",
-  name: "GHS Babi Khel Digital Library",
+  name: "GHS Babi Khel Library",
   description:
     "Digital library of Government High School Babi Khel — textbooks, past papers, notes and educational resources for all classes.",
   url: `${SITE_URL}/library`,
@@ -359,7 +359,7 @@ const ROUTES: RouteSEO[] = [
   },
   {
     pattern: "/library",
-    title: "Digital Library — GHS Babi Khel | Books & Past Papers",
+    title: "Library — GHS Babi Khel | Books & Past Papers",
     description:
       "Access the digital library of GHS Babi Khel — books, past papers and educational resources for all classes.",
     keywords: "school library, digital library, past papers, books, GHS Babi Khel library",
