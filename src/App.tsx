@@ -46,7 +46,7 @@ const OfflineCacheBootstrap = ({ queryClient }: { queryClient: QueryClient }) =>
 };
 
 // Quietly pre-loads the JS for About/Contact/Notices/Results
-// AND Admission/Notes (list + subject page) once the homepage has finished
+// AND Admission once the homepage has finished
 // its own work, so those pages are already cached and work offline even on
 // a person's very first visit — not just after they've manually opened
 // each page once while online.
@@ -61,13 +61,6 @@ const OfflineCacheBootstrap = ({ queryClient }: { queryClient: QueryClient }) =>
 // there's nothing to fetch), waits until the browser is idle so it never
 // competes with the homepage's own initial load, and silently does
 // nothing on failure (this is a nice-to-have, should never visibly break anything).
-//
-// Notes' chapter page (./pages/notes/ChapterPage) is intentionally NOT
-// prefetched here — it pulls in heavy deps (KaTeX, audio player, etc.)
-// that would bloat the cache for every visitor. It gets cached on the
-// user's first real visit to a chapter, which is fine because by then
-// they're already invested in that subject. The subject list + subject
-// page ARE prefetched, so the student can always reach a subject offline.
 //
 // SPEED: the route list, prioritised order, sequential downloading and
 // Data-Saver/2G awareness now live in lib/routePrefetch.ts — shared with
@@ -100,9 +93,6 @@ const SignIn           = lazyWithRetry(() => import("./pages/auth/SignIn"));
 const ForgotPassword   = lazyWithRetry(() => import("./pages/auth/ForgotPassword"));
 const ResetPassword    = lazyWithRetry(() => import("./pages/auth/ResetPassword"));
 const AuthCallback     = lazyWithRetry(() => import("./pages/auth/AuthCallback"));
-const NotesPage        = lazyWithRetry(() => import("./pages/notes/NotesPage"));
-const SubjectPage      = lazyWithRetry(() => import("./pages/notes/SubjectPage"));
-const ChapterPage      = lazyWithRetry(() => import("./pages/notes/ChapterPage"));
 const AdminDashboard   = lazyWithRetry(() => import("./pages/admin/AdminDashboard"));
 const RollNoSlip       = lazyWithRetry(() => import("./pages/ExamRollNumbers"));
 const NotFound         = lazyWithRetry(() => import("./pages/NotFound"));
@@ -266,9 +256,6 @@ const App = () => (
                 <Route path="/roll-no-slip"            element={<RollNoSlip />} />
                 <Route path="/admission"               element={<Admission />} />
                 <Route path="/faq"                    element={<FAQ />} />
-                <Route path="/notes"                   element={<NotesPage />} />
-                <Route path="/notes/:subject"          element={<SubjectPage />} />
-                <Route path="/notes/:subject/:chapter" element={<ChapterPage />} />
                 <Route path="*"                        element={<NotFound />} />
               </Routes>
             </Suspense>
