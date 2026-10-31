@@ -389,7 +389,7 @@ const Library = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4"
-            onClick={() => setPlayingVideo(null)}
+            // Closes ONLY via the X button (or Esc) — tapping outside must not dismiss it.
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -465,7 +465,7 @@ const Library = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4"
-            onClick={() => setReadingFile(null)}
+            // Closes ONLY via the X button (or Esc) — tapping outside must not dismiss it.
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
