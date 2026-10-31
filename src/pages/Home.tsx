@@ -871,7 +871,12 @@ const HERO_FULL_LENGTH = HERO_SEGMENTS.reduce((n, s) => n + s.text.length, 0);
 function useHeroTypewriter() {
   const reduced = typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  const [count, setCount] = useState(reduced ? HERO_FULL_LENGTH : 0);
+  // PERF (LCP): start with the FULL heading so the first paint (and the prerendered
+  // HTML) already contains the real LCP text. Starting at 0 made the heading
+  // invisible until JS hydrated (~4.6 s on slow 4G). The type/delete loop still
+  // runs afterwards, after a longer first hold so it never competes with load.
+  const [count, setCount] = useState(HERO_FULL_LENGTH);
+  const firstHold = useRef(true);
   const [deleting, setDeleting] = useState(false);
   // A decorative heading must not keep re-rendering a background tab. This
   // effect re-runs ~20×/second forever, so on a phone that is real, constant
@@ -900,7 +905,8 @@ function useHeroTypewriter() {
     if (!deleting && count < HERO_FULL_LENGTH) {
       timer = setTimeout(() => setCount(c => c + 1), TYPE_MS);
     } else if (!deleting && count === HERO_FULL_LENGTH) {
-      timer = setTimeout(() => setDeleting(true), HOLD_MS);
+      timer = setTimeout(() => setDeleting(true), firstHold.current ? 7000 : HOLD_MS);
+      firstHold.current = false;
     } else if (deleting && count > 0) {
       timer = setTimeout(() => setCount(c => c - 1), DELETE_MS);
     } else {
@@ -1060,9 +1066,9 @@ const Home = () => {
         <div className={`absolute inset-0 ${heroOverlay}`} />
 
         {/* ── Foreground content ── */}
-        <ScrollStage enter={false} exitOffset={["start start", "end start"]} className="container mx-auto px-4 sm:px-6 relative z-10 pt-10 pb-16 md:pt-6 md:pb-24">
+        <div className="container mx-auto px-4 sm:px-6 relative z-10 pt-10 pb-16 md:pt-6 md:pb-24">
           <div className="grid grid-cols-1 items-center">
-            <m.div initial="hidden" animate="visible" variants={stagger.parent} className="max-w-2xl relative">
+            <m.div initial={false} animate="visible" variants={stagger.parent} className="max-w-2xl relative">
 
               {/* Est. badge — thin premium pill: gold left hairline + soft gold wash */}
               <m.div variants={stagger.child}>
@@ -1083,14 +1089,14 @@ const Home = () => {
               <m.div variants={stagger.child} className="mt-6 sm:mt-7 flex flex-row flex-nowrap items-center justify-start gap-2.5">
                 <Link to="/results">
                   <m.button whileTap={{ scale: 0.97 }}
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 h-10 rounded-full bg-gradient-to-r from-gold to-gold-strong text-white dark:text-gold-ink text-sm font-semibold px-6 shadow-[0_6px_16px_-8px_hsl(var(--gold)/0.55)] hover:shadow-[0_8px_20px_-8px_hsl(var(--gold)/0.7)] transition-shadow duration-200">
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 h-10 rounded-full bg-gradient-to-r from-gold-strong to-[hsl(41_90%_24%)] dark:from-gold dark:to-gold-strong text-white dark:text-gold-ink text-sm font-semibold px-6 shadow-[0_6px_16px_-8px_hsl(var(--gold)/0.55)] hover:shadow-[0_8px_20px_-8px_hsl(var(--gold)/0.7)] transition-shadow duration-200">
                     View Results <ArrowRight className="w-4 h-4" />
                   </m.button>
                 </Link>
-                <Link to="/about">
+                <Link to="/about" aria-label="About our school">
                   <m.button whileTap={{ scale: 0.97 }}
                     className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 h-10 rounded-full border border-primary/25 hover:border-gold/60 hover:text-primary text-foreground text-sm font-medium px-6 bg-transparent transition-colors duration-200">
-                    Learn more
+                    About School
                   </m.button>
                 </Link>
               </m.div>
@@ -1098,7 +1104,7 @@ const Home = () => {
             </m.div>
 
           </div>
-        </ScrollStage>
+        </div>
       </section>
 
       {/* ══ 3. STATS BAR ══ */}
@@ -1188,6 +1194,8 @@ const Home = () => {
               })}
               sizes="(min-width: 1280px) 1152px, 100vw"
               alt="School campus"
+              width={1600}
+              height={600}
               className="absolute inset-0 w-full h-full object-cover object-center"
               loading="lazy"
               decoding="async"
@@ -1231,7 +1239,7 @@ const Home = () => {
                 <m.div variants={stagger.child} whileHover={{ y: -6 }} whileTap={{ scale: 0.98 }}
                   className="group relative overflow-hidden bg-card rounded-2xl p-6 shadow-card hover:shadow-elevated transition-all duration-300 border border-border/80 hover:border-gold/60 h-full">
                   <div className="orb orb-gold w-44 h-44 -top-16 -right-16 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <span className="absolute top-4 right-5 font-heading text-4xl font-bold text-gold/20 select-none">0{idx + 1}</span>
+                  <span aria-hidden="true" className="absolute top-4 right-5 font-heading text-4xl font-bold text-gold/20 select-none">0{idx + 1}</span>
                   <div className="relative w-12 h-12 rounded-xl gradient-hero text-gold flex items-center justify-center mb-4 shadow-card">
                     <f.icon className="w-6 h-6" />
                   </div>
@@ -1318,7 +1326,7 @@ const Home = () => {
               <m.div key={teacher.id} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} whileHover={{ y: -6 }}
                 className="bg-card rounded-xl p-4 text-center shadow-card hover:shadow-elevated transition-all duration-300 border border-border/70 hover:border-gold/50 group">
                 {teacher.photo_url
-                  ? <img src={teacher.photo_url} alt={teacher.full_name} loading="lazy" decoding="async" className="w-16 h-16 rounded-full mx-auto mb-3 object-cover ring-2 ring-secondary group-hover:ring-primary/30 transition-all" />
+                  ? <img src={optimizedCloudinaryUrl(teacher.photo_url, { width: 128 }) || teacher.photo_url} alt={teacher.full_name} width={64} height={64} loading="lazy" decoding="async" className="w-16 h-16 rounded-full mx-auto mb-3 object-cover ring-2 ring-secondary group-hover:ring-primary/30 transition-all" />
                   : <div className="w-16 h-16 rounded-full mx-auto mb-3 bg-primary flex items-center justify-center text-white text-lg font-heading font-bold">{(teacher.full_name || "?").split(" ").map((n: string) => n[0]).join("").slice(0, 2)}</div>
                 }
                 <h3 className="font-heading font-semibold text-[15px] text-foreground leading-snug">{teacher.full_name}</h3>
@@ -1386,7 +1394,7 @@ const Home = () => {
                     <div className="mt-5 flex flex-row flex-wrap items-center gap-2.5">
                       <Link
                         to="/admission"
-                        className="inline-flex items-center gap-1.5 h-9 px-5 rounded-full bg-gradient-to-r from-gold to-gold-strong text-white dark:text-gold-ink text-[13px] font-semibold shadow-[0_6px_16px_-8px_hsl(var(--gold)/0.6)] hover:shadow-[0_8px_20px_-8px_hsl(var(--gold)/0.75)] transition-shadow"
+                        className="inline-flex items-center gap-1.5 h-9 px-5 rounded-full bg-gradient-to-r from-gold-strong to-[hsl(41_90%_24%)] dark:from-gold dark:to-gold-strong text-white dark:text-gold-ink text-[13px] font-semibold shadow-[0_6px_16px_-8px_hsl(var(--gold)/0.6)] hover:shadow-[0_8px_20px_-8px_hsl(var(--gold)/0.75)] transition-shadow"
                       >
                         <Send className="w-3.5 h-3.5" /> Apply Online
                       </Link>
@@ -1413,7 +1421,7 @@ const Home = () => {
                       Access your student portal to view results, attendance, timetables, and stay connected with your academic progress.
                     </p>
                     <div className="mt-5 flex flex-row flex-wrap items-center gap-2.5">
-                      <Link to="/auth/signin" className="inline-flex items-center gap-1.5 h-9 px-5 rounded-full bg-gradient-to-r from-gold to-gold-strong text-white dark:text-gold-ink text-[13px] font-semibold shadow-[0_6px_16px_-8px_hsl(var(--gold)/0.6)] transition-shadow">
+                      <Link to="/auth/signin" className="inline-flex items-center gap-1.5 h-9 px-5 rounded-full bg-gradient-to-r from-gold-strong to-[hsl(41_90%_24%)] dark:from-gold dark:to-gold-strong text-white dark:text-gold-ink text-[13px] font-semibold shadow-[0_6px_16px_-8px_hsl(var(--gold)/0.6)] transition-shadow">
                         Sign In to Portal <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
                       <Link to="/results" className="inline-flex items-center gap-1.5 h-9 px-5 rounded-full border border-white/25 text-white text-[13px] font-medium hover:border-gold/70 transition-colors">
@@ -1473,6 +1481,10 @@ const Home = () => {
                           ? settings.principal_photo_url
                           : (optimizedCloudinaryUrl(settings.principal_photo_url, { width: 600 }) || settings.principal_photo_url)}
                         alt={settings?.principal_name || "Principal"}
+                        width={600}
+                        height={600}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover"
                         onError={(event) => {
                           // Keep the principal card visible if the optimized
