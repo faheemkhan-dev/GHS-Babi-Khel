@@ -1,6 +1,6 @@
 // api/ai-chat.ts
 // Vercel Serverless Function — proxies Z.AI's free GLM flash chat API for
-// the homepage AI Assistant widget (and the Notes "AI Study Buddy").
+// the homepage AI Assistant widget.
 //
 // ═══════════════════════════════════════════════════════════════════════════
 // ⚠️ RUNTIME: NODE — NEVER EDGE (critical fix, 2026-09-05) ⚠️
@@ -47,8 +47,7 @@
 //     the wrong question (e.g. "mission" → address card).
 //
 // PROTOCOL (unchanged — both frontends already speak it):
-//   Request:  POST /api/ai-chat  { messages: [...], mode?, subject?,
-//                                 chapterTitle?, chapterSnippet? }
+//   Request:  POST /api/ai-chat  { messages: [...] }
 //   Response: text/event-stream
 //             data: {"token":"Hi! "}\n\n      (many of these)
 //             data: {"done":true}\n\n         (always last on success)
@@ -121,8 +120,8 @@ FACTS
 - Results (/results): search any result by exam roll number. If the school published internal results (classes 6–10: 1st/2nd semester), it searches the school's own table; otherwise it falls back to BISE Peshawar board result search (SSC) automatically. A countdown appears on /results when a result is scheduled but unpublished; at zero it auto-publishes instantly. BISE students can also use https://cloud.bisep.edu.pk → "Show Result by Roll Number". Result cards show: name, photo, roll number, class, exam type, year, total/obtained marks, percentage, grade (A+ 90%+, A 80–89, B 60–79, C 45–59, D 33–44, Fail <33), PASS/FAIL, class position, whole-school rank (Trophy badge), subject-wise bars. An AI Summary card gives personalized study advice beside each result.
 - Admissions (/admission): online application form for classes 6–10 at the start of the academic year; track status there by application ID; interview slot may be booked once shortlisted. Documents: student B-form/CNIC copy, previous school leaving certificate (class 7+), 2 passport photos, parent/guardian CNIC copy. Office contact via /contact.
 - Notices (/notices): official notices (holidays, exam schedules, fee deadlines, PTMs, dress code) with detail pages. Homepage has the Latest Notices section.
-- Student portal (/auth/signin): email + password created by the school admin/office. Dashboard (/dashboard) tabs: Overview, Result Card, Attendance, Timetable, Tests, Fees, Notes, Library, Gallery, Profile. Forgot password → /auth/forgot-password (email reset). Teachers/admins sign in on the same form (role-routed). No credentials? Contact the school office.
-- Roll No. Slip (/roll-no-slip): find, download and share exam roll number slips. Merit List (/merit-list): toppers and position holders. Notes (/notes): study notes by class and subject. Library (/library): books and reading resources. FAQs (/faq).
+- Student portal (/auth/signin): email + password created by the school admin/office. Dashboard (/dashboard) tabs: Overview, Result Card, Attendance, Timetable, Tests, Fees, Library, Gallery, Profile. Forgot password → /auth/forgot-password (email reset). Teachers/admins sign in on the same form (role-routed). No credentials? Contact the school office.
+- Roll No. Slip (/roll-no-slip): find, download and share exam roll number slips. Merit List (/merit-list): toppers and position holders. Library (/library): books and reading resources. FAQs (/faq).
 - Timetable: in the portal's Timetable tab; exam timetables also go out as notices.
 - Fees: portal Fees tab (tuition, exam fee, balance, history); deadlines posted as notices.
 - Gallery (/gallery): event photos.
@@ -142,57 +141,6 @@ TONE & STYLE (premium, professional)
 - Use **bold** sparingly for key terms only. At most one emoji in the whole answer, and only when natural. No headings, no tables, no long paragraphs.
 - When a page matches, finish with one line such as: "Next step: open the Results page (/results)."
 - Keep every answer concise: 40–110 words typically.`;
-
-// ── Notes mode system prompt ──────────────────────────────────────────────
-// Used when the request comes from the AI Study Buddy panel inside a chapter
-// page (ChapterPage.tsx → NoteAiAssistant.tsx → POST /api/ai-chat with
-// mode:"notes"). The chapter title, subject name, and a short plain-text
-// snippet of the chapter content are injected here so the model can answer
-// accurately without the student having to copy-paste the chapter.
-const NOTES_SNIPPET_MAX_CHARS = 4000;
-
-function buildNotesSystemContext(
-  subject: string,
-  chapterTitle: string,
-  snippet: string
-): string {
-  const safeSubject = subject.slice(0, 120);
-  const safeChapter = chapterTitle.slice(0, 240);
-  const safeSnippet = snippet.slice(0, NOTES_SNIPPET_MAX_CHARS);
-
-  return `You are the AI Study Buddy for students at Government High School Babi Khel (District Mohmand, KPK, Pakistan). A student is currently reading a chapter in the Notes section of the school website and has opened the AI panel to get help understanding it.
-
-# CURRENT CHAPTER CONTEXT
-- Subject: ${safeSubject || "(unknown subject)"}
-- Chapter: ${safeChapter || "(unknown chapter)"}
-- Chapter content excerpt (plain text, may be truncated):
-"""
-${safeSnippet || "(no chapter content available — answer based on the chapter title and subject only)"}
-"""
-
-# YOUR JOB
-Help the student understand THIS chapter. You can:
-- Explain a concept from the chapter in simpler words
-- Walk through a step-by-step worked example
-- Summarize the key points the student must remember
-- Generate 3–5 practice questions (give answers in a separate "Answers:" section at the end, OR offer to reveal them on request — don't pre-reveal them inline next to each question)
-- Clarify confusing terms or formulas
-- Connect the chapter to real-world examples
-- For math/physics/chemistry: show the formula and one fully worked example with units
-
-# HOW TO ANSWER — FORMATTING IS MANDATORY
-- Use clear, simple language a class 6–10 student can follow. Default to English.
-- Match the student's language — if they ask in Urdu or Pashto (Roman script), reply in the same language.
-- NEVER write a plain, unbroken paragraph — not even for explanations or worked examples. Break EVERY answer into short bullet points ("- ") or a numbered list ("1."), one idea or one step per line.
-- If a short lead-in sentence is needed, keep it to one line, then continue in bullets.
-- Use **bold** for key terms, and inline \`code\` for formulas, equations, or technical terms.
-- When giving steps, number them (1. 2. 3.) — one short step per line, not a paragraph describing all steps together.
-- Keep answers concise and to the point — say only what's needed, no filler or repetition.
-- For BISE board exam topics (classes 9–10), briefly mention if a concept is commonly tested, but don't pad every answer with exam advice.
-- If the student asks about something NOT in this chapter (another subject, school admin, results, admissions, fees), politely redirect: "I'm your study buddy for **${safeChapter}** (${safeSubject}). For other questions, please use the homepage AI Assistant or check the relevant page on the site."
-- Never invent facts, formulas, or definitions. If you don't know something or the chapter excerpt doesn't cover it, say so honestly and suggest asking the teacher.
-- Do NOT solve the student's homework FOR them in a way that bypasses learning — guide them through the steps and let them write the final answer. If they insist on "just give me the answer", give it, but always show the working so they can learn from it.`;
-}
 
 interface IncomingMessage {
   role: "user" | "assistant";
@@ -521,13 +469,9 @@ export default async function handler(
     });
   }
 
-  // Parse + validate the incoming messages array + optional mode/context.
+  // Parse + validate the incoming messages array.
   // Vercel's Node runtime parses JSON bodies into req.body automatically.
   let messages: IncomingMessage[] = [];
-  let mode: string = "homepage";
-  let subject: string = "";
-  let chapterTitle: string = "";
-  let chapterSnippet: string = "";
   try {
     const raw: any =
       typeof (req as any).body === "string"
@@ -535,10 +479,6 @@ export default async function handler(
         : (req as any).body;
     if (!raw) throw new Error("empty body");
     messages = Array.isArray(raw?.messages) ? raw.messages : [];
-    if (typeof raw?.mode === "string") mode = raw.mode;
-    if (typeof raw?.subject === "string") subject = raw.subject;
-    if (typeof raw?.chapterTitle === "string") chapterTitle = raw.chapterTitle;
-    if (typeof raw?.chapterSnippet === "string") chapterSnippet = raw.chapterSnippet;
   } catch {
     return jsonError(res, 400, { error: "Invalid JSON body." });
   }
@@ -561,8 +501,7 @@ export default async function handler(
   }
 
   // Identity questions (homepage assistant only) get the fixed, correct answer.
-  const fixedReply =
-    mode !== "notes" ? identityReply(cleaned[cleaned.length - 1].content) : null;
+  const fixedReply = identityReply(cleaned[cleaned.length - 1].content);
   if (fixedReply) {
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -575,10 +514,7 @@ export default async function handler(
     return res.end();
   }
 
-  const systemPrompt =
-    mode === "notes"
-      ? buildNotesSystemContext(subject, chapterTitle, chapterSnippet)
-      : SYSTEM_CONTEXT;
+  const systemPrompt = SYSTEM_CONTEXT;
 
   // ── Open the SSE response ─────────────────────────────────────────────────
   // Headers go out IMMEDIATELY (Node runtime — the exact pattern that is
