@@ -39,7 +39,6 @@ export const ROUTE_LOADERS: Record<string, Loader> = {
   // Notices
   "/notices":        () => import("@/pages/Notices"),
   // Academics
-  "/notes":          () => import("@/pages/notes/NotesPage"),
   "/library":        () => import("@/pages/Library"),
   // Actions
   "/admission":      () => import("@/pages/Admission"),
@@ -60,7 +59,6 @@ const BACKGROUND_ORDER = [
   // light (a few KB each)
   "/about", "/contact", "/faq", "/notices",
   "/teachers", "/library", "/gallery", "/search", "/admission",
-  "/notes",
   // heavy (charts / pdf / excel dependency graphs) — warmed last
   "/merit-list", "/results", "/roll-no-slip",
 ];
