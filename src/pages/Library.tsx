@@ -1,4 +1,4 @@
-// Library.tsx — public "Digital Library" page (premium redesign)
+// Library.tsx — public "Library" page (premium redesign)
 // Same data + behaviour as before (files, videos, in-site PDF reader, video
 // player). Only the presentation changed: premium hero with search, thin
 // segmented switch, scrollable chips (no wrapping/cut-off), compact cards,
@@ -125,7 +125,7 @@ const Library = () => {
             <LibraryIcon className="w-6 h-6" />
           </motion.div>
           <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.28em] text-gold mb-1.5">GHS Babi Khel</p>
-          <h1 className="text-[1.9rem] md:text-5xl leading-[1.1] font-heading font-bold text-on-hero tracking-tight">Digital Library</h1>
+          <h1 className="text-[1.9rem] md:text-5xl leading-[1.1] font-heading font-bold text-on-hero tracking-tight">Library</h1>
           <div className="mt-3 flex items-center justify-center gap-2">
             <span className="h-px w-10 bg-gradient-to-r from-transparent to-gold" />
             <span className="w-1.5 h-1.5 rotate-45 bg-gold" />
