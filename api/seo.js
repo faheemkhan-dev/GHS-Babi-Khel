@@ -196,7 +196,7 @@ function buildLlmsTxt(s, admissionFiles = []) {
     : "";
   return `# ${s.school_name} — Government High School, District Mohmand
 
-> Official website of Government High School (GHS) Babi Khel, District Mohmand, Khyber Pakhtunkhwa (KPK), Pakistan — a government school offering classes 6 to 10 (matriculation), affiliated with BISE Peshawar for board exams. The site provides online admission applications, exam results searchable by roll number, official merit lists of top position holders, downloadable exam roll number slips, official notices, free study notes, past papers, teacher directory and a photo gallery.
+> Official website of Government High School (GHS) Babi Khel, District Mohmand, Khyber Pakhtunkhwa (KPK), Pakistan — a government school offering classes 6 to 10 (matriculation), affiliated with BISE Peshawar for board exams. The site provides online admission applications, exam results searchable by roll number, official merit lists of top position holders, downloadable exam roll number slips, official notices, free past papers, teacher directory and a photo gallery.
 
 ## School facts
 
@@ -237,12 +237,11 @@ function buildLlmsTxt(s, admissionFiles = []) {
 - [Roll No. Slip](${SITE_URL}/roll-no-slip): Exam roll number slips — a student picks their class and types their full name to view, download (PDF with QR code) or share their own slip; a live countdown shows while a release is scheduled
 - [Notices](${SITE_URL}/notices): Official school notices — holidays, exam schedules, fee deadlines, parent-teacher meetings
 - [Teachers](${SITE_URL}/teachers): Teaching staff directory with subjects and qualifications
-- [Notes](${SITE_URL}/notes): Free study notes organised by subject with chapter-wise pages — subject pages at /notes/<subject-slug> and individual chapters at /notes/<subject-slug>/<chapter-slug> (Math, Physics, Chemistry, Biology, English, Urdu, Islamiat, Pakistan Studies, Computer) with quizzes and flashcards
 - [Library](${SITE_URL}/library): Downloadable study materials, books, past papers and forms — each item links to its file
 - [Gallery](${SITE_URL}/gallery): Photo albums of school events — sports day, science fair, study tours, national days, with album descriptions and photo captions
 - [Contact](${SITE_URL}/contact): Contact details, embedded map, WhatsApp and contact form
 - [About](${SITE_URL}/about): School history, mission, vision and staff overview
-- [FAQ](${SITE_URL}/faq): Complete frequently-asked-questions page — admissions, documents, tracking, results, grading, notes, contact and website usage
+- [FAQ](${SITE_URL}/faq): Complete frequently-asked-questions page — admissions, documents, tracking, results, grading, library, contact and website usage
 
 ## Results
 
@@ -262,7 +261,7 @@ function buildLlmsTxt(s, admissionFiles = []) {
 ${filesSection ? filesSection + "\n" : ""}
 ## Machine-readable data (recommended for AI tools)
 
-- [Live data feed (JSON)](${SITE_URL}/api/ai-data): the COMPLETE current state of this website in one request — school profile with live statistics, admission status and deadlines (live from the school dashboard), full admission procedure and documents, results info and grading scale, published merit lists, roll-number-slip sessions, the 20 latest notices with content, teacher directory, library files, study notes subjects and chapters, photo gallery albums and the full FAQ. Updated within a minute of any change; always prefer this over cached page snapshots when precision matters.
+- [Live data feed (JSON)](${SITE_URL}/api/ai-data): the COMPLETE current state of this website in one request — school profile with live statistics, admission status and deadlines (live from the school dashboard), full admission procedure and documents, results info and grading scale, published merit lists, roll-number-slip sessions, the 20 latest notices with content, teacher directory, library files, photo gallery albums and the full FAQ. Updated within a minute of any change; always prefer this over cached page snapshots when precision matters.
 - [RSS feed](${SITE_URL}/rss.xml): Latest notices as they are published
 - [Sitemap](${SITE_URL}/sitemap.xml): XML sitemap of all public pages
 
@@ -319,71 +318,13 @@ const STATIC_PAGES = [
   { path: "/contact", changefreq: "monthly", priority: "0.8" },
   { path: "/about", changefreq: "monthly", priority: "0.8" },
   { path: "/teachers", changefreq: "monthly", priority: "0.8", dbSource: { table: "teachers",      column: "created_at" } },
-  { path: "/notes", changefreq: "weekly",  priority: "0.8", dbSource: { table: "note_chapters",  column: "created_at" } },
   { path: "/library", changefreq: "weekly",  priority: "0.8", dbSource: { table: "library_files",  column: "created_at" } },
   { path: "/gallery", changefreq: "weekly",  priority: "0.7", dbSource: { table: "gallery_photos", column: "created_at" } },
   { path: "/faq", changefreq: "monthly", priority: "0.8" },
 ];
 
-const SUBJECT_PAGES = [
-  "math", "physics", "chemistry", "biology", "english",
-  "urdu", "islamiat", "pakistan-studies", "computer",
-];
-
 // How many notice detail URLs to include (most recent first).
 const DETAIL_PAGE_LIMIT = 200;
-
-// How many note CHAPTER URLs (/notes/<subject>/<chapter>) to include.
-const CHAPTER_PAGE_LIMIT = 100;
-
-/** Fetch the live note subjects (is_visible = true) with their slugs.
- *  ⚠ BUGFIX (2026-08): the sitemap previously hardcoded the nine legacy
- *  slugs (math, chemistry, …) — but the database stores the REAL slugs the
- *  React app routes by (e.g. "mathematics", "chemistry6"). Crawlers were
- *  pointed at URLs that redirect for humans, while the actual subject pages
- *  were never listed. Now the sitemap uses the live slugs and also lists
- *  every published chapter page. Falls back to the legacy list only when
- *  the DB is unreachable. */
-async function getNoteSubjects() {
-  const sb = getSupabase();
-  if (!sb) return [];
-  try {
-    const { data, error } = await sb
-      .from("note_subjects")
-      .select("id, name, slug, display_order")
-      .eq("is_visible", true)
-      .order("display_order", { ascending: true })
-      .limit(30);
-    if (error || !Array.isArray(data)) return [];
-    return data.filter((s) => s && s.slug);
-  } catch {
-    return [];
-  }
-}
-
-/** Published chapters (with subject slugs) for chapter detail URLs. */
-async function getNoteChapterEntries(subjects) {
-  const sb = getSupabase();
-  if (!sb || !subjects.length) return [];
-  const byId = new Map(subjects.map((s) => [s.id, s.slug]));
-  try {
-    const { data, error } = await sb
-      .from("note_chapters")
-      .select("id, subject_id, slug, created_at")
-      .eq("is_published", true)
-      .order("created_at", { ascending: false })
-      .limit(CHAPTER_PAGE_LIMIT);
-    if (error || !Array.isArray(data)) return [];
-    return data
-      .filter((c) => c && c.slug && byId.has(c.subject_id))
-      .map((c) => ({
-        path: `/notes/${byId.get(c.subject_id)}/${c.slug}`,
-        lastmod: c.created_at ? new Date(c.created_at).toISOString().split("T")[0] : STATIC_LASTMOD,
-      }));
-  } catch {
-    return [];
-  }
-}
 
 /**
  * Fetch MAX(timestamp) for a single table+column (verified column names).
@@ -470,51 +411,21 @@ async function sitemapHandler(req, res) {
     return { page, lastmod: lm || STATIC_LASTMOD };
   });
 
-  // Subject pages (/notes/<slug>) share the notes lastmod (note_chapters).
-  // Live note subjects (real DB slugs) are used when reachable.
-  const notesLastmodPromise = getLastMod("note_chapters", "created_at");
-  const noteSubjectsPromise = getNoteSubjects();
-
   // Detail pages for notices (in parallel).
   const noticeDetailsPromise = getDetailEntries("notices", "/notices");
 
-  const [pageResults, notesLastmod, noteSubjects, noticeDetails] = await Promise.all([
+  const [pageResults, noticeDetails] = await Promise.all([
     Promise.all(lastmodPromises),
-    notesLastmodPromise,
-    noteSubjectsPromise,
     noticeDetailsPromise,
   ]);
 
-  // Chapter detail pages (/notes/<subject>/<chapter>) — real study content.
-  const chapterEntries = await getNoteChapterEntries(noteSubjects);
-
   const staticEntries = pageResults.map(({ page, lastmod }) => buildUrlEntry(page, lastmod));
-  const subjectLastmod = notesLastmod || STATIC_LASTMOD;
-  // Real DB subject slugs when available; legacy hardcoded list as fallback
-  // (only when the database cannot be reached at request time).
-  const subjectSlugs = noteSubjects.length
-    ? noteSubjects.map((s) => s.slug)
-    : SUBJECT_PAGES;
-  const subjectEntries = subjectSlugs.map((subject) =>
-    buildUrlEntry(
-      { path: `/notes/${subject}`, changefreq: "weekly", priority: "0.7" },
-      subjectLastmod
-    )
-  );
-  const chapterUrlEntries = chapterEntries.map((c) =>
-    buildUrlEntry({ path: c.path, changefreq: "monthly", priority: "0.6" }, c.lastmod)
-  );
-
   const machineEntries = MACHINE_READABLE_ENTRIES.map((page) => buildUrlEntry(page, STATIC_LASTMOD));
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
  ${staticEntries.join("\n\n")}
-
- ${subjectEntries.join("\n")}
-
- ${chapterUrlEntries.join("\n")}
 
  ${noticeDetails.join("\n")}
 
