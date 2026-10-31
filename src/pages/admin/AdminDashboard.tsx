@@ -23,8 +23,6 @@ const AdminAdmissions        = lazy(() => import("./tabs/AdminAdmissions"));
 const AdminStudentRecords    = lazy(() => import("./tabs/AdminStudentRecords"));
 // ── Fee Management ──
 const AdminFees = lazy(() => import("./tabs/AdminFees"));
-// ── Site Analytics (standalone tab) ──
-const AdminSiteAnalytics = lazy(() => import("./tabs/AdminSiteAnalytics"));
 
 const tabMap: Record<string, React.LazyExoticComponent<React.ComponentType<any>>> = {
   overview:           AdminOverview,
@@ -47,7 +45,6 @@ const tabMap: Record<string, React.LazyExoticComponent<React.ComponentType<any>>
   admissions:         AdminAdmissions,
   "student-records":  AdminStudentRecords,
   "fees":             AdminFees,
-  "site-analytics":   AdminSiteAnalytics,
 };
 
 // ── Per-tab error boundary ───────────────────────────────────────────────────
