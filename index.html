@@ -146,8 +146,6 @@
     <link rel="preload" href="/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
 
     <!-- Preconnect -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="dns-prefetch" href="https://supabase.co" />
     <!-- PERF: Cloudinary serves the school logo/banner/principal photos.
          Upgrading from dns-prefetch to preconnect establishes TCP+TLS
@@ -176,12 +174,28 @@
          simply stays on the system fonts. That is exactly the behaviour we
          want, and it is impossible with a CSS @import.
     -->
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400..900&family=Noto+Nastaliq+Urdu:wght@400..700&display=swap"
-      media="print"
-      onload="this.media='all'; this.onload=null;"
-    />
+    <!-- PERF: Playfair italic + Noto Nastaliq (Urdu) are NOT needed for first
+         paint (Inter + Playfair roman are self-hosted above). They are injected
+         only after the page has fully loaded and the browser is idle, so the
+         third-party CSS + font downloads never compete with the LCP request on
+         slow 4G. If Google Fonts is unreachable nothing breaks. -->
+    <script>
+      (function () {
+        var href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400..900&family=Noto+Nastaliq+Urdu:wght@400..700&display=swap';
+        function load() {
+          var l = document.createElement('link');
+          l.rel = 'stylesheet';
+          l.href = href;
+          document.head.appendChild(l);
+        }
+        function schedule() {
+          if ('requestIdleCallback' in window) requestIdleCallback(load, { timeout: 4000 });
+          else setTimeout(load, 2500);
+        }
+        if (document.readyState === 'complete') schedule();
+        else window.addEventListener('load', schedule, { once: true });
+      })();
+    </script>
     <noscript>
       <link
         rel="stylesheet"
@@ -200,6 +214,7 @@
         margin: 0;
         background: hsl(90, 60%, 98%);
       }
+      html.dark body { background: hsl(147, 48%, 8%); }
       #root { min-height: 100vh; }
     </style>
 
