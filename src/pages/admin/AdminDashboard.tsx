@@ -18,7 +18,6 @@ const AdminExamSeating      = lazy(() => import("./tabs/AdminExamSeating"));
 const AdminMeritList        = lazy(() => import("./tabs/AdminMeritList"));
 const AdminVideos            = lazy(() => import("./tabs/AdminVideos"));
 const AdminUsers             = lazy(() => import("./tabs/AdminUsers"));
-const AdminNotes             = lazy(() => import("../notes/AdminNotes"));
 // ── New feature admin tabs ──
 const AdminAdmissions        = lazy(() => import("./tabs/AdminAdmissions"));
 const AdminStudentRecords    = lazy(() => import("./tabs/AdminStudentRecords"));
@@ -43,7 +42,6 @@ const tabMap: Record<string, React.LazyExoticComponent<React.ComponentType<any>>
   "merit-list":       AdminMeritList,
   // Old combined-hub id — send to Date Sheet as a sane default if bookmarked
   "exams":            AdminExamDateSheet,
-  notes:              AdminNotes,
   videos:             AdminVideos,
   users:              AdminUsers,
   admissions:         AdminAdmissions,
