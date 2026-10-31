@@ -120,7 +120,6 @@ const NAV_SECTIONS: NavSection[] = [
     tagline: "Learn anywhere, anytime",
     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light",
     links: [
-      { to: "/notes",          label: "Notes",          icon: BookOpen, desc: "Study notes by class & subject",   tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
       { to: "/library",        label: "Library",        icon: Library,  desc: "Books & reading resources",        tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
     ],
   },
@@ -1040,15 +1039,6 @@ const Navbar = () => {
   const anyMenuOpenRef = useRef(anyMenuOpen);
   useEffect(() => { anyMenuOpenRef.current = anyMenuOpen; }, [anyMenuOpen]);
 
-  // Hide the global bottom bar on routes that have their own dock, e.g.
-  // chapter pages already render an X-style FAB row (AI / Timer / Listen
-  // / Cards / Notes / Rank), so two docks would overlap. Same for any
-  // future sub-route that wants the screen to itself.
-  const hideGlobalBottomBar = useMemo(() => {
-    const p = location.pathname;
-    return /^\/notes\/[^/]+\/[^/]+/.test(p); // /notes/:subject/:chapter
-  }, [location.pathname]);
-
   const closeAllMenus = useCallback(() => {
     setOpen(false);
     setOpenSection(null);
@@ -1380,7 +1370,6 @@ const Navbar = () => {
         — see the CONTAINING-BLOCK RULE comment above: a position:fixed
         element must not live inside the transformed <nav>, or "bottom: 0"
         pins it to the navbar instead of the viewport. */}
-    {!hideGlobalBottomBar && (
       <div
         className={`dock-bar lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-card/95 border-t border-border transition-transform duration-300 ease-out ${
           navHidden ? "translate-y-full" : "translate-y-0"
@@ -1453,7 +1442,6 @@ const Navbar = () => {
             </Link>
           </div>
       </div>
-    )}
     </>
   );
 };
