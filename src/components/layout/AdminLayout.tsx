@@ -67,7 +67,6 @@ const navSections: NavSection[] = [
   {
     heading: "CONTENT",
     items: [
-      { id: "notes",   label: "Notes Manager",    emoji: "📓" },
       { id: "videos",  label: "Gallery",          emoji: "🖼️" },
     ],
   },
