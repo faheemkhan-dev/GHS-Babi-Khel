@@ -4,7 +4,7 @@
 // how "Manage Students", "Manage Results" etc. are each their own page.
 
 import AdminExamSchedule from "./AdminExamSchedule";
-
+ 
 const AdminExamDateSheet = () => <AdminExamSchedule />;
 
 export default AdminExamDateSheet;
