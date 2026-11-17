@@ -101,6 +101,7 @@ const NoticeDetail     = lazyWithRetry(() => import("./pages/NoticeDetail"));
 const Contact          = lazyWithRetry(() => import("./pages/Contact"));
 const FAQ              = lazyWithRetry(() => import("./pages/FAQ"));
 const MeritList        = lazyWithRetry(() => import("./pages/MeritList"));
+const Duties           = lazyWithRetry(() => import("./pages/Duties"));
 
 // The route-loading UI lives in src/components/shared/RouteLoadingFallback.tsx —
 // it explains offline / slow-connection states instead of a bare spinner,
@@ -233,6 +234,7 @@ const App = () => (
                 <Route path="/about"                element={<About />} />
                 <Route path="/contact"              element={<Contact />} />
                 <Route path="/teachers"             element={<Teachers />} />
+                <Route path="/duties"               element={<Duties />} />
                 <Route path="/notices"              element={<Notices />} />
                 <Route path="/notices/:id"          element={<NoticeDetail />} />
                 <Route path="/search"               element={<Search />} />
