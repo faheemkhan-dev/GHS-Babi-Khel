@@ -1101,3 +1101,7 @@ main .admin-thin-shadow-none { box-shadow: none !important; }
 .dark .dark\:text-emerald-300, .dark .dark\:text-emerald-400,
 .dark .dark\:text-green-300, .dark .dark\:text-green-400 { color: hsl(146 36% 64%); }
 .dark .border-emerald-400, .dark .border-emerald-500, .dark .border-green-500 { border-color: hsl(148 45% 34%); }
+
+/* Exam Duties page — luxe serif heading face */
+:root { --font-luxe: 'Cormorant Garamond', 'Playfair Display', 'Playfair Fallback', ui-serif, Georgia, serif; }
+.font-luxe { font-family: var(--font-luxe); letter-spacing: -0.015em; }
