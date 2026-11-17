@@ -9,8 +9,7 @@ import {
   useSetAdmissionPayment, useAdmissionResetAll,
   Admission, AdmissionStatus
 } from "@/hooks/useAdmission";
-import { type PaymentMethod } from "@/hooks/useFees";
-import { paymentMethodLabel, type AdmissionPaymentAccount } from "@/lib/admissionPayment";
+import { paymentMethodLabel, type AdmissionPaymentAccount, type PaymentMethod } from "@/lib/admissionPayment";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,7 +136,7 @@ async function createChallanForEligibleApplicant(app: Admission): Promise<Enroll
   }
   const amount = Number(feeStruct.amount ?? 0);
   if (amount <= 0) {
-    return { studentId: null, voucherNumber: null, voucherAmount: null, skippedReason: `${feeName} fee for Class ${app.applying_class} is set to Rs 0 — set an amount in Fee Management → Structures, then save this applicant again`, feeType: targetFeeType };
+    return { studentId: null, voucherNumber: null, voucherAmount: null, skippedReason: `${feeName} fee for Class ${app.applying_class} is set to Rs 0 — set an amount for this fee, then save this applicant again`, feeType: targetFeeType };
   }
 
   // 3. Hidden, inactive register entry (required by the voucher's student FK).
@@ -276,10 +275,6 @@ function AdmissionDetail({ app, onClose, onSaved, onDelete }: { app: Admission; 
         try {
           const result = await createChallanForEligibleApplicant({ ...app, admission_roll_no: rollNo || app.admission_roll_no, status });
           qc.invalidateQueries({ queryKey: ["admin-students"] });
-          qc.invalidateQueries({ queryKey: ["fee-vouchers"] });
-          qc.invalidateQueries({ queryKey: ["fee-dashboard"] });
-          qc.invalidateQueries({ queryKey: ["fee-defaulters"] });
-          qc.invalidateQueries({ queryKey: ["all-student-vouchers"] });
           if (result.voucherNumber && result.voucherAmount && !result.alreadyExisted) {
             const feeLabel = result.feeType === "migration" ? "Migration fee" : "Admission fee";
             toast.success(`${feeLabel} challan created — Rs ${result.voucherAmount.toLocaleString("en-PK")} · ${result.voucherNumber}`, { icon: "🧾", duration: 6000 });
