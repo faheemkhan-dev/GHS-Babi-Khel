@@ -430,18 +430,17 @@ function getResultsExtraSchemas(url) {
 // link, so the destination is always correct even though the preview
 // text is generic for those specific pages.
 const ROUTES = [
-  { pattern: "/", title: "GHS Babi Khel — Government High School, District Mohmand KPK", description: "Government High School Babi Khel, District Mohmand, KPK Pakistan. Quality education, notices, results, library and admissions." },
+  { pattern: "/", title: "GHS Babi Khel — Government High School, District Mohmand KPK", description: "Government High School Babi Khel, District Mohmand, KPK Pakistan. Quality education, notices, results and admissions." },
   { pattern: "/about", title: "About GHS Babi Khel — History, Mission & Vision | District Mohmand KPK", description: "Learn about Government High School Babi Khel — our history since 2018, mission, vision, faculty and commitment to quality education in District Mohmand." },
   { pattern: "/teachers", title: "Teachers & Faculty — GHS Babi Khel | District Mohmand KPK", description: "Meet the qualified teachers and faculty of GHS Babi Khel — dedicated educators shaping the future of students in District Mohmand, KPK." },
   { pattern: "/notices", title: "School Notices & Announcements — GHS Babi Khel", description: "Browse the latest school notices, urgent announcements, academic updates and event information from Government High School Babi Khel." },
   { pattern: "/results", title: "BISE Peshawar Result 2026 — SSC Result, BISEP Result, Peshawar Board Result | GHS Babi Khel", description: "Check BISE Peshawar Result 2026 by roll number — SSC Result (9th & 10th class), HSSC Result (11th & 12th class), BISEP Result, Peshawar Board Result, Annual-I & Annual-II exams. Fast, free, mobile-friendly BISE Peshawar board result lookup powered by GHS Babi Khel." },
   { pattern: "/merit-list", title: "Merit List — Official School Exam Rankings | GHS Babi Khel", description: "Official GHS Babi Khel merit list — top position holders of every exam, class-wise and whole-school rankings with marks, percentages and grades." },
   { pattern: "/gallery", title: "Photo Gallery — GHS Babi Khel School Events & Activities", description: "Explore the photo and video gallery of Government High School Babi Khel — events, sports, academic activities and celebrations." },
-  { pattern: "/library", title: "Library — GHS Babi Khel | Books & Past Papers", description: "Access the digital library of GHS Babi Khel — books, past papers and educational resources for all classes." },
   { pattern: "/weather", title: "Weather — District Mohmand KPK | GHS Babi Khel", description: "Live weather forecast for Babi Khel and District Mohmand, KPK — temperature, conditions and outlook for the school community." },
   { pattern: "/contact", title: "Contact GHS Babi Khel — Address, Phone & Email | District Mohmand", description: "Contact Government High School Babi Khel, District Mohmand, KPK. Find our address, phone number, email, WhatsApp and location map. Reach out for admissions, queries and feedback." },
   { pattern: "/admission", title: "Admissions Open — GHS Babi Khel | Apply Online District Mohmand", description: "Apply for admission at Government High School Babi Khel — eligibility, fee structure, required documents and online application form." },
-  { pattern: "/search", title: "Search — GHS Babi Khel", description: "Search across notices, teachers and library files at Government High School Babi Khel." },
+  { pattern: "/search", title: "Search — GHS Babi Khel", description: "Search across notices, teachers and public pages at Government High School Babi Khel." },
   // Dynamic / nested routes — generic but on-brand previews.
   { pattern: /^\/notices\/.+$/, title: "School Notice — GHS Babi Khel", description: "Read the full school notice from Government High School Babi Khel.", type: "article" },
 ];

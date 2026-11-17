@@ -19,12 +19,11 @@ const useAdminStats = () =>
     queryFn: async () => {
       const head = { count: "exact" as const, head: true };
       const [
-        teachers, notices, library, albums, users, results,
+        teachers, notices, albums, users, results,
         pendingUsers, admissions, pendingAdmissions,
       ] = await Promise.all([
         supabase.from("teachers").select("id", head),
         supabase.from("notices").select("id", head),
-        supabase.from("library_files").select("id", head),
         supabase.from("gallery_albums").select("id", head),
         supabase.from("profiles").select("id", head),
         supabase.from("results").select("id", head),
@@ -35,7 +34,6 @@ const useAdminStats = () =>
       return {
         teachers: teachers.count ?? 0,
         notices: notices.count ?? 0,
-        library: library.count ?? 0,
         albums: albums.count ?? 0,
         users: users.count ?? 0,
         results: results.count ?? 0,
@@ -213,7 +211,6 @@ const AdminOverview = () => {
   ];
   const contentTiles = [
     { to: "/admin?tab=announcements", label: "Notices",        value: stats?.notices, icon: Bell,       tone: TONES.amber },
-    { to: "/admin?tab=library",       label: "Library Files",  value: stats?.library, icon: BookOpen,   tone: TONES.cyan },
     { to: "/admin?tab=videos",        label: "Gallery Albums", value: stats?.albums,  icon: ImageIcon,  tone: TONES.pink },
   ];
 

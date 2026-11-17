@@ -90,26 +90,12 @@ const admissionFAQSchema = {
   ],
 };
 
-/** Library schema */
-const librarySchema = {
-  "@context": "https://schema.org",
-  "@type": "Library",
-  name: "GHS Babi Khel Library",
-  description:
-    "Digital library of Government High School Babi Khel — textbooks, past papers, notes and educational resources for all classes.",
-  url: `${SITE_URL}/library`,
-  containedInPlace: {
-    "@type": "HighSchool",
-    "@id": `${SITE_URL}#organization`,
-  },
-};
-
 const ROUTES: RouteSEO[] = [
   {
     pattern: "/",
     title: "GHS Babi Khel — Government High School, District Mohmand KPK",
     description:
-      "Government High School Babi Khel, District Mohmand, KPK Pakistan. Quality education, notices, results, library and admissions.",
+      "Government High School Babi Khel, District Mohmand, KPK Pakistan. Quality education, notices, results and admissions.",
     keywords:
       "GHS Babi Khel, Government High School Babi Khel, Mohmand school, KPK school, school admission, school notices, school results Pakistan",
     hasUrdu: true,
@@ -358,15 +344,6 @@ const ROUTES: RouteSEO[] = [
     }),
   },
   {
-    pattern: "/library",
-    title: "Library — GHS Babi Khel | Books & Past Papers",
-    description:
-      "Access the digital library of GHS Babi Khel — books, past papers and educational resources for all classes.",
-    keywords: "school library, digital library, past papers, books, GHS Babi Khel library",
-    breadcrumbs: () => [baseBreadcrumb, { name: "Library", path: "/library" }],
-    jsonLd: () => librarySchema,
-  },
-  {
     pattern: "/contact",
     title: "Contact GHS Babi Khel — Address, Phone & Email | District Mohmand",
     description:
@@ -452,7 +429,7 @@ const ROUTES: RouteSEO[] = [
     pattern: "/faq",
     title: "FAQ — Frequently Asked Questions | GHS Babi Khel",
     description:
-      "Frequently asked questions about GHS Babi Khel: admission procedure and documents, application tracking, results and grading, BISE Peshawar board exams, library, contact details and how to install the website as an app.",
+      "Frequently asked questions about GHS Babi Khel: admission procedure and documents, application tracking, results and grading, BISE Peshawar board exams, contact details and how to install the website as an app.",
     keywords:
       "GHS Babi Khel FAQ, school admission questions, how to apply GHS Babi Khel, admission documents, result check roll number, BISE Peshawar result, school contact Mohmand, GHS Babi Khel help",
     breadcrumbs: () => [baseBreadcrumb, { name: "FAQ", path: "/faq" }],

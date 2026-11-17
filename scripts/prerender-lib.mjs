@@ -96,7 +96,6 @@ export const STATIC_ROUTES = [
   "/roll-no-slip",   // ← was missing — root cause of Googlebot index failures
   "/teachers",
   "/gallery",
-  "/library",
   "/faq",
 ];
 
@@ -208,22 +207,21 @@ async function fetchIds(table, limit) {
 
 /**
  * Latest published items for the static fallback lists. Returns
- * { notices, library, gallery, stats } — empty values when the
+ * { notices, gallery, stats } — empty values when the
  * env vars are missing or a fetch fails (fallback stays fully functional).
  *
  * EXTENDED (2026-08): previously only notices were injected at build
- * time, so the STATIC fallback pages for /library and /gallery were
+ * time, so the STATIC fallback page for /gallery was
  * almost content-free for any crawler that does not receive the live render
  * (weak AI tools with browser-like user-agents, offline archives, …). Now
  * the build-time snapshot carries the same public data the live renderer
- * serves: library files, gallery albums
+ * serves: gallery albums
  * and the school's real statistics.
  */
 async function fetchLatestLists(limit = 10) {
   const { url, key } = supabaseEnv();
   const out = {
     notices: [],
-    library: [],
     gallery: [],
     admissionFiles: [],
     stats: null,
@@ -253,15 +251,9 @@ async function fetchLatestLists(limit = 10) {
       )
     );
 
-  const [notices, libraryRows, galleryRows, settingsRow, admissionFileRows] =
+  const [notices, galleryRows, settingsRow, admissionFileRows] =
     await Promise.all([
       grab("notices"),
-      withTimeout("library_files", (signal) =>
-        fetch(
-          `${url}/rest/v1/library_files?select=id,title,category,class,file_url,created_at&order=created_at.desc&limit=12`,
-          { headers, signal }
-        )
-      ),
       withTimeout("gallery_albums", (signal) =>
         fetch(
           `${url}/rest/v1/gallery_albums?select=id,title,description,cover_url,created_at&order=created_at.desc&limit=10`,
@@ -286,7 +278,6 @@ async function fetchLatestLists(limit = 10) {
     ]);
 
   out.notices = Array.isArray(notices) ? notices.filter((r) => r && r.id && r.title) : [];
-  out.library = Array.isArray(libraryRows) ? libraryRows.filter((r) => r && r.title) : [];
   out.admissionFiles = Array.isArray(admissionFileRows)
     ? admissionFileRows.filter((r) => r && r.title && r.file_url)
     : [];
@@ -443,7 +434,6 @@ async function renderPage(context, route, outPath, originalPreloads) {
  * Fill dynamic lists inside a fallback page with build-time public data.
  * Handles:
  *   • <ul data-ghs-list="notices"></ul>   — latest published items
- *   • <ul data-ghs-list="library"></ul>        — latest library downloads
  *   • <ul data-ghs-list="gallery"></ul>        — photo albums with counts
  *   • <ul data-ghs-stats></ul>                 — real school statistics
  * Each list's "empty" paragraph is removed when real items exist (or the
@@ -451,7 +441,7 @@ async function renderPage(context, route, outPath, originalPreloads) {
  */
 function makeListFiller(lists) {
   return (html) => {
-    for (const source of ["notices", "library", "gallery", "admission-files"]) {
+    for (const source of ["notices", "gallery", "admission-files"]) {
       const items = source === "admission-files" ? (lists && lists.admissionFiles) || [] : (lists && lists[source]) || [];
       const ulRe = new RegExp(`<ul data-ghs-list="${source}"></ul>`);
       const pRe = new RegExp(`\\s*<p data-ghs-empty="${source}">[\\s\\S]*?</p>`);
@@ -466,17 +456,6 @@ function makeListFiller(lists) {
                 : "";
               const label = nice ? `${esc(it.title)} — ${nice}` : esc(it.title);
               return `<li><a href="/${source}/${esc(it.id)}">${label}</a></li>`;
-            })
-            .join("");
-        } else if (source === "library") {
-          lis = items
-            .map((f) => {
-              const bits = [];
-              if (f.category) bits.push(esc(f.category));
-              if (f.class && f.class !== "All") bits.push(`Class ${esc(f.class)}`);
-              const meta = bits.length ? ` (${bits.join(" · ")})` : "";
-              const href = f.file_url || "/library";
-              return `<li><a href="${esc(href)}">${esc(f.title)}</a>${meta}</li>`;
             })
             .join("");
         } else if (source === "admission-files") {
@@ -541,7 +520,7 @@ async function fillMissingRoutesWithStaticContent() {
   if (!existsSync(shellPath)) return { filled: [], skipped: "dist/index.html missing" };
 
   const shellHtml = await readFile(shellPath, "utf8");
-  // Always fetch build-time data (library/gallery/notice lists + stats blocks).
+  // Always fetch build-time data (gallery/notice lists + stats blocks).
   const lists = await fetchLatestLists(10);
 
   const filler = makeListFiller(lists);

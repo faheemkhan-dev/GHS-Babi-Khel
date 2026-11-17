@@ -1,10 +1,6 @@
 // AdminVideos.tsx
 //
-// FIXED (per request): this used to be "Videos & Gallery" with two tabs —
-// Videos and Gallery. Video management has been MOVED into AdminLibrary.tsx
-// as a "Videos" sub-tab alongside "Files", so admins upload/manage both
-// documents and videos from one merged Library section instead of two
-// separate admin pages. This file is now Gallery-only (photo albums).
+// This file is the admin Gallery section (photo albums and school media).
 import { lazy, Suspense } from "react";
 
 const AdminGallery = lazy(() => import("./AdminGallery"));

@@ -5,7 +5,7 @@ import {
   Menu, X, GraduationCap, LogIn, UserPlus, ArrowRight,
   LayoutDashboard, LogOut, Shield, Search, ChevronDown, ChevronRight,
   Home, Landmark, Mail, Megaphone,
-  Trophy, Medal, BookOpen, Library, Images, ClipboardList, HelpCircle,
+  Trophy, Medal, BookOpen, Images, ClipboardList, HelpCircle, Users,
   Hash, Timer, Command as CommandIcon,
   Ticket, FileSignature, type LucideIcon,
 } from "lucide-react";
@@ -120,7 +120,7 @@ const NAV_SECTIONS: NavSection[] = [
     tagline: "Learn anywhere, anytime",
     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light",
     links: [
-      { to: "/library",        label: "Library",        icon: Library,  desc: "Books & reading resources",        tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
+      { to: "/teachers",       label: "Our Staff",      icon: Users,    desc: "Meet our teachers & faculty",         tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
     ],
   },
 ];

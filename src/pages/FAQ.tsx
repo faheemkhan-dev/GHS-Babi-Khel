@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  BookOpen,
   ClipboardList,
   GraduationCap,
   HelpCircle,
@@ -39,10 +38,6 @@ const CATEGORY_META: Record<
   "Results & Exams": {
     icon: ClipboardList,
     blurb: "Checking results by roll number, merit lists, exam roll number slips, grading scale, date sheets and BISE Peshawar board exams",
-  },
-  "Library": {
-    icon: BookOpen,
-    blurb: "The digital library, study books and past papers",
   },
   "School Information": {
     icon: School,

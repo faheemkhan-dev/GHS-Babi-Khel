@@ -31,7 +31,6 @@
 export const FAQ_CATEGORIES = [
   "Admissions",
   "Results & Exams",
-  "Library",
   "School Information",
   "Website & Contact",
 ];
@@ -153,22 +152,6 @@ export const FAQ_ITEMS = [
       "For a school-conducted exam (1st or 2nd semester), contact the school office or your subject teacher directly so the marks can be verified against the answer sheet. For a BISE Peshawar board result (SSC-I or SSC-II), rechecking and reappraisal requests must be submitted to BISE Peshawar itself within the board's notified rechecking window — the school website only displays the board's published result and cannot change it.",
   },
 
-  // ── Library ───────────────────────────────────────────────────────────
-  {
-    id: "nts-library",
-    category: "Library",
-    question: "What can I download from the digital library?",
-    answer:
-      "The digital library (ghsbabikhel.dpdns.org/library) hosts downloadable study materials for classes 6 to 10: books, past papers and helping materials, organised by subject and class with descriptions and file sizes. Everything is free to download. Students preparing for school exams or the BISE Peshawar board examinations can keep the files on their phone and read them offline after installing the website as an app.",
-  },
-  {
-    id: "nts-search",
-    category: "Library",
-    question: "How do I quickly find a notice, library file or past paper?",
-    answer:
-      "Use the search icon in the navigation bar, or go directly to the Search page (ghsbabikhel.dpdns.org/search), and type a subject, class or keyword. It searches across notices, library files and other pages at once, so you don't have to browse each section separately.",
-  },
-
   // ── School Information ────────────────────────────────────────────────────
   {
     id: "sch-about",
@@ -212,14 +195,14 @@ export const FAQ_ITEMS = [
     category: "Website & Contact",
     question: "Can I use the website offline or install it as an app?",
     answer:
-      "Yes. The website is a Progressive Web App (PWA). Open it in Chrome on Android (or Safari on iPhone), choose 'Add to Home screen / Install app', and it behaves like a normal app with its own icon. After installation, pages you have visited and downloaded materials remain available without internet, and the site syncs fresh notices and results automatically whenever you are back online.",
+      "Yes. The website is a Progressive Web App (PWA). Open it in Chrome on Android (or Safari on iPhone), choose 'Add to Home screen / Install app', and it behaves like a normal app with its own icon. After installation, pages you have visited remain available without internet, and the site syncs fresh notices and results automatically whenever you are back online.",
   },
   {
     id: "web-cost",
     category: "Website & Contact",
     question: "Is there any cost or account required to use the website?",
     answer:
-      "The website is completely free, and all public sections — notices, results, library and gallery — can be used without any account. You only sign in if you are a student or guardian tracking an admission application or dashboard features, or if you are staff. There are no ads and no charges for any feature of the site.",
+      "The website is completely free, and all public sections — notices, results and gallery — can be used without any account. You only sign in if you are a student or guardian tracking an admission application or dashboard features, or if you are staff. There are no ads and no charges for any feature of the site.",
   },
   {
     id: "web-contact",
@@ -233,7 +216,7 @@ export const FAQ_ITEMS = [
     category: "Website & Contact",
     question: "Do I need to create an account, and what does it unlock?",
     answer:
-      "You don't need an account to browse notices, results, library or gallery — those are open to everyone. Creating a free account (Sign Up, ghsbabikhel.dpdns.org/auth/signup) is only useful if you want a personal dashboard to track your admission application status in one place, or if you are a teacher who needs access to staff features. Signing in is never required just to read study material or check a result.",
+      "You don't need an account to browse notices, results or gallery — those are open to everyone. Creating a free account (Sign Up, ghsbabikhel.dpdns.org/auth/signup) is only useful if you want a personal dashboard to track your admission application status in one place, or if you are a teacher who needs access to staff features. Signing in is never required just to check a result.",
   },
   {
     id: "web-notices",

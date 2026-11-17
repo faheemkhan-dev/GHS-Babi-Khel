@@ -97,7 +97,7 @@ export const maxDuration = 10;
 //     section, never the whole endpoint.
 //   • NEVER LEAKS PRIVATE DATA: only genuinely public tables are read
 //     (school_settings, admission_settings, published notices,
-//     active teachers and library files). The
+//     active teachers and admission documents). The
 //     `admissions` and `results` tables contain personal data and are NOT
 //     dumped here — the endpoints only explain how to search them.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -184,7 +184,7 @@ async function fetchSchoolProfile() {
     tagline: s.tagline || "Excellence in Education",
     description:
       s.description ||
-      "Official website of Government High School Babi Khel — online admissions, exam results, notices, digital library and more for classes 6 to 10.",
+      "Official website of Government High School Babi Khel — online admissions, exam results, notices and more for classes 6 to 10.",
     // Real statistics from the admin dashboard (shown to AI crawlers so they
     // never read misleading "0+" placeholders — only values the school set).
     total_students: typeof s.total_students === "number" ? s.total_students : null,
@@ -278,31 +278,10 @@ async function fetchTeachers(limit = 50) {
   }));
 }
 
-async function fetchLibraryFiles(limit = 20) {
-  const rows = await safeQuery("library_files", (sb) =>
-    sb
-      .from("library_files")
-      .select("id, title, description, category, class, subject, file_url, file_type, created_at")
-      .order("created_at", { ascending: false })
-      .limit(limit)
-  );
-  return rows.map((f) => ({
-    id: f.id,
-    title: f.title,
-    description: f.description || null,
-    category: f.category || null,
-    class: f.class || null,
-    subject: f.subject || null,
-    file_type: f.file_type || null,
-    download_url: f.file_url || null,
-    added_at: f.created_at,
-  }));
-}
-
 // ── Admission forms & documents (admin-uploaded real files) ────────────────
 // The /admission page's Downloads section serves four documents (prospectus,
 // fee structure, school-to-school transfer letter, rules). When the admin has
-// uploaded the real PDFs to the library with category "Admission" (title
+  // uploaded the real PDFs with category "Admission" (title
 // containing prospectus / fee / migration / rules — the same mapping the
 // Admission page uses), those ACTUAL files are listed here with their direct
 // download URLs, so AI tools can point users straight at the forms.
@@ -562,7 +541,6 @@ const SECTION_FETCHERS = {
   admissionFiles: fetchAdmissionFiles,
   notices: () => fetchNotices(20),
   teachers: () => fetchTeachers(50),
-  library: () => fetchLibraryFiles(20),
   meritLists: () => fetchMeritLists(10),
   rollSlips: () => fetchRollSlipSessions(10),
   exams: fetchExamInfo,
@@ -583,7 +561,6 @@ const ROUTE_SECTIONS = {
   "/roll-no-slip":    ["school", "exams", "rollSlips"],
   "/teachers":        ["school", "teachers"],
   "/gallery":         ["school", "gallery"],
-  "/library":         ["school", "library"],
   "/faq":             ["school"],
   "/about":           ["school"],
   "/contact":         ["school"],
@@ -640,7 +617,6 @@ async function getLiveSiteData(sections) {
   data.admissionFiles = data.admissionFiles || [];
   data.notices = data.notices || [];
   data.teachers = data.teachers || [];
-  data.library = data.library || [];
   data.meritLists = data.meritLists || [];
   data.rollSlips = data.rollSlips || [];
   data.exams = data.exams || { published_exams: [], grading: {} };
@@ -703,7 +679,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Static routes this renderer accepts (mirrors prerender STATIC_ROUTES).
 const STATIC_ROUTES = new Set([
   "/", "/about", "/contact", "/admission", "/notices", "/results",
-  "/merit-list", "/roll-no-slip", "/teachers", "/gallery", "/library",
+  "/merit-list", "/roll-no-slip", "/teachers", "/gallery",
   "/faq",
 ]);
 
@@ -796,7 +772,7 @@ function admissionFilesHtml(admissionFiles) {
 /** Route-specific LIVE sections appended after the static blocks. */
 function liveSections(route, data) {
   const parts = [];
-  const { admission, admissionFiles, notices, exams, teachers, library, meritLists, rollSlips, gallery, school } = data;
+  const { admission, admissionFiles, notices, exams, teachers, meritLists, rollSlips, gallery, school } = data;
 
   switch (true) {
     case route === "/": {
@@ -829,7 +805,7 @@ function liveSections(route, data) {
       parts.push("<h2>Required documents</h2>");
       parts.push(listHtml(admission.required_documents.map((d) => esc(d))));
       // Real admin-uploaded files with direct URLs (prospectus, fee
-      // structure, transfer letter, rules …) — live from the library.
+      // structure, transfer letter, rules …) — live from shared file storage.
       const filesHtml = admissionFilesHtml(admissionFiles);
       if (filesHtml) parts.push(filesHtml);
       parts.push(`<h2>Documents generated on the Admission page itself</h2>
@@ -965,22 +941,6 @@ function liveSections(route, data) {
             )
             .join("")}</ul>`
         );
-      }
-      break;
-    }
-    case route === "/library": {
-      if (library.length) {
-        parts.push("<h2>Latest downloadable materials (live)</h2>");
-        parts.push(
-          `<ul>${library
-            .map(
-              (f) =>
-                `<li><a href="${esc(f.download_url || "/library")}">${esc(f.title)}</a>${f.class ? ` — Class ${esc(f.class)}` : ""}${f.subject ? ` · ${esc(f.subject)}` : ""}${f.category ? ` · ${esc(f.category)}` : ""}${f.description ? `<br><span class="meta">${esc(f.description.slice(0, 220))}</span>` : ""}</li>`
-            )
-            .join("")}</ul>`
-        );
-      } else {
-        parts.push(`<p class="meta">No downloadable materials have been added to the library yet. When the school uploads books, past papers or admission forms they will be listed here.</p>`);
       }
       break;
     }
@@ -1188,7 +1148,7 @@ function jsonLdFor(route, data, detail, pageName) {
   //    trail that replaces the bare URL in the search snippet). Maps each
   //    route to its section + page name; detail routes use the item's title.
   //    Drives BreadcrumbList schema for /about, /contact, /notices,
-  //    /results, /merit-list, /roll-no-slip, /teachers, /library,
+  //    /results, /merit-list, /roll-no-slip, /teachers,
   //    /gallery, /faq, /admission, /notices/<id>.
   const BREADCRUMB_MAP = {
     "/about":        ["Our School",      "About"],
@@ -1201,7 +1161,6 @@ function jsonLdFor(route, data, detail, pageName) {
     "/roll-no-slip": ["Results",         "Roll No. Slip"],
     "/admission":    ["Admissions",      "Apply for Admission"],
     "/teachers":     ["Our School",      "Teachers"],
-    "/library":      ["Academics",       "Library"],
   };
   let breadcrumbItems = null;
   if (BREADCRUMB_MAP[route]) {
@@ -1281,7 +1240,6 @@ const PAGES_GUIDE = [
   { path: "/roll-no-slip", purpose: "Exam roll number slips — a student picks their class and types their full name to view, download (PDF with QR code) or share their own slip; a live countdown shows while a release is scheduled" },
   { path: "/notices", purpose: "Official notices — exams, holidays, fee deadlines, parent-teacher meetings" },
   { path: "/teachers", purpose: "Teaching staff directory" },
-  { path: "/library", purpose: "Downloadable books and past papers (each item links to its file)" },
   { path: "/gallery", purpose: "Photo albums of school events — sports day, science fair, study tours, national days" },
   { path: "/contact", purpose: "Contact details, map, WhatsApp and contact form" },
   { path: "/about", purpose: "School history, mission and vision" },
@@ -1333,7 +1291,7 @@ async function aiDataHandler(req, res) {
     meta: {
       name: "GHS Babi Khel — AI data feed",
       description:
-        "Live, machine-readable snapshot of Government High School Babi Khel (District Mohmand, KPK, Pakistan): school profile with real statistics, admission status and procedure, results info, published merit lists, roll-number-slip sessions, latest notices, teachers, library files, photo gallery albums, and the full FAQ. Generated on request from the school's own database — safe to quote.",
+        "Live, machine-readable snapshot of Government High School Babi Khel (District Mohmand, KPK, Pakistan): school profile with real statistics, admission status and procedure, results info, published merit lists, roll-number-slip sessions, latest notices, teachers, photo gallery albums, and the full FAQ. Generated on request from the school's own database — safe to quote.",
       generated_at: new Date().toISOString(),
       generated_at_display: `${nowInSchoolTz()} (PKT)`,
       timezone: "Asia/Karachi",
@@ -1416,7 +1374,7 @@ async function aiDataHandler(req, res) {
         : "No application deadline is currently published; see the Admission page for the live status.",
       // Admin-uploaded admission documents (prospectus, fee structure,
       // transfer letter, rules …) with DIRECT download URLs — from the same
-      // library the Downloads section of the Admission page serves.
+      // shared file storage used by the Downloads section of the Admission page.
       downloadable_files: data.admissionFiles,
     },
 
@@ -1429,7 +1387,6 @@ async function aiDataHandler(req, res) {
     // ── Latest content (live, newest first) ─────────────────────────────────
     latest_notices: data.notices,
     teachers: data.teachers,
-    library: data.library,
 
     // ── Merit lists (public rankings — the /merit-list page data) ───────────
     merit_lists: {
@@ -1602,11 +1559,10 @@ ${detail.content ? detail.content.split(/\n{2,}|\n/).map((p) => `<p>${esc(p)}</p
         }
         // `links: {source}` markers are BUILD-TIME placeholders — the live
         // sections below always carry fresh lists with their own headings.
-        // Previously the placeholder's bare <h2> ("Recent notices",
-        // "Latest library items") was still
+        // Previously the placeholder's bare <h2> ("Recent notices") was still
         // emitted, producing EMPTY heading sections followed by a second,
         // differently-titled live heading — a content-quality smell on
-        // /notices and /library that reads as thin/duplicated
+        // /notices that reads as thin/duplicated
         // structure to crawlers. Skip the whole placeholder block here.
         if (block.links?.source) return "";
         if (block.h2) parts.push(`<h2>${esc(block.h2)}</h2>`);

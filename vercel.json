@@ -4,8 +4,6 @@
   "redirects": [
     { "source": "/result-card", "destination": "/results", "permanent": true },
     { "source": "/duty", "destination": "/", "permanent": true },
-    { "source": "/notes", "destination": "/library", "permanent": true },
-    { "source": "/notes/:path*", "destination": "/library", "permanent": true },
     {
       "source": "/((?!sitemap\\.xml|robots\\.txt|\\.well-known/).*)",
       "has": [{ "type": "host", "value": "(.*\\.)?indevs\\.in" }],
@@ -36,7 +34,6 @@
     { "source": "/roll-no-slip", "destination": "/roll-no-slip/index.html" },
     { "source": "/teachers", "destination": "/teachers/index.html" },
     { "source": "/gallery", "destination": "/gallery/index.html" },
-    { "source": "/library", "destination": "/library/index.html" },
     { "source": "/faq", "destination": "/faq/index.html" },
     { "source": "/((?!api/|assets/|fonts/|\\.well-known/|ai-catalog\\.json).*)", "destination": "/index.html" }
   ],

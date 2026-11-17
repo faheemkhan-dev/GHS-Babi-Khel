@@ -121,7 +121,7 @@ FACTS
 - Admissions (/admission): online application form for classes 6–10 at the start of the academic year; track status there by application ID; interview slot may be booked once shortlisted. Documents: student B-form/CNIC copy, previous school leaving certificate (class 7+), 2 passport photos, parent/guardian CNIC copy. Office contact via /contact.
 - Notices (/notices): official notices (holidays, exam schedules, fee deadlines, PTMs, dress code) with detail pages. Homepage has the Latest Notices section.
 - Student portal (/auth/signin): email + password created by the school admin/office. Dashboard (/dashboard) tabs: Overview, Result Card, Attendance, Timetable, Tests, Fees, Library, Gallery, Profile. Forgot password → /auth/forgot-password (email reset). Teachers/admins sign in on the same form (role-routed). No credentials? Contact the school office.
-- Roll No. Slip (/roll-no-slip): find, download and share exam roll number slips. Merit List (/merit-list): toppers and position holders. Library (/library): books and reading resources. FAQs (/faq).
+- Roll No. Slip (/roll-no-slip): find, download and share exam roll number slips. Merit List (/merit-list): toppers and position holders. FAQs (/faq).
 - Timetable: in the portal's Timetable tab; exam timetables also go out as notices.
 - Fees: portal Fees tab (tuition, exam fee, balance, history); deadlines posted as notices.
 - Gallery (/gallery): event photos.

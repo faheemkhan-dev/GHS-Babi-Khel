@@ -80,7 +80,6 @@
     { "path": "/merit-list", "description": "Published merit lists of top-performing students" },
     { "path": "/roll-no-slip", "description": "Roll number slip download for board exams" },
     { "path": "/notices", "description": "Latest school notices" },
-    { "path": "/library", "description": "Digital library of books and resources" },
     { "path": "/gallery", "description": "Photo gallery of school events" },
     { "path": "/teachers", "description": "Faculty and teaching staff" },
     { "path": "/faq", "description": "Frequently asked questions" },

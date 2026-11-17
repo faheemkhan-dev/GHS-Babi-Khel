@@ -41,7 +41,7 @@
 //             publish (notices, ticker, has-results, roll sessions,
 //             result rank pools, class averages, result schedule).
 //   • 60 s  — latest-exam meta.
-//   • 120 s — date sheet, merit entries, roll rosters, library listing.
+//   • 120 s — date sheet, merit entries and roll rosters.
 //   • 300 s — school settings, result years (change a few times a year).
 //   Every response also carries `stale-while-revalidate`, so even an expired
 //   entry is served instantly and refreshed in the background.
@@ -76,7 +76,6 @@ const CACHE = {
   "roll-roster":    { s: 120, swr: 300 },
   "exam-schedule":  { s: 120, swr: 300 },
   "all-exam-schedule": { s: 120, swr: 300 },
-  library:          { s: 120, swr: 300 },
   "result-years":   { s: 300, swr: 600 },
   "has-results":    { s: 5,   swr: 5 },    // Unpublish must show within seconds
   "latest-exam":    { s: 10,  swr: 10 },
@@ -242,27 +241,6 @@ const FETCHERS = {
     return rows ?? [];
   },
 
-  // Library listing with pagination + optional filters (same shape the hook
-  // returned: { data, count }). `count=exact` runs once per cache window.
-  // A search/category/class that is not cache-safe → BadRequest → the
-  // browser's direct query takes over (correct results, just uncached).
-  async library(q) {
-    const page = num(q.get("page"), 1, 500, 1);
-    const perPage = num(q.get("perPage"), 1, 60, 12);
-    const category = safeText(q, "category");
-    const cls = safeText(q, "class");
-    const search = safeText(q, "search");
-    let p = `library_files?select=id,title,category,class,subject,file_url,file_type,file_size,cover_url,download_count,created_at` +
-      `&order=created_at.desc&limit=${perPage}&offset=${(page - 1) * perPage}`;
-    if (category && category !== "All") p += `&category=eq.${enc(category)}`;
-    if (cls && cls !== "All") p += `&class=eq.${enc(cls)}`;
-    if (search) p += `&title=ilike.*${enc(search.replace(/[\\%_]/g, (c) => "\\" + c))}*`;
-    const [rows, count] = await Promise.all([
-      sb(p),
-      sbCount(p.replace(/&limit=[^&]*/, "").replace(/&offset=[^&]*/, "")),
-    ]);
-    return { data: rows ?? [], count };
-  },
 
   // Distinct result years (dedup happens client-side, as before).
   async "result-years"() {

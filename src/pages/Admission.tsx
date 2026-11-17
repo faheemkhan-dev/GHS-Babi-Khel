@@ -201,7 +201,7 @@ const Admission = () => {
 
   useEffect(() => { if (step === 3) newCaptcha(); }, [step, newCaptcha]);
 
-  // ── Library files (admin-uploaded) ───────────────────────────────────────
+  // ── Admin-uploaded admission documents ───────────────────────────────────
   // Not needed for first paint: fetched after the page is idle, cached for
   // 10 minutes, and shared across visits by react-query.
   const [idle, setIdle] = useState(false);
@@ -212,7 +212,7 @@ const Admission = () => {
     return () => window.clearTimeout(t);
   }, []);
   const { data: libFiles = {} } = useQuery<Record<string, { url: string; id: string }>>({
-    queryKey: ["admission-library-files"],
+    queryKey: ["admission-files"],
     enabled: idle,
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {

@@ -59,7 +59,6 @@ const navSections: NavSection[] = [
       { id: "teachers",      label: "Manage Teachers",   emoji: "👨‍🏫" },
       { id: "timetables",    label: "Timetables",        emoji: "📅" },
       { id: "announcements", label: "Notices",           emoji: "📢" },
-      { id: "library",       label: "Library",           emoji: "📚" },
     ],
   },
   {

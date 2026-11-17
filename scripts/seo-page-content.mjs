@@ -56,7 +56,6 @@ export const NAV_LINKS = [
   ["Merit List", "/merit-list"],
   ["Roll No. Slip", "/roll-no-slip"],
   ["Teachers", "/teachers"],
-  ["Library", "/library"],
   ["Gallery", "/gallery"],
   ["FAQ", "/faq"],
 ];
@@ -198,7 +197,7 @@ const PAGES = {
         ],
       },
       // Filled at build time (prerender-lib.mjs) with the ACTUAL admin-uploaded
-      // admission files (category "Admission" in the library) — direct download
+      // admission files (category "Admission") — direct download
       // URLs, so even a static snapshot points AI tools at the real forms.
       {
         h2: "Downloadable admission documents",
@@ -255,33 +254,6 @@ const PAGES = {
     ],
   },
 
-  "/library": {
-    title: "Library — Downloads & Past Papers | GHS Babi Khel",
-    description:
-      "Digital library of GHS Babi Khel — free downloadable study materials, books, notes, past papers and forms for classes 6–10, organised by category (Past Papers, Books, Notes, Assignments, Admission) and class.",
-    h1: "School Library",
-    blocks: [
-      {
-        p: [
-          "The digital library page hosts the study resources of Government High School Babi Khel: downloadable books, past papers and helping materials for classes 6 to 10, organised by category and class. Students preparing for school exams and BISE Peshawar board examinations can download the materials free of cost and read them offline after installing the site as an app.",
-          "The library is organised by category — Past Papers, Books, Notes, Assignments, Admission and Other — and can be filtered by class and searched by title. Every item shows its category and class, and downloads are counted so the school can see which materials students use most. Library items are added by the school administration throughout the year.",
-        ],
-      },
-      { h2: "Latest library items", links: { source: "library", empty: "Library items will be listed here as soon as the school administration adds them." } },
-      {
-        h2: "What you can find in the library",
-        ul: [
-          "Past Papers — BISE Peshawar style question papers and school exam papers for exam preparation",
-          "Books — reference books and reading material in PDF or link form",
-          "Assignments and worksheets for practice",
-          "Admission-related forms and documents",
-        ],
-      },
-    ],
-  },
-
-
-
   "/merit-list": {
     title: "Merit List — Toppers & Position Holders | GHS Babi Khel",
     description:
@@ -314,7 +286,7 @@ const PAGES = {
   "/faq": {
     title: "FAQ — Frequently Asked Questions | GHS Babi Khel",
     description:
-      "Frequently asked questions about GHS Babi Khel: admission procedure and documents, application tracking, results and grading, BISE Peshawar board exams, library, contact details and how to install the website as an app.",
+      "Frequently asked questions about GHS Babi Khel: admission procedure and documents, application tracking, results and grading, BISE Peshawar board exams, contact details and how to install the website as an app.",
     h1: "Frequently Asked Questions",
     blocks: FAQ_CATEGORIES.map((category) => ({
       h2: category,
