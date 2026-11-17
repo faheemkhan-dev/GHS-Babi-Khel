@@ -559,6 +559,7 @@ const ROUTE_SECTIONS = {
   "/results":         ["school", "exams"],
   "/merit-list":      ["school", "exams", "meritLists"],
   "/roll-no-slip":    ["school", "exams", "rollSlips"],
+  "/duties":          ["school"],
   "/teachers":        ["school", "teachers"],
   "/gallery":         ["school", "gallery"],
   "/faq":             ["school"],
@@ -679,7 +680,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Static routes this renderer accepts (mirrors prerender STATIC_ROUTES).
 const STATIC_ROUTES = new Set([
   "/", "/about", "/contact", "/admission", "/notices", "/results",
-  "/merit-list", "/roll-no-slip", "/teachers", "/gallery",
+  "/merit-list", "/roll-no-slip", "/duties", "/teachers", "/gallery",
   "/faq",
 ]);
 
@@ -1160,6 +1161,7 @@ function jsonLdFor(route, data, detail, pageName) {
     "/merit-list":   ["Results",         "Merit List"],
     "/roll-no-slip": ["Results",         "Roll No. Slip"],
     "/admission":    ["Admissions",      "Apply for Admission"],
+    "/duties":       ["Our School",      "Exam Duties"],
     "/teachers":     ["Our School",      "Teachers"],
   };
   let breadcrumbItems = null;
@@ -1239,6 +1241,7 @@ const PAGES_GUIDE = [
   { path: "/merit-list", purpose: "Official merit list — top position holders and class/whole-school exam rankings published by the school office, with pass statistics and a live countdown while a list is scheduled" },
   { path: "/roll-no-slip", purpose: "Exam roll number slips — a student picks their class and types their full name to view, download (PDF with QR code) or share their own slip; a live countdown shows while a release is scheduled" },
   { path: "/notices", purpose: "Official notices — exams, holidays, fee deadlines, parent-teacher meetings" },
+  { path: "/duties", purpose: "BISE Peshawar supervisory exam duty draw — teachers check their theory/practical duty by CNIC or mobile number, then download or share the duty order" },
   { path: "/teachers", purpose: "Teaching staff directory" },
   { path: "/gallery", purpose: "Photo albums of school events — sports day, science fair, study tours, national days" },
   { path: "/contact", purpose: "Contact details, map, WhatsApp and contact form" },
