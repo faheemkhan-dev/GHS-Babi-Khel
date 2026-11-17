@@ -120,6 +120,7 @@ const NAV_SECTIONS: NavSection[] = [
     tagline: "Learn anywhere, anytime",
     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light",
     links: [
+      { to: "/duties",         label: "Exam Duties",    icon: ClipboardList, desc: "BISE Peshawar supervisory draw", tint: "bg-gold-soft text-[hsl(43_89%_29%)] dark:bg-gold/15 dark:text-gold" },
       { to: "/teachers",       label: "Our Staff",      icon: Users,    desc: "Meet our teachers & faculty",         tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
     ],
   },
