@@ -1,6 +1,6 @@
 // src/lib/idlePolling.ts — "poll only while somebody is actually using the page"
 // ═══════════════════════════════════════════════════════════════════════════
-// Problem: a tab left open (an admin on Fee Management, Exam Seating, the
+// Problem: a tab left open (an admin on Exam Seating, the
 // dashboard…) kept refetching every 10 s – 5 min for hours, even though nobody
 // was there. On the Nano compute those idle polls add up.
 //
