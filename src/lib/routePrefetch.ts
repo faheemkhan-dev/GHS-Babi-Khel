@@ -30,6 +30,9 @@ export const ROUTE_LOADERS: Record<string, Loader> = {
   "/roll-no-slip":   () => import("@/pages/ExamRollNumbers"),
   // Results family
   "/results":        () => import("@/pages/Results"),
+  // Exam Duties — linked from the navbar mega-menu (Academics) and footer.
+  // Light page (~30 KB) — prefetched on intent like the rest.
+  "/duties":         () => import("@/pages/Duties"),
   // School info
   "/about":          () => import("@/pages/About"),
   "/gallery":        () => import("@/pages/Gallery"),
@@ -56,7 +59,7 @@ export const ROUTE_LOADERS: Record<string, Loader> = {
 const BACKGROUND_ORDER = [
   // light (a few KB each)
   "/about", "/contact", "/faq", "/notices",
-  "/teachers", "/gallery", "/search", "/admission",
+  "/teachers", "/gallery", "/search", "/admission", "/duties",
   // heavy (charts / pdf / excel dependency graphs) — warmed last
   "/merit-list", "/results", "/roll-no-slip",
 ];
