@@ -18,6 +18,7 @@ const footerLinks = {
   quickLinks: [
     { to: "/about",     label: "About Us" },
     { to: "/admission", label: "Admission" },
+    { to: "/duties",    label: "Exam Duties" },
     { to: "/teachers",  label: "Our Teachers" },
     { to: "/notices",   label: "Notices" },
     { to: "/faq",       label: "FAQs" },
