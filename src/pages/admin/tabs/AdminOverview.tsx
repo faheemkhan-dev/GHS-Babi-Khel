@@ -8,7 +8,7 @@ import {
   Users, GraduationCap, Bell, BookOpen, Image as ImageIcon,
   UserCog, ClipboardList, Calendar, CheckCircle, AlertCircle, Activity,
   ArrowUpRight, FileText, BookMarked, MapPin, Landmark, Phone, Mail, Hash,
-  Settings, RefreshCw, CalendarDays, Wallet, Trophy, Sparkles,
+  Settings, RefreshCw, CalendarDays, Trophy, Sparkles,
 } from "lucide-react";
 
 /* ─── Data hooks ─────────────────────────────────────────────────
@@ -217,7 +217,6 @@ const AdminOverview = () => {
   /* Shortcuts only point at pages that have NO tile above. */
   const shortcuts = [
     { tab: "timetables",      label: "Timetables",  hint: "Classes & substitutes", icon: CalendarDays },
-    { tab: "fees",            label: "Fees",        hint: "Collection & dues",     icon: Wallet },
     { tab: "exam-date-sheet", label: "Date Sheet",  hint: "Exam schedule",         icon: Calendar },
     { tab: "merit-list",      label: "Merit List",  hint: "Top performers",        icon: Trophy },
     { tab: "settings",        label: "Settings",    hint: "School profile",        icon: Settings },
