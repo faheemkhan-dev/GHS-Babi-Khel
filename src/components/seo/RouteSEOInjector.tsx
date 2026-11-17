@@ -116,6 +116,15 @@ const ROUTES: RouteSEO[] = [
     }),
   },
   {
+    pattern: "/duties",
+    title: "BISE Peshawar Exam Duties — Supervisory Draw Result | GHS Babi Khel",
+    description:
+      "Check your BISE Peshawar supervisory draw result (theory & practical duties) by CNIC or mobile number, live from the Board. Fast, free and mobile-friendly.",
+    keywords:
+      "BISE Peshawar duties, supervisory draw, BISEP draw, exam duty order, SSC supervisory staff, theory duty, practical duty, GHS Babi Khel",
+    breadcrumbs: () => [baseBreadcrumb, { name: "Exam Duties", path: "/duties" }],
+  },
+  {
     pattern: "/teachers",
     title: "Teachers & Faculty — GHS Babi Khel | District Mohmand KPK",
     description:
