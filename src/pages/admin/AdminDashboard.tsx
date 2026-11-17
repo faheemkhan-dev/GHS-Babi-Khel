@@ -20,8 +20,6 @@ const AdminUsers             = lazy(() => import("./tabs/AdminUsers"));
 // ── New feature admin tabs ──
 const AdminAdmissions        = lazy(() => import("./tabs/AdminAdmissions"));
 const AdminStudentRecords    = lazy(() => import("./tabs/AdminStudentRecords"));
-// ── Fee Management ──
-const AdminFees = lazy(() => import("./tabs/AdminFees"));
 
 const tabMap: Record<string, React.LazyExoticComponent<React.ComponentType<any>>> = {
   overview:           AdminOverview,
@@ -42,7 +40,6 @@ const tabMap: Record<string, React.LazyExoticComponent<React.ComponentType<any>>
   users:              AdminUsers,
   admissions:         AdminAdmissions,
   "student-records":  AdminStudentRecords,
-  "fees":             AdminFees,
 };
 
 // ── Per-tab error boundary ───────────────────────────────────────────────────
