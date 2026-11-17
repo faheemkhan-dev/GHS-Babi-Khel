@@ -25,6 +25,8 @@
     { "source": "/api/robots", "destination": "/api/seo?kind=robots" },
     { "source": "/api/rss", "destination": "/api/seo?kind=rss" },
     { "source": "/api/bisep-proxy", "destination": "/api/bisep-proxy" },
+    { "source": "/api/create-payment", "destination": "/api/safepay?kind=create" },
+    { "source": "/api/safepay-webhook", "destination": "/api/safepay?kind=webhook" },
     { "source": "/about", "destination": "/about/index.html" },
     { "source": "/contact", "destination": "/contact/index.html" },
     { "source": "/admission", "destination": "/admission/index.html" },

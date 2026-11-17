@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import {
@@ -6,9 +6,11 @@ import {
   useUpdateAdmissionStatus,
   useDeleteAdmission,
   useUpdateAdmissionSettings, useAdmissionSettings,
+  useSetAdmissionPayment, useAdmissionResetAll,
   Admission, AdmissionStatus
 } from "@/hooks/useAdmission";
 import { type PaymentMethod } from "@/hooks/useFees";
+import { paymentMethodLabel, type AdmissionPaymentAccount } from "@/lib/admissionPayment";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,10 +27,14 @@ import {
   Clock, FileText, Download, RefreshCw, ChevronLeft,
   ChevronRight, Settings2, Users, Loader2, Search,
   UserCheck, AlertTriangle, Trash2, X,
-  Wallet, Calendar, MapPin, Plus
+  Wallet, Calendar, MapPin, Plus, BadgeCheck, Armchair, Trophy, UserPlus
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
+
+const AdminAdmissionClasses = lazy(() => import("./AdminAdmissionClasses"));
+const AdminAdmissionMeritLists = lazy(() => import("./AdminAdmissionMeritLists"));
+const AdminWalkinDialog = lazy(() => import("./AdminWalkinDialog"));
 
 const PAGE_SIZE = 20;
 
@@ -42,6 +48,7 @@ const statusConfig: Record<AdmissionStatus, { label: string; badge: string; desc
   interview_scheduled:  { label: "Interview Scheduled",  badge: "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/30 dark:text-cyan-300 dark:border-cyan-800",         desc: "Interview slot booked" },
   interview_completed:  { label: "Interview Done",       badge: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800",   desc: "Interview completed successfully" },
   waitlisted:           { label: "Waitlisted",           badge: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800",       desc: "Waiting for a seat to open" },
+  merit_listed:         { label: "Merit Listed 🎉",      badge: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800",       desc: "Selected in a published merit list — seat confirmed by merit" },
   admitted:             { label: "Admitted ✅",          badge: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800",       desc: "Fully admitted — enrolled in students register" },
   admit_card_issued:    { label: "Admit Card Issued",    badge: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800",       desc: "Admit card generated and issued" },
 };
@@ -470,6 +477,216 @@ function AdmissionDetail({ app, onClose, onSaved, onDelete }: { app: Admission; 
   );
 }
 
+/* ── Processing Fee dialog (the ONLY place the processing fee is recorded) ──
+ * Separate from the admission-fee challan that is auto-created on approval —
+ * this is the small up-front application fee that qualifies a student for
+ * the merit list. */
+function FeeDialog({ app, onClose, onSaved }: { app: Admission; onClose: () => void; onSaved?: () => void }) {
+  const paymentMut = useSetAdmissionPayment();
+  const [method, setMethod] = useState<string>(app.payment_method || "cash");
+  const [receipt, setReceipt] = useState(app.payment_receipt || "");
+
+  const run = async (status: "paid" | "rejected" | "pending") => {
+    try {
+      const res: any = await paymentMut.mutateAsync({ id: app.id, status, receipt, method });
+      if (res?.unchanged) toast("No change — the fee was already in this state.", { icon: "ℹ️" });
+      else if (status === "paid") toast.success(`Fee recorded — Rs ${app.processing_fee} via ${paymentMethodLabel(method)}.`);
+      else if (status === "rejected") toast.success("Payment marked rejected.");
+      else toast.success("Fee reset to pending.");
+      onSaved?.();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message || "Could not update the fee.");
+    }
+  };
+
+  const paid = app.payment_status === "paid";
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md w-[calc(100vw-1.5rem)] max-h-[90vh] overflow-y-auto rounded-2xl p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2.5 text-left">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Wallet className="w-4 h-4" /></span>
+            Processing Fee
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3.5">
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            {([
+              ["Applicant", app.full_name],
+              ["Reference", app.reference_no],
+              ["Fee", `Rs ${app.processing_fee}`],
+              ["Payment Ref.", app.payment_reference || "not generated"],
+              ["Deadline", app.fee_deadline ? format(new Date(app.fee_deadline), "dd MMM yyyy") : "—"],
+              ["Current", `${PAYMENT_STATUS_LABELS[app.payment_status] || app.payment_status}${app.payment_method ? ` · ${paymentMethodLabel(app.payment_method)}` : ""}`],
+            ] as [string, string][]).map(([k, v]) => (
+              <div key={k} className="bg-muted/40 border border-border/50 rounded-xl px-3 py-2 min-w-0">
+                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{k}</p>
+                <p className="font-semibold text-xs break-words">{v}</p>
+              </div>
+            ))}
+          </div>
+
+          {paid ? (
+            <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900 p-3 text-xs text-green-800 dark:text-green-300 font-semibold">
+              Fee received. This application is final.
+            </div>
+          ) : (
+            <>
+              <div>
+                <Label className="text-xs font-bold mb-1.5 block">Paid by</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    ["bank", "Bank"], ["easypaisa", "EasyPaisa"], ["jazzcash", "JazzCash"],
+                    ["cash", "Cash at School"], ["safepay", "Online Payment"], ["other", "Other"],
+                  ].map(([value, label]) => (
+                    <button key={value} type="button" onClick={() => setMethod(value)}
+                      className={`rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors ${
+                        method === value
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border/60 bg-card text-muted-foreground hover:border-primary/40"
+                      }`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-bold mb-1.5 block">Receipt / transaction no. (optional)</Label>
+                <Input value={receipt} onChange={(e) => setReceipt(e.target.value)} placeholder="e.g. RC-0042" className="h-9 text-sm" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button onClick={() => run("paid")} disabled={paymentMut.isPending}
+                  className="h-10 w-full gap-1.5 rounded-full text-xs font-bold">
+                  {paymentMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <BadgeCheck className="w-4 h-4" />}
+                  Mark Fee Paid (Rs {app.processing_fee})
+                </Button>
+                {app.payment_status === "rejected" ? (
+                  <Button variant="outline" onClick={() => run("pending")} disabled={paymentMut.isPending}
+                    className="h-9 w-full rounded-full text-xs font-semibold">Reset to Fee Pending</Button>
+                ) : (
+                  app.payment_status === "pending" && app.payment_reference && (
+                    <Button variant="outline" onClick={() => run("rejected")} disabled={paymentMut.isPending}
+                      className="h-9 w-full rounded-full border-destructive/40 text-xs font-semibold text-destructive hover:bg-destructive/10">Reject Payment</Button>
+                  )
+                )}
+              </div>
+            </>
+          )}
+
+          <p className="text-[10.5px] text-muted-foreground border-t border-border/60 pt-2.5">
+            Fee is recorded here only. Review and merit are automatic: use the <b>Merit Lists</b> tab.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = { pending: "Pending", paid: "Paid", rejected: "Rejected" };
+
+const FeeStatusPill = ({ app }: { app: Admission }) => {
+  const s = app.payment_status || "pending";
+  const cls =
+    s === "paid"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900"
+      : s === "rejected"
+        ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900"
+        : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900";
+  return (
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cls}`}>
+      {PAYMENT_STATUS_LABELS[s] || s}
+      {app.payment_method && s === "paid" ? ` · ${paymentMethodLabel(app.payment_method)}` : ""}
+    </span>
+  );
+};
+
+/* ── Delete All (reset for the next session) ───────────────────────────── */
+function DeleteAllCard({ count }: { count: number }) {
+  const resetMut = useAdmissionResetAll();
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  const exportFirst = async () => {
+    setExporting(true);
+    try {
+      const { exportApplicationsExcel } = await import("@/lib/admissionExcel");
+      const { data, error } = await supabase
+        .from("admissions")
+        .select("id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, payment_status, payment_reference, payment_method, payment_receipt, processing_fee, fee_deadline, paid_at, father_cnic, occupation, created_at, updated_at")
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      if (error) throw error;
+      await exportApplicationsExcel((data ?? []) as Admission[], null);
+    } catch (e: any) {
+      toast.error(e?.message || "Export failed.");
+    } finally { setExporting(false); }
+  };
+
+  const doReset = async () => {
+    try {
+      const res: any = await resetMut.mutateAsync();
+      toast.success(`${res?.admissions ?? 0} application(s) deleted. Ready for the next session.`);
+      setOpen(false);
+      setConfirmText("");
+    } catch (e: any) {
+      toast.error(e?.message || "Reset failed.");
+    }
+  };
+
+  return (
+    <>
+      <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-3.5 sm:p-4">
+        <p className="text-xs font-bold text-red-700 dark:text-red-400 mb-1 flex items-center gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5" /> New Session Reset
+        </p>
+        <p className="text-[11px] text-red-700/80 dark:text-red-300/80 mb-2.5">
+          Permanently deletes all {count} application(s), documents, timelines and merit lists.
+          Classes, seats, settings and the students-register / fee-voucher records are kept.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={exportFirst} disabled={exporting}
+            className="h-9 gap-1.5 rounded-full border-green-600/40 px-3.5 text-xs font-bold text-green-700 hover:bg-green-600/10 dark:text-green-400">
+            {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Download Excel Backup First
+          </Button>
+          <Button size="sm" disabled={!count} onClick={() => setOpen(true)}
+            className="h-9 gap-1.5 rounded-full bg-red-600 px-3.5 text-xs font-bold text-white hover:bg-red-700">
+            <Trash2 className="w-3.5 h-3.5" /> Delete All Applications
+          </Button>
+        </div>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-left">Delete EVERYTHING for the next session?</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            This permanently deletes <b>{count}</b> application(s), all applicant documents, every merit
+            list and the payment ledger. Classes, seats and settings are kept. This cannot be undone.
+          </p>
+          <div>
+            <Label className="text-xs font-bold mb-1.5 block">Type DELETE ALL to confirm</Label>
+            <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="DELETE ALL" className="h-9 text-sm font-mono" />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => { setOpen(false); setConfirmText(""); }}
+              className="h-10 flex-1 rounded-full text-xs font-bold">Cancel</Button>
+            <Button variant="destructive" disabled={confirmText !== "DELETE ALL" || resetMut.isPending} onClick={doReset}
+              className="h-10 flex-1 rounded-full text-xs font-bold">
+              {resetMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Everything"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 /* ── Settings Panel ─────────────────────────────────────────────────────── */
 function AdmissionSettingsPanel() {
   const { data: settings, isLoading } = useAdmissionSettings();
@@ -482,7 +699,11 @@ function AdmissionSettingsPanel() {
     last_date:      "",
     banner_message: "",
     notes:          "",
+    processing_fee: "100",
+    contact_whatsapp: "",
+    online_payment_enabled: false,
   });
+  const [accounts, setAccounts] = useState<AdmissionPaymentAccount[]>([]);
   const [synced, setSynced] = useState(false);
 
   if (settings && !synced) {
@@ -493,13 +714,21 @@ function AdmissionSettingsPanel() {
       last_date:      settings.last_date ?? "",
       banner_message: settings.banner_message ?? "",
       notes:          settings.notes ?? "",
+      processing_fee: String(settings.processing_fee ?? 100),
+      contact_whatsapp: settings.contact_whatsapp ?? "",
+      online_payment_enabled: !!settings.online_payment_enabled,
     });
+    setAccounts((settings.payment_accounts ?? []) as AdmissionPaymentAccount[]);
     setSynced(true);
   }
+
+  const setAccount = (i: number, patch: Partial<AdmissionPaymentAccount>) =>
+    setAccounts((a) => a.map((acc, idx) => (idx === i ? { ...acc, ...patch } : acc)));
 
   const handleSave = async () => {
     setSaving(true);
     try {
+      const feeNum = Number(form.processing_fee);
       await updateMut.mutateAsync({
         is_open:        form.is_open,
         session_year:   form.session_year,
@@ -507,6 +736,10 @@ function AdmissionSettingsPanel() {
         last_date:      form.last_date   || null,
         banner_message: form.banner_message || null,
         notes:          form.notes || null,
+        processing_fee: Number.isFinite(feeNum) && feeNum >= 0 ? Math.round(feeNum) : 0,
+        payment_accounts: accounts,
+        online_payment_enabled: form.online_payment_enabled,
+        contact_whatsapp: form.contact_whatsapp || null,
       });
       toast.success("Settings saved");
     } catch {
@@ -521,7 +754,7 @@ function AdmissionSettingsPanel() {
   return (
     <Card className="rounded-2xl border-border/60 shadow-sm">
       <CardContent className="p-4 sm:p-5">
-        <PanelHeader icon={Settings2} title="Admission Settings" desc="Control the public admission window and banner" />
+        <PanelHeader icon={Settings2} title="Admission Settings" desc="Admission window, processing fee and payment accounts" />
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="flex items-center justify-between gap-3 p-3 bg-muted/40 border border-border/60 rounded-xl sm:col-span-2">
             <div className="min-w-0">
@@ -537,6 +770,13 @@ function AdmissionSettingsPanel() {
               placeholder="2026" className="h-9 text-sm" />
           </div>
           <div>
+            <Label className="text-xs font-semibold mb-1 block">Processing Fee (Rs)</Label>
+            <Input type="number" min={0} value={form.processing_fee}
+              onChange={e => setForm(f => ({ ...f, processing_fee: e.target.value }))}
+              placeholder="100" className="h-9 text-sm" />
+            <p className="text-[10px] text-muted-foreground mt-1">Set 0 to switch the processing fee off entirely.</p>
+          </div>
+          <div>
             <Label className="text-xs font-semibold mb-1 block">Open Date</Label>
             <Input type="date" value={form.open_date ?? ""}
               onChange={e => setForm(f => ({ ...f, open_date: e.target.value }))} className="h-9 text-sm" />
@@ -545,6 +785,7 @@ function AdmissionSettingsPanel() {
             <Label className="text-xs font-semibold mb-1 block">Last Date</Label>
             <Input type="date" value={form.last_date ?? ""}
               onChange={e => setForm(f => ({ ...f, last_date: e.target.value }))} className="h-9 text-sm" />
+            <p className="text-[10px] text-muted-foreground mt-1">Admission stays open until the last date; the fee deadline is its 23:59.</p>
           </div>
           <div className="sm:col-span-2">
             <Label className="text-xs font-semibold mb-1 block">Banner Message</Label>
@@ -552,6 +793,84 @@ function AdmissionSettingsPanel() {
               onChange={e => setForm(f => ({ ...f, banner_message: e.target.value }))}
               placeholder="Admissions Open for Session 2026 — Apply Online Today"
               className="h-9 text-sm" />
+          </div>
+          <div className="sm:col-span-2">
+            <Label className="text-xs font-semibold mb-1 block">WhatsApp Number for Payment Verification</Label>
+            <Input value={form.contact_whatsapp ?? ""}
+              onChange={e => setForm(f => ({ ...f, contact_whatsapp: e.target.value }))}
+              placeholder="03XX-XXXXXXX (manual-payment screenshots go here)"
+              className="h-9 text-sm" />
+          </div>
+
+          {/* Online payment switch */}
+          <div className="flex items-center justify-between gap-3 p-3 bg-muted/40 border border-border/60 rounded-xl sm:col-span-2">
+            <div className="min-w-0">
+              <p className="font-semibold text-sm">Online Payment (Safepay)</p>
+              <p className="text-xs text-muted-foreground">Easypaisa / JazzCash / wallet checkout with automatic fee confirmation. Manual transfer always stays available. Also needs the SAFEPAY_* env keys on Vercel.</p>
+            </div>
+            <Switch checked={form.online_payment_enabled} onCheckedChange={v => setForm(f => ({ ...f, online_payment_enabled: v }))} />
+          </div>
+
+          {/* Payment accounts */}
+          <div className="sm:col-span-2">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <Label className="text-xs font-bold">School Payment Accounts (printed on the fee challan)</Label>
+              <Button size="sm" variant="outline" onClick={() => setAccounts(a => [...a, { type: "bank", bank_name: "", account_title: "", account_number: "", iban: "" }])}
+                className="h-8 gap-1 rounded-full border-border/60 px-3 text-[11px] font-bold">
+                <Plus className="w-3.5 h-3.5" /> Add Account
+              </Button>
+            </div>
+            {accounts.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground italic">No account added. Applicants will be told to pay at the school office.</p>
+            ) : (
+              <div className="space-y-2">
+                {accounts.map((acc, i) => (
+                  <div key={i} className="p-2.5 rounded-xl border border-border/60 bg-muted/30 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Select value={acc.type} onValueChange={v => setAccount(i, { type: v as AdmissionPaymentAccount["type"] })}>
+                        <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bank">Bank</SelectItem>
+                          <SelectItem value="easypaisa">EasyPaisa</SelectItem>
+                          <SelectItem value="jazzcash">JazzCash</SelectItem>
+                          <SelectItem value="cash">Cash at School</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div className="flex-1" />
+                      <Button size="sm" variant="ghost" aria-label="Remove account"
+                        onClick={() => setAccounts(a => a.filter((_, idx) => idx !== i))}
+                        className="h-8 w-8 rounded-full p-0 text-red-500 hover:bg-red-500/10 hover:text-red-700">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                    {acc.type === "bank" && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input value={acc.bank_name ?? ""} onChange={e => setAccount(i, { bank_name: e.target.value })} placeholder="Bank name" className="h-8 text-xs" />
+                        <Input value={acc.account_title ?? ""} onChange={e => setAccount(i, { account_title: e.target.value })} placeholder="Account title" className="h-8 text-xs" />
+                        <Input value={acc.account_number ?? ""} onChange={e => setAccount(i, { account_number: e.target.value })} placeholder="Account number" className="h-8 text-xs" />
+                        <Input value={acc.iban ?? ""} onChange={e => setAccount(i, { iban: e.target.value })} placeholder="IBAN" className="h-8 text-xs" />
+                      </div>
+                    )}
+                    {(acc.type === "easypaisa" || acc.type === "jazzcash") && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input value={acc.account_name ?? ""} onChange={e => setAccount(i, { account_name: e.target.value })} placeholder="Account name" className="h-8 text-xs" />
+                        <Input value={acc.phone ?? ""} onChange={e => setAccount(i, { phone: e.target.value })} placeholder="03XX-XXXXXXX" className="h-8 text-xs" />
+                      </div>
+                    )}
+                    {acc.type === "cash" && (
+                      <Input value={acc.instructions ?? ""} onChange={e => setAccount(i, { instructions: e.target.value })} placeholder="Instructions (optional) — e.g. office hours" className="h-8 text-xs" />
+                    )}
+                    {acc.type === "other" && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input value={acc.label ?? ""} onChange={e => setAccount(i, { label: e.target.value })} placeholder="Method name" className="h-8 text-xs" />
+                        <Input value={acc.instructions ?? ""} onChange={e => setAccount(i, { instructions: e.target.value })} placeholder="Instructions" className="h-8 text-xs" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <Button onClick={handleSave} disabled={saving} className="mt-4 h-9 w-full gap-1.5 whitespace-nowrap rounded-full bg-primary px-5 text-xs font-semibold text-primary-foreground shadow-none hover:bg-primary/90 sm:w-auto">
@@ -813,8 +1132,8 @@ const DeleteApplicationButton = ({ app, disabled, onConfirm }: { app: Admission;
 );
 
 /** Applications list — table on ≥md, stacked cards on mobile (nothing cut off). */
-function ApplicationsList({ apps, onView, onDelete, deleting }: {
-  apps: Admission[]; onView: (a: Admission) => void; onDelete: (id: string) => void; deleting?: boolean;
+function ApplicationsList({ apps, onView, onDelete, onFee, deleting }: {
+  apps: Admission[]; onView: (a: Admission) => void; onDelete: (id: string) => void; onFee?: (a: Admission) => void; deleting?: boolean;
 }) {
   return (
     <>
@@ -823,8 +1142,8 @@ function ApplicationsList({ apps, onView, onDelete, deleting }: {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/60 text-left">
-              {["Applicant", "Class", "Type", "Status", "Applied", ""].map((h, i) => (
-                <th key={i} className={`whitespace-nowrap px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground ${i === 5 ? "text-right" : ""}`}>{h}</th>
+              {["Applicant", "Class", "Type", "Fee", "Status", "Applied", ""].map((h, i) => (
+                <th key={i} className={`whitespace-nowrap px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground ${i === 6 ? "text-right" : ""}`}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -842,6 +1161,12 @@ function ApplicationsList({ apps, onView, onDelete, deleting }: {
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">Class {app.applying_class}</td>
                 <td className="px-4 py-3 capitalize whitespace-nowrap">{app.admission_type}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="flex flex-col items-start gap-0.5">
+                    <FeeStatusPill app={app} />
+                    {app.payment_reference && <span className="text-[10px] text-muted-foreground font-mono">{app.payment_reference}</span>}
+                  </div>
+                </td>
                 <td className="px-4 py-3"><StatusPill status={app.status} /></td>
                 <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{format(new Date(app.created_at), "dd MMM yy")}</td>
                 <td className="px-4 py-3">
@@ -849,6 +1174,12 @@ function ApplicationsList({ apps, onView, onDelete, deleting }: {
                     <Button size="sm" variant="outline" onClick={() => onView(app)} className="h-8 min-w-0 gap-1.5 whitespace-nowrap rounded-full border-border/60 px-3 text-xs font-semibold shadow-none">
                       <Eye className="w-3.5 h-3.5" /> View
                     </Button>
+                    {onFee && (
+                      <Button size="sm" variant="outline" onClick={() => onFee(app)} aria-label="Processing fee"
+                        className="h-8 gap-1.5 whitespace-nowrap rounded-full border-border/60 px-3 text-xs font-semibold shadow-none">
+                        <Wallet className="w-3.5 h-3.5" /> Fee
+                      </Button>
+                    )}
                     <DeleteApplicationButton app={app} disabled={deleting} onConfirm={onDelete} />
                   </div>
                 </td>
@@ -877,10 +1208,18 @@ function ApplicationsList({ apps, onView, onDelete, deleting }: {
               <span className="h-1 w-1 rounded-full bg-border" />
               <span>{format(new Date(app.created_at), "dd MMM yyyy")}</span>
             </div>
+            <div className="mt-2.5">
+              <FeeStatusPill app={app} />
+            </div>
             <div className="mt-3 flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => onView(app)} className="h-8 min-w-0 flex-1 gap-1.5 whitespace-nowrap rounded-full border-border/60 px-3 text-xs font-semibold shadow-none">
                 <Eye className="w-3.5 h-3.5" /> View &amp; Manage
               </Button>
+              {onFee && (
+                <Button size="sm" variant="outline" onClick={() => onFee(app)} className="h-8 min-w-0 flex-1 gap-1.5 whitespace-nowrap rounded-full border-border/60 px-3 text-xs font-semibold shadow-none">
+                  <Wallet className="w-3.5 h-3.5" /> Fee
+                </Button>
+              )}
               <DeleteApplicationButton app={app} disabled={deleting} onConfirm={onDelete} />
             </div>
           </li>
@@ -890,14 +1229,21 @@ function ApplicationsList({ apps, onView, onDelete, deleting }: {
   );
 }
 
+/* ══ MAIN TAB — three sub-tabs (Applications · Classes & Seats · Merit Lists) ══ */
+type SubTab = "applications" | "classes" | "merit";
+
 const AdminAdmissions = () => {
+  const [subTab, setSubTab] = useState<SubTab>("applications");
   const [statusFilter, setStatusFilter] = useState("pending");
   const [classFilter,  setClassFilter]  = useState("all");
   const [typeFilter,   setTypeFilter]   = useState("all");
   const [page,         setPage]         = useState(0);
   const [selected,     setSelected]     = useState<Admission | null>(null);
+  const [feeApp,       setFeeApp]       = useState<Admission | null>(null);
+  const [walkinOpen,   setWalkinOpen]   = useState(false);
   const [search,       setSearch]       = useState("");
   const [activeStatFilter, setActiveStatFilter] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const qc = useQueryClient();
   const deleteMut = useDeleteAdmission();
 
@@ -916,6 +1262,8 @@ const AdminAdmissions = () => {
     approved:  all.filter(a => a.status === "approved").length,
     rejected:  all.filter(a => a.status === "rejected").length,
     migration: all.filter(a => a.admission_type === "migration").length,
+    feePaid:   all.filter(a => a.payment_status === "paid").length,
+    feePending: all.filter(a => a.payment_status !== "paid").length,
   };
 
   // Filtered list based on active stat card click
@@ -926,6 +1274,8 @@ const AdminAdmissions = () => {
         if (activeStatFilter === "approved") return a.status === "approved";
         if (activeStatFilter === "rejected") return a.status === "rejected";
         if (activeStatFilter === "migration") return a.admission_type === "migration";
+        if (activeStatFilter === "feePaid") return a.payment_status === "paid";
+        if (activeStatFilter === "feePending") return a.payment_status !== "paid";
         return true;
       })
     : null;
@@ -935,16 +1285,15 @@ const AdminAdmissions = () => {
     ? admissions.filter(a =>
         a.full_name.toLowerCase().includes(search.toLowerCase()) ||
         a.b_form_no.includes(search) ||
-        a.reference_no.toLowerCase().includes(search.toLowerCase())
+        a.reference_no.toLowerCase().includes(search.toLowerCase()) ||
+        (a.payment_reference || "").includes(search.trim())
       )
     : admissions;
 
-  // Handle stat card click — show filtered modal-like list
   const handleStatClick = (statKey: string) => {
     setActiveStatFilter(prev => prev === statKey ? null : statKey);
   };
 
-  // Handle delete from stat-filtered view
   const handleDeleteAdmission = async (id: string) => {
     try {
       await deleteMut.mutateAsync(id);
@@ -954,17 +1303,54 @@ const AdminAdmissions = () => {
     }
   };
 
-  // Remove a processed admission from the list immediately
-  const handleAdmissionSaved = (_id: string) => {
+  const removeProcessed = (_id: string) => {
     qc.invalidateQueries({ queryKey: ["admin-admissions"] });
   };
 
-  const handleAdmissionDeleted = (_id: string) => {
-    qc.invalidateQueries({ queryKey: ["admin-admissions"] });
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const { exportApplicationsExcel } = await import("@/lib/admissionExcel");
+      const { data: rows, error } = await supabase
+        .from("admissions")
+        .select("id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, payment_status, payment_reference, payment_method, payment_receipt, processing_fee, fee_deadline, paid_at, father_cnic, occupation, created_at, updated_at")
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      if (error) throw error;
+      await exportApplicationsExcel((rows ?? []) as Admission[], null);
+      toast.success(`Exported ${(rows ?? []).length} application(s).`);
+    } catch (e: any) {
+      toast.error(e?.message || "Export failed.");
+    } finally { setExporting(false); }
   };
+
+  // ── Sub-tab dispatch ─────────────────────────────────────────────────────
+  if (subTab === "classes") {
+    return (
+      <div className="space-y-4">
+        <SubTabPills subTab={subTab} onTab={setSubTab} />
+        <Suspense fallback={<Skeleton className="h-64 rounded-2xl" />}>
+          <AdminAdmissionClasses />
+        </Suspense>
+      </div>
+    );
+  }
+  if (subTab === "merit") {
+    return (
+      <div className="space-y-4">
+        <SubTabPills subTab={subTab} onTab={setSubTab} />
+        <Suspense fallback={<Skeleton className="h-64 rounded-2xl" />}>
+          <AdminAdmissionMeritLists />
+        </Suspense>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 pb-20 sm:space-y-6 md:pb-0">
+      {/* ── Sub-tab pills (Applications · Classes & Seats · Merit Lists) ─── */}
+      <SubTabPills subTab={subTab} onTab={setSubTab} />
+
       {/* ── Premium header ─────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card p-3.5 shadow-sm sm:p-4">
         <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-2xl" />
@@ -983,13 +1369,15 @@ const AdminAdmissions = () => {
       </div>
 
       {/* Stats — CLICKABLE cards */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5 [&>*:first-child]:col-span-2 sm:[&>*:first-child]:col-span-1">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-7 [&>*:first-child]:col-span-2 sm:[&>*:first-child]:col-span-1">
         {[
-          { key: "total",     label: "Total",     value: stats.total,     icon: Users,        color: "text-primary",    dot: "bg-primary",    activeBg: "border-primary bg-primary/10" },
-          { key: "pending",   label: "Pending",   value: stats.pending,   icon: Clock,        color: "text-blue-600",   dot: "bg-blue-500",   activeBg: "border-blue-400 bg-blue-500/10" },
-          { key: "approved",  label: "Approved",  value: stats.approved,  icon: CheckCircle2, color: "text-green-600",  dot: "bg-emerald-500", activeBg: "border-green-400 bg-green-500/10" },
-          { key: "rejected",  label: "Rejected",  value: stats.rejected,  icon: XCircle,      color: "text-red-500",    dot: "bg-red-500",    activeBg: "border-red-400 bg-red-500/10" },
-          { key: "migration", label: "Migration", value: stats.migration, icon: RefreshCw,    color: "text-purple-600", dot: "bg-purple-500", activeBg: "border-purple-400 bg-purple-500/10" },
+          { key: "total",     label: "Total",      value: stats.total,      icon: Users,        color: "text-primary",    dot: "bg-primary",    activeBg: "border-primary bg-primary/10" },
+          { key: "pending",   label: "Pending",    value: stats.pending,    icon: Clock,        color: "text-blue-600",   dot: "bg-blue-500",   activeBg: "border-blue-400 bg-blue-500/10" },
+          { key: "approved",  label: "Approved",   value: stats.approved,   icon: CheckCircle2, color: "text-green-600",  dot: "bg-emerald-500", activeBg: "border-green-400 bg-green-500/10" },
+          { key: "rejected",  label: "Rejected",   value: stats.rejected,   icon: XCircle,      color: "text-red-500",    dot: "bg-red-500",    activeBg: "border-red-400 bg-red-500/10" },
+          { key: "migration", label: "Migration",  value: stats.migration,  icon: RefreshCw,    color: "text-purple-600", dot: "bg-purple-500", activeBg: "border-purple-400 bg-purple-500/10" },
+          { key: "feePaid",   label: "Fee Paid",    value: stats.feePaid,   icon: BadgeCheck,   color: "text-emerald-600", dot: "bg-emerald-500", activeBg: "border-emerald-400 bg-emerald-500/10" },
+          { key: "feePending", label: "Fee Pending", value: stats.feePending, icon: Wallet,     color: "text-amber-600",  dot: "bg-amber-500",  activeBg: "border-amber-400 bg-amber-500/10" },
         ].map(s => (
           <Card
             key={s.key}
@@ -1023,7 +1411,9 @@ const AdminAdmissions = () => {
               {activeStatFilter === "approved" && <CheckCircle2 className="w-4 h-4 text-green-600" />}
               {activeStatFilter === "rejected" && <XCircle className="w-4 h-4 text-red-500" />}
               {activeStatFilter === "migration" && <RefreshCw className="w-4 h-4 text-purple-600" />}
-              {activeStatFilter === "total" ? "All" : activeStatFilter.charAt(0).toUpperCase() + activeStatFilter.slice(1)} Admissions
+              {activeStatFilter === "feePaid" && <BadgeCheck className="w-4 h-4 text-emerald-600" />}
+              {activeStatFilter === "feePending" && <Wallet className="w-4 h-4 text-amber-600" />}
+              {activeStatFilter === "total" ? "All" : activeStatFilter === "feePaid" ? "Fee Paid" : activeStatFilter === "feePending" ? "Fee Pending" : activeStatFilter.charAt(0).toUpperCase() + activeStatFilter.slice(1)} Admissions
               <Badge variant="secondary" className="text-[10px] h-5">{statFilteredAdmissions.length}</Badge>
             </h3>
             <Button size="sm" variant="ghost" onClick={() => setActiveStatFilter(null)}
@@ -1038,11 +1428,23 @@ const AdminAdmissions = () => {
                 No {activeStatFilter} admissions found
               </div>
             ) : (
-              <ApplicationsList apps={statFilteredAdmissions} onView={setSelected} onDelete={handleDeleteAdmission} deleting={deleteMut.isPending} />
+              <ApplicationsList apps={statFilteredAdmissions} onView={setSelected} onFee={setFeeApp} onDelete={handleDeleteAdmission} deleting={deleteMut.isPending} />
             )}
           </div>
         </Card>
       )}
+
+      {/* Toolbar — Export · Walk-in · Delete All */}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={exportExcel} disabled={exporting || !stats.total}
+          className="h-9 gap-1.5 rounded-full bg-emerald-600 px-3.5 text-xs font-bold text-white hover:bg-emerald-700">
+          {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Export Excel
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setWalkinOpen(true)}
+          className="h-9 gap-1.5 rounded-full border-border/60 px-3.5 text-xs font-bold">
+          <UserPlus className="w-3.5 h-3.5" /> Add Walk-in / Import
+        </Button>
+      </div>
 
       {/* Settings */}
       <AdmissionSettingsPanel />
@@ -1055,7 +1457,7 @@ const AdminAdmissions = () => {
         <div className="relative col-span-3 sm:min-w-[220px] sm:flex-1">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name / B-Form / ref..."
+            placeholder="Search name / B-Form / ref / payment ref..."
             className="h-10 rounded-full border-border/60 bg-card pl-10 text-sm shadow-none" />
         </div>
         <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(0); }}>
@@ -1097,7 +1499,7 @@ const AdminAdmissions = () => {
               No applications found
             </div>
           ) : (
-            <ApplicationsList apps={filtered} onView={setSelected} onDelete={handleDeleteAdmission} deleting={deleteMut.isPending} />
+            <ApplicationsList apps={filtered} onView={setSelected} onFee={setFeeApp} onDelete={handleDeleteAdmission} deleting={deleteMut.isPending} />
           )}
         </div>
 
@@ -1117,17 +1519,62 @@ const AdminAdmissions = () => {
         )}
       </Card>
 
+      {/* New-session reset (delete all) */}
+      <DeleteAllCard count={stats.total} />
+
       {/* Detail Dialog */}
       {selected && (
         <AdmissionDetail
           app={selected}
           onClose={() => setSelected(null)}
-          onSaved={handleAdmissionSaved}
-          onDelete={handleAdmissionDeleted}
+          onSaved={removeProcessed}
+          onDelete={removeProcessed}
         />
+      )}
+
+      {/* Processing Fee dialog */}
+      {feeApp && (
+        <FeeDialog
+          app={feeApp}
+          onClose={() => setFeeApp(null)}
+          onSaved={() => { qc.invalidateQueries({ queryKey: ["admin-admissions"] }); }}
+        />
+      )}
+
+      {/* Walk-in add / import dialog */}
+      {walkinOpen && (
+        <Suspense fallback={null}>
+          <AdminWalkinDialog open onClose={() => setWalkinOpen(false)} />
+        </Suspense>
       )}
     </div>
   );
 };
+
+/* ── Sub-tab pills ──────────────────────────────────────────────────────── */
+function SubTabPills({ subTab, onTab }: { subTab: SubTab; onTab: (t: SubTab) => void }) {
+  const pills: Array<{ id: SubTab; label: string; icon: typeof ClipboardList }> = [
+    { id: "applications", label: "Applications", icon: ClipboardList },
+    { id: "classes", label: "Classes & Seats", icon: Armchair },
+    { id: "merit", label: "Merit Lists", icon: Trophy },
+  ];
+  return (
+    <div className="flex flex-wrap gap-1.5 rounded-full border border-border/60 bg-muted/40 p-1">
+      {pills.map(p => (
+        <button
+          key={p.id}
+          onClick={() => onTab(p.id)}
+          className={`flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-xs font-bold transition-colors sm:flex-none sm:px-4 ${
+            subTab === p.id
+              ? "bg-card text-foreground shadow-sm border border-border/60"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <p.icon className="w-3.5 h-3.5" /> {p.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default AdminAdmissions;

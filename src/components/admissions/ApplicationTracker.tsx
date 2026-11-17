@@ -27,6 +27,7 @@ const STATUS_META: Record<string, { label: string; icon: any; color: string }> =
   interview_scheduled:  { label: "Interview Scheduled",       icon: Calendar,     color: "#06b6d4" },
   interview_completed:  { label: "Interview Completed",       icon: CheckCircle2, color: "#10b981" },
   waitlisted:           { label: "Waitlisted",                icon: Clock,        color: "#f59e0b" },
+  merit_listed:         { label: "Merit Listed",              icon: Award,        color: "#a88228" },
   approved:             { label: "Approved",                  icon: CheckCircle2, color: "#10b981" },
   admitted:             { label: "Admitted",                  icon: Award,        color: "#10b981" },
   admit_card_issued:    { label: "Admit Card Issued",         icon: Award,        color: "#10b981" },

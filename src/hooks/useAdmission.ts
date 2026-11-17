@@ -6,7 +6,8 @@ export type AdmissionType   = "fresh" | "migration";
 export type AdmissionStatus =
   | "pending" | "under_review" | "approved" | "rejected" | "documents_missing"
   | "documents_verified" | "interview_scheduled" | "interview_completed"
-  | "waitlisted" | "admitted" | "admit_card_issued";
+  | "waitlisted" | "merit_listed" | "admitted" | "admit_card_issued";
+export type AdmissionPaymentStatus = "pending" | "paid" | "rejected";
 
 /**
  * Normalize a phone number to digit-only form (preserving a leading +).
@@ -23,6 +24,11 @@ export interface AdmissionSettings {
   id: number; is_open: boolean; session_year: string;
   open_date: string | null; last_date: string | null;
   banner_message: string | null; notes: string | null; updated_at: string;
+  // Processing-fee payment (file 20 migration)
+  processing_fee: number | null;
+  payment_accounts: import("@/lib/admissionPayment").AdmissionPaymentAccount[] | null;
+  online_payment_enabled: boolean | null;
+  contact_whatsapp: string | null;
 }
 
 export interface Admission {
@@ -33,6 +39,10 @@ export interface Admission {
   previous_class: string | null; previous_marks: string | null; year_of_passing: string | null;
   status: AdmissionStatus; admin_note: string | null; rejection_reason: string | null;
   admission_roll_no: string | null; migration_step: number | null;
+  // Processing-fee payment (file 20 migration)
+  payment_status: AdmissionPaymentStatus; payment_reference: string | null;
+  payment_method: string | null; payment_receipt: string | null;
+  processing_fee: number; fee_deadline: string | null; paid_at: string | null;
   created_at: string; updated_at: string;
 }
 
@@ -64,7 +74,7 @@ export interface AdmissionDocumentPayload {
   file_name: string | null;
 }
 
-const ADMISSION_FIELDS = "id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, created_at, updated_at";
+const ADMISSION_FIELDS = "id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, payment_status, payment_reference, payment_method, payment_receipt, processing_fee, fee_deadline, paid_at, created_at, updated_at";
 const ADMISSION_DOCUMENT_FIELDS = "id, admission_id, doc_type, file_path, file_name, uploaded_at";
 
 function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
@@ -98,13 +108,50 @@ export function useAdmissionSettings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("admission_settings")
-        .select("id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at")
+        .select("id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at, processing_fee, payment_accounts, online_payment_enabled, contact_whatsapp")
         .eq("id", 1)
         .maybeSingle();
       if (error) throw error;
       return data;
     },
     staleTime: 2 * 60 * 1000,
+  });
+}
+
+// ── Classes & Seats + Merit Lists (public, CDN-cached readers) ─────────────
+
+export function useAdmissionClassSeats() {
+  return useQuery({
+    queryKey: ["admission-class-seats"],
+    queryFn: async () => {
+      const { fetchClassSeatsPublic } = await import("@/lib/admissionPayment");
+      return fetchClassSeatsPublic();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAdmissionMeritLists() {
+  return useQuery({
+    queryKey: ["admission-merit-lists-public"],
+    queryFn: async () => {
+      const { fetchMeritListsPublic } = await import("@/lib/admissionPayment");
+      return fetchMeritListsPublic();
+    },
+    staleTime: 15 * 1000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useAdmissionMeritList(id: string | null) {
+  return useQuery({
+    queryKey: ["admission-merit-list", id],
+    queryFn: async () => {
+      const { fetchMeritListPublic } = await import("@/lib/admissionPayment");
+      return id ? fetchMeritListPublic(id) : null;
+    },
+    enabled: !!id,
+    staleTime: 60 * 1000,
   });
 }
 
@@ -253,6 +300,293 @@ export function useUpdateAdmissionSettings() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admission-settings"] }),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Processing fee / merit lists / class seats (file 20 — admin console)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Record / reset the processing fee — the ONLY fee write (admin fee dialog). */
+export function useSetAdmissionPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      status: "pending" | "paid" | "rejected";
+      receipt?: string | null;
+      method?: string | null;
+    }) => {
+      const { data, error } = await supabase.rpc("admission_admin_set_payment", {
+        p_admission_id: args.id,
+        p_status: args.status,
+        p_receipt: args.receipt ?? null,
+        p_method: args.method ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.ok) throw new Error(row?.error || "Failed to update the fee.");
+      return row;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-admissions"] });
+      qc.invalidateQueries({ queryKey: ["track-admission"] });
+    },
+  });
+}
+
+/** Delete every application + merit list for the next session (DELETE ALL). */
+export function useAdmissionResetAll() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc("admission_admin_reset_all", {
+        p_confirm: "DELETE ALL",
+      });
+      if (error) throw new Error(error.message);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.ok) throw new Error(row?.error || "Reset failed.");
+      return row;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-admissions"] });
+      qc.invalidateQueries({ queryKey: ["admin-admission-merit-lists"] });
+      qc.invalidateQueries({ queryKey: ["admission-merit-lists-public"] });
+    },
+  });
+}
+
+/** Admin list of ALL merit lists (drafts included) per class. */
+export function useAdminAdmissionMeritLists() {
+  return useQuery({
+    queryKey: ["admin-admission-merit-lists"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("admission_merit_lists")
+        .select("id, class, list_no, title, session_year, admission_start_date, admission_last_date, is_published, published_at, created_at")
+        .order("class", { ascending: true })
+        .order("list_no", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((m: any) => ({
+        ...m,
+        listed_count: 0,
+        not_listed_count: 0,
+      }));
+    },
+  });
+}
+
+/** One merit list + entries (admin view, drafts too) — direct table read. */
+export function useAdminAdmissionMeritList(id: string | null) {
+  return useQuery({
+    queryKey: ["admin-admission-merit-view", id],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data: list, error: listErr } = await supabase
+        .from("admission_merit_lists")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (listErr) throw listErr;
+      if (!list) return null;
+      const { data: entries, error: eErr } = await supabase
+        .from("admission_merit_list_entries")
+        .select("id, admission_id, position, reference_no, name, father_name, previous_marks, marks_pct, remarks, is_listed")
+        .eq("merit_list_id", id)
+        .order("position", { ascending: true });
+      if (eErr) throw eErr;
+      const all = entries ?? [];
+      return {
+        ok: true,
+        list: {
+          id: list.id, class: list.class, class_label: `Class ${list.class}`,
+          list_no: list.list_no, title: list.title, session_year: list.session_year,
+          admission_start_date: list.admission_start_date,
+          admission_last_date: list.admission_last_date,
+          instructions: list.instructions, published_at: list.published_at,
+          is_published: list.is_published,
+        },
+        entries: all.map((e: any) => ({
+          id: e.id, position: e.position, reference_no: e.reference_no,
+          name: e.name, father_name: e.father_name, previous_marks: e.previous_marks,
+          marks_pct: e.marks_pct, remarks: e.remarks, is_listed: e.is_listed,
+        })),
+        listed_count: all.filter((e: any) => e.is_listed).length,
+        not_listed_count: all.filter((e: any) => !e.is_listed).length,
+      };
+    },
+    enabled: !!id,
+  });
+}
+
+/** One-click auto merit (preview = dry run). */
+export function useAdmissionMeritAuto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      list_no: number;
+      admission_start_date?: string | null;
+      admission_last_date?: string | null;
+      instructions?: string | null;
+      publish?: boolean;
+      dry_run?: boolean;
+      class?: string | null;
+    }) => {
+      const { data, error } = await supabase.rpc("admission_merit_auto", {
+        p_list_no: args.list_no,
+        p_admission_start_date: args.admission_start_date ?? null,
+        p_admission_last_date: args.admission_last_date ?? null,
+        p_instructions: args.instructions ?? null,
+        p_publish: args.publish ?? false,
+        p_dry_run: args.dry_run ?? false,
+        p_class: args.class ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.ok) throw new Error(row?.error || "Merit list failed.");
+      return row;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["admin-admission-merit-lists"] });
+      qc.invalidateQueries({ queryKey: ["admin-admissions"] });
+      qc.invalidateQueries({ queryKey: ["admission-merit-lists-public"] });
+      qc.invalidateQueries({ queryKey: ["track-admission"] });
+      if (!vars.dry_run) {
+        import("@/lib/admissionPayment").then((m) => m.markAdmissionMeritBust());
+      }
+    },
+  });
+}
+
+export function useAdmissionMeritPublish() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, published }: { id: string; published: boolean }) => {
+      const { data, error } = await supabase.rpc("admission_merit_publish", {
+        p_id: id, p_published: published,
+      });
+      if (error) throw new Error(error.message);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.ok) throw new Error(row?.error || "Publish failed.");
+      return row;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-admission-merit-lists"] });
+      qc.invalidateQueries({ queryKey: ["admin-admission-merit-view"] });
+      qc.invalidateQueries({ queryKey: ["admin-admissions"] });
+      qc.invalidateQueries({ queryKey: ["admission-merit-lists-public"] });
+      qc.invalidateQueries({ queryKey: ["admission-merit-list"] });
+      qc.invalidateQueries({ queryKey: ["track-admission"] });
+      import("@/lib/admissionPayment").then((m) => m.markAdmissionMeritBust());
+    },
+  });
+}
+
+export function useAdmissionMeritDelete() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc("admission_merit_delete", { p_id: id });
+      if (error) throw new Error(error.message);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.ok) throw new Error(row?.error || "Delete failed.");
+      return row;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-admission-merit-lists"] });
+      qc.invalidateQueries({ queryKey: ["admission-merit-lists-public"] });
+    },
+  });
+}
+
+export function useAdmissionMeritRemark() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ entryId, remarks }: { entryId: string; remarks: string }) => {
+      const { data, error } = await supabase.rpc("admission_merit_entry_remark", {
+        p_entry_id: entryId, p_remarks: remarks,
+      });
+      if (error) throw new Error(error.message);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.ok) throw new Error(row?.error || "Could not save the remark.");
+      return row;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-admission-merit-view"] });
+      qc.invalidateQueries({ queryKey: ["admission-merit-list"] });
+    },
+  });
+}
+
+/** Admin classes & seats (includes closed classes). */
+export function useAdminAdmissionClasses() {
+  return useQuery({
+    queryKey: ["admin-admission-classes"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("admission_class_seats")
+        .select("class, seats, is_open, display_order, updated_at")
+        .order("display_order", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        class: string; seats: number; is_open: boolean;
+        display_order: number; updated_at: string;
+      }>;
+    },
+  });
+}
+
+export function useSetAdmissionClassSeats() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { class: string; seats?: number | null; is_open?: boolean | null }) => {
+      const { data, error } = await supabase.rpc("admission_admin_set_class_seats", {
+        p_class: args.class,
+        p_seats: args.seats ?? null,
+        p_is_open: args.is_open ?? null,
+      });
+      if (error) throw new Error(error.message);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.ok) throw new Error(row?.error || "Could not save seats.");
+      return row;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-admission-classes"] });
+      qc.invalidateQueries({ queryKey: ["admission-class-seats"] });
+      import("@/lib/admissionPayment").then((m) => m.markAdmissionClassesBust());
+    },
+  });
+}
+
+/** Walk-in (paper) application entered by the office. */
+export function useAddAdmissionWalkin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Record<string, any>) => {
+      const { data, error } = await supabase.rpc("admission_admin_add_walkin", { p: payload });
+      if (error) throw new Error(error.message);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.ok) throw new Error(row?.error || "Could not save the walk-in application.");
+      return row as { ok: true; id: string; reference_no: string };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-admissions"] }),
+  });
+}
+
+/** Bulk walk-in import (per-row isolation, server-side). */
+export function useImportAdmissionWalkins() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (rows: Record<string, any>[]) => {
+      const { data, error } = await supabase.rpc("admission_admin_import_walkins", {
+        p_rows: rows,
+      });
+      if (error) throw new Error(error.message);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.ok) throw new Error(row?.error || "Import failed.");
+      return row as { ok: true; imported: number; failed: number; errors: Array<{ row: number; name: string; error: string }> };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-admissions"] }),
   });
 }
 

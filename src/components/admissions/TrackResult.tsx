@@ -1,12 +1,23 @@
 import { lazy, Suspense, useState, useEffect, useCallback } from "react";
-import { AlertCircle, Download, RefreshCw } from "lucide-react";
+import { AlertCircle, Download, RefreshCw, FileDown, FileText, Loader2, BadgeCheck, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabasePublic } from "@/lib/supabase";
+import { useAdmissionSettings, type Admission } from "@/hooks/useAdmission";
+import { useSchoolSettings } from "@/hooks/useSchoolSettings";
+import {
+  ensurePaymentReference,
+  formatDeadline,
+  paymentMethodLabel,
+  type AdmissionPaymentAccount,
+} from "@/lib/admissionPayment";
+import toast from "react-hot-toast";
 const ApplicationTracker = lazy(() => import("@/components/admissions/ApplicationTracker"));
 const InterviewSlotBooking = lazy(() => import("@/components/admissions/InterviewSlotBooking"));
 const AdmitCard = lazy(() => import("@/components/admissions/AdmitCard"));
 const FeeChallan = lazy(() => import("@/components/admissions/FeeChallan"));
+const OnlinePayPanel = lazy(() => import("@/components/admissions/OnlinePayPanel"));
 
 // Migration steps reflect the process described in BISE Peshawar's official
 // enrollment notification for Class 9/10: migration is a school-to-school
@@ -34,6 +45,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   interview_scheduled:{ label: "Interview Scheduled", color: "bg-cyan-100 text-cyan-800" },
   interview_completed:{ label: "Interview Completed", color: "bg-teal-100 text-teal-800" },
   waitlisted:        { label: "Waitlisted",         color: "bg-amber-100 text-amber-800" },
+  merit_listed:      { label: "Merit Listed 🎉",    color: "bg-amber-100 text-amber-800" },
   admitted:          { label: "Admitted ✅",        color: "bg-green-100 text-green-800" },
   admit_card_issued: { label: "Admit Card Issued",  color: "bg-green-100 text-green-800" },
 };
@@ -56,6 +68,16 @@ export default function TrackResult({ result }: { result: any }) {
   const [timelineLoading, setTimelineLoading] = useState(true);
   const [realBooking, setRealBooking] = useState<{ label: string } | null>(null);
   const [bookingChecked, setBookingChecked] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState<string | null>(null);
+  const [liveRef, setLiveRef] = useState<string | null>(result.payment_reference ?? null);
+
+  const { data: settings } = useAdmissionSettings();
+  const { data: school } = useSchoolSettings();
+  const accounts: AdmissionPaymentAccount[] = (settings?.payment_accounts ?? []) as AdmissionPaymentAccount[];
+  const processingFee = result.processing_fee ?? settings?.processing_fee ?? 0;
+  const hasProcessingFee = Number(processingFee) > 0;
+
+  useEffect(() => { setLiveRef(result.payment_reference ?? null); }, [result.payment_reference]);
 
   const loadTimeline = useCallback(async () => {
     setTimelineLoading(true);
@@ -94,8 +116,67 @@ export default function TrackResult({ result }: { result: any }) {
 
   useEffect(() => { loadTimeline(); loadBooking(); }, [loadTimeline, loadBooking]);
 
+  // ── PDF downloads (GHSS-Ghallanai-style documents) ───────────────────────
+  const pdfInputBase = () => ({
+    referenceNo: result.reference_no,
+    name: result.full_name,
+    fatherName: result.father_name,
+    bFormNo: result.b_form_no,
+    applyingClass: result.applying_class,
+    admissionType: result.admission_type || "fresh",
+    processingFee: Number(processingFee),
+    deadline: result.fee_deadline,
+    paymentAccounts: accounts,
+    sessionYear: settings?.session_year ?? null,
+    appliedOn: result.created_at,
+  });
+
+  const downloadApplicationPdf = async () => {
+    setPdfBusy("application");
+    try {
+      const m = await import("@/lib/admissionPdf");
+      await m.downloadApplicationForm({
+        ...pdfInputBase(),
+        paymentStatus: result.payment_status || "pending",
+        paymentReference: liveRef,
+        gender: result.gender,
+        dateOfBirth: result.date_of_birth,
+        contactNumber: result.contact_number,
+        whatsappNumber: result.whatsapp_number,
+        homeAddress: result.home_address,
+        fatherCnic: result.father_cnic,
+        occupation: result.occupation,
+        previousSchool: result.previous_school,
+        previousClass: result.previous_class,
+        previousMarks: result.previous_marks,
+        yearOfPassing: result.year_of_passing,
+      });
+    } catch (e: any) {
+      toast.error(`Could not build the PDF: ${e?.message || "try again"}`);
+    } finally { setPdfBusy(null); }
+  };
+
+  const downloadChallanPdf = async (withReference: boolean) => {
+    setPdfBusy("challan");
+    try {
+      let ref = liveRef;
+      if (withReference && !ref) {
+        const res = await ensurePaymentReference(result.reference_no, result.b_form_no);
+        if (!res.ok) { toast.error(res.error || "Could not create the payment reference."); return; }
+        ref = res.payment_reference ?? null;
+        if (ref) setLiveRef(ref);
+      }
+      const m = await import("@/lib/admissionPdf");
+      await m.downloadFeeChallan({ ...pdfInputBase(), paymentReference: ref });
+    } catch (e: any) {
+      toast.error(`Could not build the challan: ${e?.message || "try again"}`);
+    } finally { setPdfBusy(null); }
+  };
+
   const canBookInterview = ["documents_verified", "under_review", "interview_scheduled"].includes(status);
   const canDownloadAdmitCard = ["interview_scheduled", "admitted", "admit_card_issued"].includes(status);
+
+  const feePaid = result.payment_status === "paid";
 
   return (
     <div className="space-y-4">
@@ -114,6 +195,23 @@ export default function TrackResult({ result }: { result: any }) {
             <div><p className="text-xs text-muted-foreground">Type</p><p className="font-semibold capitalize">{result.admission_type}</p></div>
             <div><p className="text-xs text-muted-foreground">Applied On</p><p className="font-semibold">{new Date(result.created_at).toLocaleDateString("en-PK")}</p></div>
           </div>
+
+          {/* Document downloads — always available (GHSS-style) */}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={downloadApplicationPdf} disabled={!!pdfBusy}
+              className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-bold">
+              {pdfBusy === "application" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+              Application PDF
+            </Button>
+            {hasProcessingFee && (
+              <Button variant="outline" size="sm" onClick={() => downloadChallanPdf(true)} disabled={!!pdfBusy}
+                className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-bold">
+                {pdfBusy === "challan" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                {liveRef ? "Fee Challan" : "Generate + Fee Challan"}
+              </Button>
+            )}
+          </div>
+
           {result.admin_note && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
               <p className="font-semibold mb-1">Message from Admin:</p>
@@ -133,10 +231,73 @@ export default function TrackResult({ result }: { result: any }) {
               <p>Download the admission forms, fill them, attach your documents, and submit at the school office to complete your enrollment.</p>
             </div>
           )}
+          {status === "merit_listed" && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">
+              <p className="font-semibold mb-1">🎉 You are on the merit list!</p>
+              <p>Congratulations — you have been selected for a seat in Class {result.applying_class}. Bring your original documents to the school office by the last date shown on the merit list to confirm your admission.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Fee Challan - Show when approved or admitted */}
+      {/* Processing Fee (application fee) — GHSS-style payment card */}
+      {hasProcessingFee && (
+        feePaid ? (
+          <Card className="border-2 border-green-300/60 dark:border-green-900/60">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-foreground">Processing Fee — Rs {Number(processingFee).toLocaleString("en-PK")}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {result.paid_at ? `Paid on ${new Date(result.paid_at).toLocaleDateString("en-PK")}` : "Fee received"}
+                    {result.payment_method ? ` · via ${paymentMethodLabel(result.payment_method)}` : ""}
+                    {result.payment_receipt ? ` · Ref ${result.payment_receipt}` : ""}
+                  </p>
+                </div>
+                <Badge className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1">
+                  <BadgeCheck className="w-3.5 h-3.5 mr-1" /> Paid
+                </Badge>
+              </div>
+              {liveRef && (
+                <p className="text-xs text-muted-foreground">
+                  Payment Reference <span className="font-mono font-bold text-foreground">{liveRef}</span>
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" aria-label="Loading payment panel" />}>
+            <OnlinePayPanel
+              referenceNo={result.reference_no}
+              bFormNo={result.b_form_no}
+              processingFee={Number(processingFee)}
+              paymentReference={liveRef}
+              feeDeadline={result.fee_deadline}
+              accounts={accounts}
+              whatsappNumber={settings?.contact_whatsapp ?? null}
+              schoolPhone={school?.phone ?? null}
+              onReference={(ref) => setLiveRef(ref)}
+              onDownloadChallan={() => downloadChallanPdf(false)}
+              challanBusy={pdfBusy === "challan"}
+            />
+          </Suspense>
+        )
+      )}
+      {hasProcessingFee && !feePaid && result.payment_status === "rejected" && (
+        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-2xl p-4 flex items-start gap-3">
+          <XCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-foreground text-sm">Payment could not be verified</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              The school office could not verify your processing fee payment. Please contact the office
+              {formatDeadline(result.fee_deadline) !== "—" ? ` before ${formatDeadline(result.fee_deadline)}` : ""}.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Fee Challan - Show when approved or admitted (admission fee voucher —
+          created by the office at approval; separate from the processing fee) */}
       {(status === "approved" || status === "admitted") && (
         <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" aria-label="Loading fee details" />}><FeeChallan
           admissionId={result.id}
@@ -203,8 +364,7 @@ export default function TrackResult({ result }: { result: any }) {
         </div>
       )}
 
-      {canDownloadAdmitCard && <Suspense fallback={<div className="h-16 rounded-2xl bg-muted" aria-label="Loading admit card" />}><AdmitCard admission={result} /></Suspense>}
+      {canDownloadAdmitCard && <Suspense fallback={<div className="h-16 rounded-2xl bg-muted" aria-label="Loading admit card" />}><AdmitCard admission={result as Admission} /></Suspense>}
     </div>
   );
 }
-

@@ -83,6 +83,11 @@ const CACHE = {
   "result-schedule":{ s: 5,   swr: 10 },
   "result-rank":    { s: 30,  swr: 120 },
   "class-average":  { s: 30,  swr: 120 },
+  // Admission (ported from the GHSS Ghallanai feature): seats + published
+  // merit lists are public and read-heavy on result day.
+  "admission-classes":     { s: 300, swr: 600 },
+  "admission-merit-lists": { s: 10,  swr: 20 },   // publish must reach applicants in seconds
+  "admission-merit-list":  { s: 30,  swr: 60 },
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -347,7 +352,42 @@ const FETCHERS = {
     const t = await res.text();
     return t ? JSON.parse(t) : null;
   },
+
+  // ── Admission kinds (GHSS-Ghallanai-style payment/merit feature) ──────
+  // Same SECURITY DEFINER RPCs the browser calls directly as fallback —
+  // the edge cache just absorbs the read burst.
+
+  // Classes & seats (every class has seats directly — high-school model).
+  async "admission-classes"() {
+    return (await sbRpc("admission_class_seats_list")) ?? [];
+  },
+
+  // Published admission merit lists (light list — no entries).
+  async "admission-merit-lists"() {
+    return (await sbRpc("admission_merit_lists_public")) ?? [];
+  },
+
+  // One published admission merit list + its entries.
+  async "admission-merit-list"(q) {
+    const id = q.get("id") || "";
+    if (!UUID_RE.test(id)) return null;
+    return (await sbRpc("admission_merit_list_view", { p_id: id })) ?? null;
+  },
 };
+
+/** POST a public SECURITY DEFINER RPC with the service role + timeout. */
+async function sbRpc(fn, body = {}) {
+  const { url, key } = cfg();
+  const res = await fetch(`${url}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(SB_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`rpc ${fn} → ${res.status}`);
+  const t = await res.text();
+  return t ? JSON.parse(t) : null;
+}
 
 export default async function handler(req, res) {
   // GET only — this is a public read cache, nothing more.

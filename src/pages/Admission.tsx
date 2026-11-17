@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useEffect, useMemo } from "react";
-import { useLocation } from "react-router-dom";
-import { CheckCircle2, Search, ChevronRight, ChevronLeft, Loader2, AlertCircle, User, BookOpen, Download, Shield, XCircle, MapPin, Phone, GraduationCap, TrendingUp, Calendar, Send, Eye, Edit3, Save, Trash2, Info, X, Briefcase } from "lucide-react";
+import { useLocation, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, Search, ChevronRight, ChevronLeft, Loader2, AlertCircle, User, BookOpen, Download, Shield, XCircle, MapPin, Phone, GraduationCap, TrendingUp, Calendar, Send, Eye, Edit3, Save, Trash2, Info, X, Briefcase, FileText, FileDown, BadgeCheck } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,9 @@ import { PushOptIn } from "@/components/shared/PushOptIn";
 import { useQuery } from "@tanstack/react-query";
 import AdmissionHome from "@/components/admissions/AdmissionHome";
 const TrackResult = lazy(() => import("@/components/admissions/TrackResult"));
+const ClassesAndSeats = lazy(() => import("@/components/admissions/ClassesAndSeats"));
+const AdmissionMeritLists = lazy(() => import("@/components/admissions/AdmissionMeritLists"));
+const OnlinePayPanel = lazy(() => import("@/components/admissions/OnlinePayPanel"));
 
 type View = "home" | "apply" | "track" | "success" | "eligibility";
 
@@ -151,6 +155,57 @@ const Admission = () => {
   const [doTrack, setDoTrack]         = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
 
+  // ── Processing-fee payment state (success view + Safepay return) ─────────
+  const [paymentRef, setPaymentRef]   = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy]         = useState<string | null>(null);
+  const qc = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Safepay checkout return: /admission?payment=return&ref=… (poll until the
+  // webhook flips the fee to paid) or ?payment=cancelled&ref=… (calm toast).
+  useEffect(() => {
+    const mode = searchParams.get("payment");
+    const ref = searchParams.get("ref");
+    if (!mode || !ref) return;
+    // clean the URL once consumed (no re-trigger on re-render)
+    setSearchParams({}, { replace: true });
+    setView("track");
+    setTrackQuery(ref);
+    setDoTrack(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (mode === "cancelled") {
+      toast("Payment was not completed. You can try again whenever you are ready.", { icon: "ℹ️", duration: 5000 });
+      return;
+    }
+    if (mode === "return") {
+      setAwaitingPaymentRef(ref);
+      let tries = 0;
+      const poll = window.setInterval(async () => {
+        tries += 1;
+        await qc.invalidateQueries({ queryKey: ["track-admission"] });
+        if (tries >= 12) window.clearInterval(poll);
+      }, 3000);
+      // Safety: stop polling when the visitor leaves the page.
+      return () => window.clearInterval(poll);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount — the params are consumed immediately
+
+  // ── Track (moved up: the Safepay watcher needs its results) ─────────────
+  const trackEnabled = doTrack && trackQuery.length >= 5;
+  const { data: trackResults, isFetching: trackLoading } = useTrackAdmission(trackEnabled ? trackQuery : "");
+
+  // When the polled refetch shows the fee as paid, confirm it once.
+  const [awaitingPaymentRef, setAwaitingPaymentRef] = useState<string | null>(null);
+  useEffect(() => {
+    if (!awaitingPaymentRef || !trackResults) return;
+    const match = (trackResults as any[]).find((r) => r?.reference_no === awaitingPaymentRef);
+    if (match?.payment_status === "paid") {
+      setAwaitingPaymentRef(null);
+      toast.success("Payment received. Thank you!");
+    }
+  }, [trackResults, awaitingPaymentRef]);
+
   const defaultForm = {
     full_name: "", father_name: "", date_of_birth: "", b_form_no: "",
     contact_number: "", whatsapp_number: "", home_address: "", gender: "",
@@ -250,6 +305,59 @@ const Admission = () => {
   const generateEmptyForm = useCallback(() => runDownload("empty_form", (m) => m.generateEmptyForm(school)), [runDownload, school]);
   const generateFilledForm = useCallback(() => runDownload("filled_form", (m) => m.generateFilledForm(school, form)), [runDownload, school, form]);
 
+  // ── Success-view PDFs (GHSS-style challan + application form) ────────────
+  const successPdfInput = useCallback(() => ({
+    referenceNo,
+    name: form.full_name,
+    fatherName: form.father_name,
+    bFormNo: (form.b_form_no || "").replace(/[^0-9]/g, ""),
+    applyingClass: form.applying_class,
+    admissionType: form.admission_type || "fresh",
+    processingFee: Number(settings?.processing_fee ?? 0),
+    deadline: null,
+    paymentAccounts: (settings?.payment_accounts ?? []) as any[],
+    sessionYear: settings?.session_year ?? null,
+    appliedOn: new Date().toISOString(),
+  }), [referenceNo, form, settings]);
+
+  const downloadSuccessPdf = useCallback(async (kind: "challan" | "application") => {
+    if (!referenceNo) return;
+    setPdfBusy(kind);
+    try {
+      const m = await import("@/lib/admissionPdf");
+      if (kind === "application") {
+        await m.downloadApplicationForm({
+          ...successPdfInput(),
+          paymentStatus: "pending",
+          paymentReference: paymentRef,
+          gender: form.gender,
+          dateOfBirth: form.date_of_birth || null,
+          contactNumber: form.contact_number,
+          whatsappNumber: form.whatsapp_number || null,
+          homeAddress: form.home_address || null,
+          fatherCnic: form.father_cnic || null,
+          occupation: form.occupation || null,
+          previousSchool: form.previous_school || null,
+          previousClass: form.previous_class || null,
+          previousMarks: form.previous_marks || null,
+          yearOfPassing: form.year_of_passing || null,
+        });
+      } else {
+        let ref = paymentRef;
+        if (!ref) {
+          const { ensurePaymentReference } = await import("@/lib/admissionPayment");
+          const res = await ensurePaymentReference(referenceNo, (form.b_form_no || "").replace(/[^0-9]/g, ""));
+          if (!res.ok) { toast.error(res.error || "Could not create the payment reference."); return; }
+          ref = res.payment_reference ?? null;
+          if (ref) setPaymentRef(ref);
+        }
+        await m.downloadFeeChallan({ ...successPdfInput(), paymentReference: ref });
+      }
+    } catch (e: any) {
+      toast.error(`Could not build the PDF: ${e?.message || "try again"}`);
+    } finally { setPdfBusy(null); }
+  }, [referenceNo, paymentRef, form, settings, successPdfInput]);
+
   // ── Save draft on form change ───────────────────────────────────────────
   useEffect(() => {
     const hasContent = Object.values(form).some(v => v && v !== "fresh");
@@ -260,10 +368,6 @@ const Admission = () => {
 
 
 
-
-
-  const trackEnabled = doTrack && trackQuery.length >= 5;
-  const { data: trackResults, isFetching: trackLoading } = useTrackAdmission(trackEnabled ? trackQuery : "");
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm(f => ({ ...f, [k]: e.target.value }));
@@ -485,21 +589,28 @@ const Admission = () => {
 
         {/* ══════════ HOME VIEW ══════════ */}
         {view === "home" && (
-          <AdmissionHome
-            isOpen={isEffectivelyOpen}
-            sessionLabel={displaySessionYear}
-            lastDate={settings?.last_date}
-            bannerMessage={settings?.banner_message}
-            closedNote={nextOpeningNote}
-            downloading={downloading}
-            hasLibFile={(k) => !!libFiles[k]}
-            onApply={startApply}
-            onTrack={() => { setView("track"); window.scrollTo({ top: 0 }); }}
-            onDownloadItem={generateAndDownload}
-            onDownloadBlank={generateEmptyForm}
-            onDownloadAll={downloadAll}
-            onLocked={() => toast.error(nextOpeningNote || "Admissions are currently closed.")}
-          />
+          <div className="space-y-4">
+            <AdmissionHome
+              isOpen={isEffectivelyOpen}
+              sessionLabel={displaySessionYear}
+              lastDate={settings?.last_date}
+              bannerMessage={settings?.banner_message}
+              closedNote={nextOpeningNote}
+              downloading={downloading}
+              hasLibFile={(k) => !!libFiles[k]}
+              onApply={startApply}
+              onTrack={() => { setView("track"); window.scrollTo({ top: 0 }); }}
+              onDownloadItem={generateAndDownload}
+              onDownloadBlank={generateEmptyForm}
+              onDownloadAll={downloadAll}
+              onLocked={() => toast.error(nextOpeningNote || "Admissions are currently closed.")}
+            />
+            {/* Classes & Seats + Merit Lists (GHSS-Ghallanai sections, high-school model) */}
+            <div className="container mx-auto px-4 max-w-3xl space-y-4">
+              <Suspense fallback={null}><ClassesAndSeats processingFee={settings?.processing_fee ?? null} /></Suspense>
+              <Suspense fallback={null}><AdmissionMeritLists /></Suspense>
+            </div>
+          </div>
         )}
 
         {/* ══════════ APPLY VIEW ══════════ */}
@@ -870,6 +981,49 @@ const Admission = () => {
                   className="mb-6 text-left"
                 />
               )}
+
+              {/* ── Processing fee: reference + downloads + pay (GHSS-style) ── */}
+              {referenceNo && Number(settings?.processing_fee ?? 0) > 0 && (
+                <div className="space-y-3 mb-6 text-left">
+                  <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-2xl p-4">
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-1.5">
+                      <BadgeCheck className="w-4 h-4" /> Processing Fee — Rs {Number(settings?.processing_fee).toLocaleString("en-PK")}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mb-3">
+                      Pay online (Easypaisa · JazzCash · wallet) or by manual transfer to the school account, then verify on WhatsApp.
+                      Your application enters the merit list once the fee is confirmed.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => downloadSuccessPdf("challan")} disabled={!!pdfBusy}
+                        className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-bold">
+                        {pdfBusy === "challan" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                        {paymentRef ? "Fee Challan" : "Generate + Fee Challan"}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => downloadSuccessPdf("application")} disabled={!!pdfBusy}
+                        className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-bold">
+                        {pdfBusy === "application" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                        Application PDF
+                      </Button>
+                    </div>
+                  </div>
+                  <Suspense fallback={null}>
+                    <OnlinePayPanel
+                      referenceNo={referenceNo}
+                      bFormNo={(form.b_form_no || "").replace(/[^0-9]/g, "")}
+                      processingFee={Number(settings?.processing_fee ?? 0)}
+                      paymentReference={paymentRef}
+                      feeDeadline={null}
+                      accounts={(settings?.payment_accounts ?? []) as any[]}
+                      whatsappNumber={settings?.contact_whatsapp ?? null}
+                      schoolPhone={school?.phone ?? null}
+                      onReference={(ref) => setPaymentRef(ref)}
+                      onDownloadChallan={() => downloadSuccessPdf("challan")}
+                      challanBusy={pdfBusy === "challan"}
+                    />
+                  </Suspense>
+                </div>
+              )}
+
               <div className="bg-card border border-border rounded-2xl p-4 text-left text-xs space-y-2 mb-6 text-muted-foreground">
                 <p className="font-semibold text-foreground text-sm">What happens next:</p>
                 <p className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> Save your reference number</p>
