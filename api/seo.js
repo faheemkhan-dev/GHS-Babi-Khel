@@ -236,6 +236,7 @@ function buildLlmsTxt(s, admissionFiles = []) {
 - [Merit List](${SITE_URL}/merit-list): Official exam rankings published by the school office — top position holders per class and school-wide lists with marks, percentages, grades and pass statistics
 - [Roll No. Slip](${SITE_URL}/roll-no-slip): Exam roll number slips — a student picks their class and types their full name to view, download (PDF with QR code) or share their own slip; a live countdown shows while a release is scheduled
 - [Notices](${SITE_URL}/notices): Official school notices — holidays, exam schedules, fee deadlines, parent-teacher meetings
+- [Exam Duties](${SITE_URL}/duties): BISE Peshawar supervisory exam duty draw — teachers check their theory or practical duty by CNIC or mobile number, then download the duty order PDF or share it
 - [Teachers](${SITE_URL}/teachers): Teaching staff directory with subjects and qualifications
 - [Gallery](${SITE_URL}/gallery): Photo albums of school events — sports day, science fair, study tours, national days, with album descriptions and photo captions
 - [Contact](${SITE_URL}/contact): Contact details, map, WhatsApp and contact form
@@ -314,6 +315,7 @@ const STATIC_PAGES = [
   { path: "/results", changefreq: "daily",   priority: "1.0", dbSource: { table: "results",       column: "created_at" } },
   { path: "/merit-list", changefreq: "daily", priority: "0.9", dbSource: { table: "merit_lists",   column: "created_at" } },
   { path: "/roll-no-slip", changefreq: "daily", priority: "0.9", dbSource: { table: "exam_roll_sessions", column: "created_at" } },
+  { path: "/duties", changefreq: "monthly", priority: "0.8" },
   { path: "/contact", changefreq: "monthly", priority: "0.8" },
   { path: "/about", changefreq: "monthly", priority: "0.8" },
   { path: "/teachers", changefreq: "monthly", priority: "0.8", dbSource: { table: "teachers",      column: "created_at" } },
