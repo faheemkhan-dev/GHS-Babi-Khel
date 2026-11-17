@@ -31,34 +31,44 @@ type View = "home" | "apply" | "track" | "success" | "eligibility";
 // ── Visual Progress Stepper ───────────────────────────────────────────────────
 function StepStepper({ step, totalSteps }: { step: number; totalSteps: number }) {
   const stepLabels = ["Student Info", "Academic Info", "Review & Submit"];
+  const stepIcons = [User, BookOpen, Eye];
+  const pct = totalSteps > 1 ? ((step - 1) / (totalSteps - 1)) * 100 : 0;
   return (
-    <div className="flex items-center justify-center gap-0 mb-8 px-2">
-      {stepLabels.map((s, i) => {
-        const stepNum = i + 1;
-        const isActive = stepNum === step;
-        const isDone = stepNum < step;
-        return (
-          <div key={i} className="flex items-center">
-            <div
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full text-xs font-bold transition-all ${
-                isActive ? "bg-primary text-white shadow-lg shadow-primary/30" :
-                isDone  ? "bg-green-500 text-white" :
-                "bg-muted text-muted-foreground"
-              }`}
-            >
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                isDone ? "bg-white text-green-600" : isActive ? "bg-white/30 text-white" : "bg-muted-foreground/20"
-              }`}>
-                {isDone ? <CheckCircle2 className="w-3.5 h-3.5" /> : stepNum}
+    <div className="mb-6 rounded-2xl border border-border bg-card px-4 pt-5 pb-4 shadow-sm">
+      <div className="relative mx-auto flex max-w-sm items-start justify-between">
+        {/* track */}
+        <div className="absolute left-[16.66%] right-[16.66%] top-5 h-1 -translate-y-1/2 rounded-full bg-muted" aria-hidden />
+        <div
+          className="absolute left-[16.66%] top-5 h-1 -translate-y-1/2 rounded-full bg-gradient-to-r from-primary to-green-500 transition-all duration-500"
+          style={{ width: `${(pct / 100) * 66.68}%` }}
+          aria-hidden
+        />
+        {stepLabels.map((label, i) => {
+          const n = i + 1;
+          const isActive = n === step;
+          const isDone = n < step;
+          const Icon = stepIcons[i];
+          return (
+            <div key={label} className="relative z-10 flex w-1/3 flex-col items-center text-center">
+              <div
+                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300 ${
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/30 scale-110"
+                    : isDone
+                    ? "border-green-500 bg-green-500 text-white"
+                    : "border-border bg-background text-muted-foreground"
+                }`}
+              >
+                {isDone ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-4 w-4" />}
               </div>
-              <span className="hidden sm:inline">{s}</span>
+              <span className={`mt-2 text-[10px] font-bold uppercase tracking-wide leading-tight ${isActive ? "text-primary" : isDone ? "text-green-600" : "text-muted-foreground"}`}>
+                Step {n}
+              </span>
+              <span className={`text-[11px] leading-tight ${isActive ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{label}</span>
             </div>
-            {i < totalSteps - 1 && (
-              <div className={`h-0.5 w-4 sm:w-8 mx-1 rounded transition-colors ${isDone ? "bg-green-400" : "bg-muted"}`} />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -369,8 +379,61 @@ const Admission = () => {
 
 
 
+  // ── Input masks: block extra / wrong characters while typing ────────────
+  // CNIC & B-Form: digits only, auto-formatted XXXXX-XXXXXXX-X (max 13 digits)
+  // Mobile: digits only, auto-formatted 03XX-XXXXXXX (max 11 digits)
+  // Year: digits only, max 4. Names: letters/spaces only.
+  const maskInput = (id: string, raw: string): string => {
+    switch (id) {
+      case "b_form_no":
+      case "father_cnic": {
+        const d = raw.replace(/\D/g, "").slice(0, 13);
+        if (d.length <= 5) return d;
+        if (d.length <= 12) return `${d.slice(0, 5)}-${d.slice(5)}`;
+        return `${d.slice(0, 5)}-${d.slice(5, 12)}-${d.slice(12)}`;
+      }
+      case "contact_number":
+      case "whatsapp_number": {
+        const d = raw.replace(/\D/g, "").slice(0, 11);
+        return d.length <= 4 ? d : `${d.slice(0, 4)}-${d.slice(4)}`;
+      }
+      case "year_of_passing":
+        return raw.replace(/\D/g, "").slice(0, 4);
+      case "full_name":
+      case "father_name":
+        return raw.replace(/[^A-Za-z\u0600-\u06FF\s.'-]/g, "").slice(0, 50);
+      case "previous_marks":
+        return raw.replace(/[^0-9A-Za-z+\-/%.\s]/g, "").slice(0, 12);
+      case "previous_class":
+        return raw.slice(0, 8);
+      case "home_address":
+        return raw.slice(0, 100);
+      case "previous_school":
+        return raw.slice(0, 80);
+      case "occupation":
+        return raw.slice(0, 40);
+      default:
+        return raw;
+    }
+  };
+  const FIELD_INPUT_PROPS: Record<string, { inputMode?: "numeric" | "tel" | "text"; maxLength?: number; autoComplete?: string }> = {
+    b_form_no:       { inputMode: "numeric", maxLength: 15, autoComplete: "off" },
+    father_cnic:     { inputMode: "numeric", maxLength: 15, autoComplete: "off" },
+    contact_number:  { inputMode: "tel", maxLength: 12, autoComplete: "tel" },
+    whatsapp_number: { inputMode: "tel", maxLength: 12, autoComplete: "tel" },
+    year_of_passing: { inputMode: "numeric", maxLength: 4 },
+    full_name:       { maxLength: 50 },
+    father_name:     { maxLength: 50 },
+    previous_marks:  { maxLength: 12 },
+    previous_class:  { maxLength: 8 },
+    home_address:    { maxLength: 100 },
+    previous_school: { maxLength: 80 },
+    occupation:      { maxLength: 40 },
+  };
+
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setForm(f => ({ ...f, [k]: e.target.value }));
+    const value = maskInput(k, e.target.value);
+    setForm(f => ({ ...f, [k]: value }));
     if (fieldErrors[k]) setFieldErrors(errs => { const n = { ...errs }; delete n[k]; return n; });
   };
 
@@ -385,9 +448,6 @@ const Admission = () => {
 
   // ── Field-level validation (regex based, blocks garbage input like "1234" in a name field) ──
   const NAME_RE = /^[A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF\s.'-]{2,49}$/; // letters (incl. Urdu/Arabic script), spaces, . ' - only
-  const BFORM_RE = /^\d{5}-\d{7}-\d$/;             // 13 digits formatted as XXXXX-XXXXXXX-X
-  const BFORM_DIGITS_RE = /^\d{13}$/;              // or plain 13 digits
-  const PHONE_RE = /^0\d{2,4}-?\d{6,8}$/;          // Pakistani-style phone: 03XX-XXXXXXX (allows optional dash, some variance)
   const ADDRESS_RE = /^[A-Za-z\u0600-\u06FF0-9][A-Za-z\u0600-\u06FF0-9\s,.'-]{2,99}$/;
   const SCHOOL_RE = /^[A-Za-z\u0600-\u06FF0-9][A-Za-z\u0600-\u06FF0-9\s,.'&-]{2,79}$/;
   const CLASS_RE = /^(Class\s*)?(6|7|8|9|10)$/i;
@@ -408,21 +468,21 @@ const Admission = () => {
       case "b_form_no": {
         if (!v) return "This field is required";
         const digits = v.replace(/\D/g, "");
-        if (digits.length !== 13) return "Must be exactly 13 digits (XXXXX-XXXXXXX-X)";
-        if (!BFORM_RE.test(v) && !BFORM_DIGITS_RE.test(v)) return "Use format XXXXX-XXXXXXX-X";
+        if (digits.length !== 13) return "Must be exactly 13 digits";
         return null;
       }
       case "contact_number": {
         if (!v) return "This field is required";
         const digits = v.replace(/\D/g, "");
-        if (digits.length < 10 || digits.length > 11) return "Enter a valid 11-digit phone number";
-        if (!PHONE_RE.test(v)) return "Use format 03XX-XXXXXXX";
+        if (digits.length !== 11) return "Mobile number must be exactly 11 digits";
+        if (!digits.startsWith("03")) return "Mobile number must start with 03";
         return null;
       }
       case "whatsapp_number": {
         if (!v) return null; // optional
         const digits = v.replace(/\D/g, "");
-        if (digits.length < 10 || digits.length > 11 || !PHONE_RE.test(v)) return "Use format 03XX-XXXXXXX";
+        if (digits.length !== 11) return "Mobile number must be exactly 11 digits";
+        if (!digits.startsWith("03")) return "Mobile number must start with 03";
         return null;
       }
       case "home_address": {
@@ -434,8 +494,7 @@ const Admission = () => {
       case "father_cnic": {
         if (!v) return "This field is required";
         const digits = v.replace(/\D/g, "");
-        if (digits.length !== 13) return "Must be exactly 13 digits (XXXXX-XXXXXXX-X)";
-        if (!BFORM_RE.test(v) && !BFORM_DIGITS_RE.test(v)) return "Use format XXXXX-XXXXXXX-X";
+        if (digits.length !== 13) return "Must be exactly 13 digits";
         return null;
       }
       case "occupation": {
@@ -546,7 +605,7 @@ const Admission = () => {
       setReferenceNo(refNo);
       setView("success");
       clearDraft(); setHasDraft(false);
-      toast.success("Eligibility application submitted successfully!");
+      toast.success("Application submitted successfully!");
     } catch (err) {
       toast.error(err?.message ?? "Submission failed. Please try again.");
     } finally {
@@ -604,12 +663,11 @@ const Admission = () => {
               onDownloadBlank={generateEmptyForm}
               onDownloadAll={downloadAll}
               onLocked={() => toast.error(nextOpeningNote || "Admissions are currently closed.")}
-            />
-            {/* Classes & Seats + Merit Lists (GHSS-Ghallanai sections, high-school model) */}
-            <div className="container mx-auto px-4 max-w-3xl space-y-4">
+            >
+              {/* Classes & Seats + Merit Lists sit above Eligibility / Downloads */}
               <Suspense fallback={null}><ClassesAndSeats processingFee={settings?.processing_fee ?? null} /></Suspense>
               <Suspense fallback={null}><AdmissionMeritLists /></Suspense>
-            </div>
+            </AdmissionHome>
           </div>
         )}
 
@@ -622,9 +680,9 @@ const Admission = () => {
             </button>
 
             <div className="text-center mb-2">
-              <h2 className="text-lg font-bold text-foreground">Eligibility Application</h2>
+              <h2 className="text-lg font-bold text-foreground">Online Application</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Fill your details to check eligibility. If approved, you'll download forms & visit the office.
+                Fill in the details below to apply. Seats are filled through the Merit List.
               </p>
             </div>
 
@@ -645,15 +703,21 @@ const Admission = () => {
             <div>
               <div key={step}>
 
-                <Card className="border-border">
+                <Card className="overflow-hidden rounded-2xl border-border shadow-md">
                   <CardContent className="p-5 space-y-4">
 
                     {/* Step 1 — Student Info (with icons & tooltips) */}
                     {step === 1 && (
                       <>
-                        <h2 className="font-bold text-base flex items-center gap-2">
-                          <User className="w-4 h-4 text-primary" /> Student Information
-                        </h2>
+                        <div className="-mx-5 -mt-5 mb-1 flex items-center gap-3 rounded-t-xl border-b border-border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-5 py-4">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                            <User className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <h2 className="text-base font-bold leading-tight">Student Information</h2>
+                            <p className="text-[11px] text-muted-foreground">Step 1 of 3 — about the student</p>
+                          </div>
+                        </div>
                         <div className="space-y-3">
                           {[
                             { id: "full_name", label: "Full Name", placeholder: "Student full name", req: true, icon: User, tip: "Enter the student's full name as on B-Form" },
@@ -671,11 +735,12 @@ const Admission = () => {
                                 <FieldTooltip text={f.tip} />
                               </Label>
                               <div className="relative">
-                                <f.icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+                                <f.icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/60" />
                                 <Input value={(form as any)[f.id]} onChange={set(f.id)} onBlur={validateField(f.id)}
                                   placeholder={f.placeholder}
+                                  {...FIELD_INPUT_PROPS[f.id]}
                                   aria-invalid={!!fieldErrors[f.id]}
-                                  className={`text-sm h-10 pl-9 ${fieldErrors[f.id] ? "border-red-500 focus-visible:ring-red-400" : ""}`} />
+                                  className={`h-11 rounded-xl bg-muted/30 text-sm pl-10 transition-colors focus-visible:bg-background ${fieldErrors[f.id] ? "border-red-500 focus-visible:ring-red-400" : ""}`} />
                               </div>
                               {fieldErrors[f.id] && (
                                 <p className="text-[10px] text-red-600 mt-1 flex items-center gap-1">
@@ -716,9 +781,15 @@ const Admission = () => {
                     {/* Step 2 — Academic Info (with icons & tooltips) */}
                     {step === 2 && (
                       <>
-                        <h2 className="font-bold text-base flex items-center gap-2">
-                          <BookOpen className="w-4 h-4 text-primary" /> Academic Information
-                        </h2>
+                        <div className="-mx-5 -mt-5 mb-1 flex items-center gap-3 rounded-t-xl border-b border-border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-5 py-4">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                            <BookOpen className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <h2 className="text-base font-bold leading-tight">Academic Information</h2>
+                            <p className="text-[11px] text-muted-foreground">Step 2 of 3 — class & previous school</p>
+                          </div>
+                        </div>
                         <div className="space-y-3">
                           <div>
                             <Label className="text-xs font-semibold mb-1 flex items-center">
@@ -764,7 +835,7 @@ const Admission = () => {
                           {isMigration && ["9", "10"].includes(form.applying_class) && (
                             <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 text-xs text-primary flex gap-2">
                               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                              <span>Class {form.applying_class} migration is completed school-to-school on the BISE Peshawar portal within the board's notified migration window — school approval of this application is a separate first step. Track progress after submission.</span>
+                              <span>Class {form.applying_class} migration is completed school-to-school on the BISE Peshawar portal within the board's notified migration window — Track progress after submission.</span>
                             </div>
                           )}
                           {isMigration && !["9", "10"].includes(form.applying_class) && form.applying_class && (
@@ -785,11 +856,12 @@ const Admission = () => {
                                 <FieldTooltip text={f.tip} />
                               </Label>
                               <div className="relative">
-                                <f.icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+                                <f.icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/60" />
                                 <Input value={(form as any)[f.id]} onChange={set(f.id)} onBlur={validateField(f.id)}
                                   placeholder={f.placeholder}
+                                  {...FIELD_INPUT_PROPS[f.id]}
                                   aria-invalid={!!fieldErrors[f.id]}
-                                  className={`text-sm h-10 pl-9 ${fieldErrors[f.id] ? "border-red-500 focus-visible:ring-red-400" : ""}`} />
+                                  className={`h-11 rounded-xl bg-muted/30 text-sm pl-10 transition-colors focus-visible:bg-background ${fieldErrors[f.id] ? "border-red-500 focus-visible:ring-red-400" : ""}`} />
                               </div>
                               {fieldErrors[f.id] && (
                                 <p className="text-[10px] text-red-600 mt-1 flex items-center gap-1">
@@ -805,13 +877,15 @@ const Admission = () => {
                     {/* Step 3 — REVIEW & SUBMIT (no document upload) */}
                     {step === 3 && (
                       <>
-                        <h2 className="font-bold text-base flex items-center gap-2">
-                          <Eye className="w-4 h-4 text-primary" /> Review & Submit
-                        </h2>
-                        <p className="text-xs text-muted-foreground mb-3">
-                          Review your details below. If approved by the school, you'll be asked to bring your documents to the office.
-                        </p>
-
+                        <div className="-mx-5 -mt-5 mb-1 flex items-center gap-3 rounded-t-xl border-b border-border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-5 py-4">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                            <Eye className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <h2 className="text-base font-bold leading-tight">Review & Submit</h2>
+                            <p className="text-[11px] text-muted-foreground">Step 3 of 3 — confirm and send</p>
+                          </div>
+                        </div>
                         {/* Review summary */}
                         <div className="space-y-3">
                           <div className="bg-muted/50 rounded-xl p-3">
@@ -856,11 +930,6 @@ const Admission = () => {
                             </div>
                           </div>
 
-                          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-xl p-3 text-xs text-blue-700 dark:text-blue-300 flex gap-2">
-                            <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                            <span>Documents are not uploaded online. If your eligibility is approved, you'll need to bring the original documents listed in the Admission Application Form (downloadable below) to the school office (Mon–Sat, 8AM–12PM).</span>
-                          </div>
-
                           {/* Filled Admission Form download — appears once the applicant has completed the form */}
                           <button
                             type="button"
@@ -873,7 +942,7 @@ const Admission = () => {
                             </div>
                             <div>
                               <p className="font-semibold text-xs text-primary">Download Admission Form (Printable)</p>
-                              <p className="text-[10px] text-muted-foreground">Pre-filled with the details you entered — print, sign & submit at office</p>
+                              <p className="text-[10px] text-muted-foreground">Pre-filled with the details you entered</p>
                             </div>
                           </button>
                         </div>
@@ -966,7 +1035,7 @@ const Admission = () => {
               </div>
               <h2 className="text-xl font-bold mb-2">Application Submitted!</h2>
               <p className="text-muted-foreground text-sm mb-6">
-                Your eligibility application has been received. The school will review it and contact you.
+                Your application has been received. Seats are filled through the Merit List.
               </p>
               <div className="bg-primary/10 border border-primary/30 rounded-2xl p-5 mb-6">
                 <p className="text-xs text-muted-foreground mb-1">Your Reference Number</p>
@@ -1027,10 +1096,8 @@ const Admission = () => {
               <div className="bg-card border border-border rounded-2xl p-4 text-left text-xs space-y-2 mb-6 text-muted-foreground">
                 <p className="font-semibold text-foreground text-sm">What happens next:</p>
                 <p className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> Save your reference number</p>
-                <p className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> School reviews your eligibility</p>
-                <p className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> If approved — download forms, fill them, and bring to office</p>
-                <p className="flex items-start gap-2"><span className="text-primary font-bold">4.</span> If not approved — you'll be informed with the reason</p>
-                <p className="flex items-start gap-2"><span className="text-primary font-bold">5.</span> Track your status anytime using B-Form or reference number</p>
+                <p className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> Seats are allotted through the Merit List</p>
+                <p className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> Track your status anytime using B-Form or reference number</p>
               </div>
               <div className="flex flex-col gap-3">
                 <Button onClick={() => { setView("track"); setTrackQuery(referenceNo); setDoTrack(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
