@@ -62,6 +62,8 @@
 //   dependency.
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { handleDraw } from "./_lib/bisep-draw-core.js";
+
 const SB_TIMEOUT_MS = 10000;
 
 // kind → { s: s-maxage seconds, swr: stale-while-revalidate seconds }
@@ -398,6 +400,15 @@ export default async function handler(req, res) {
 
   const url = new URL(req.url, "https://x.invalid");
   const kind = url.searchParams.get("kind") || "";
+
+  // BISE Peshawar duty draw (served at /api/bisep-draw via vercel.json rewrite;
+  // lives here so the project stays under the 12-function Hobby limit).
+  if (kind === "draw") {
+    const r = await handleDraw(url.searchParams);
+    res.setHeader("Cache-Control", r.cache);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.status(r.status).json(r.body);
+  }
   const cacheCfg = CACHE[kind];
   const fetcher = FETCHERS[kind];
 
