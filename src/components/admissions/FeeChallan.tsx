@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { supabasePublic } from "@/lib/supabase";
-import { type PaymentMethod } from "@/hooks/useFees";
+import { type PaymentMethod } from "@/lib/admissionPayment";
 
 interface VoucherData {
   id: string;
