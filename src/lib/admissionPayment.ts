@@ -17,7 +17,22 @@
 
 import { supabasePublic } from "@/lib/supabase";
 import { cachedOrDirect } from "@/lib/publicData";
-import type { PaymentMethod } from "@/hooks/useFees";
+
+// Payment account shape used by the admission challan and online-pay panels.
+export interface PaymentMethod {
+  type: "bank" | "easypaisa" | "jazzcash" | "cash" | "other";
+  // Bank-specific fields
+  bank_name?: string;
+  account_title?: string;
+  account_number?: string;
+  iban?: string;
+  // Mobile money fields (EasyPaisa, JazzCash)
+  account_name?: string;
+  phone?: string;
+  // Display label for custom types
+  label?: string;
+  instructions?: string;
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
