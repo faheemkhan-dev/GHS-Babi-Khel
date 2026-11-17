@@ -28,7 +28,7 @@ const OnlinePayPanel = lazy(() => import("@/components/admissions/OnlinePayPanel
 // day-counts, since BISEP does not publish those — only the overall window.
 const MIGRATION_STEPS = [
   { label: "Student submits online eligibility application to our school", time: "Done instantly", action: null },
-  { label: "School reviews eligibility & requests your documents (incl. School Leaving Certificate)", time: "Varies by school", action: null },
+  { label: "Merit list is published — merit-listed students submit documents (incl. School Leaving Certificate)", time: "Varies by school", action: null },
   { label: "Current school initiates migration on the BISEP portal (school-to-school)", time: "Within BISEP's annual migration window", action: null },
   { label: "Our school accepts the migration on the BISEP portal", time: "Within BISEP's annual migration window", action: null },
   { label: "Any BISEP fee/challan (if applicable) is paid", time: "As per BISEP schedule", action: null },
@@ -228,7 +228,7 @@ export default function TrackResult({ result }: { result: any }) {
           {["approved", "admitted"].includes(status) && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-800">
               <p className="font-semibold mb-1">🎉 Great news! You're approved!</p>
-              <p>Download the admission forms, fill them, attach your documents, and submit at the school office to complete your enrollment.</p>
+              <p>Your application is approved. Watch the Merit List for seat allotment.</p>
             </div>
           )}
           {status === "merit_listed" && (
