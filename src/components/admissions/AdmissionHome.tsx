@@ -2,10 +2,11 @@ import { lazy, Suspense, memo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight, BookOpen, Banknote, Mail, ScrollText, FileDown, Download,
-  Loader2, Lock, CheckCircle2, ChevronDown, GraduationCap, Repeat, Search,
-  AlertCircle, Sparkles, CalendarClock, Layers,
+  Loader2, Lock, ChevronDown, GraduationCap, Search,
+  AlertCircle, Sparkles, CalendarClock,
 } from "lucide-react";
 import type { AdmissionType } from "@/hooks/useAdmission";
+import type { ReactNode } from "react";
 
 /**
  * Admission Portal — home view.
@@ -33,16 +34,7 @@ const DOWNLOADS = [
 const STEPS = [
   { title: "Check eligibility", desc: "A quick class and age check — takes under a minute." },
   { title: "Apply online",      desc: "Fill a simple 3-step form and get your reference number." },
-  { title: "School review",     desc: "Track your status anytime using the reference number." },
-  { title: "Visit the office",  desc: "Bring the printed form and documents to complete admission." },
-] as const;
-
-const DOCUMENTS = [
-  "B-Form (NADRA)",
-  "Recent passport photo",
-  "Previous result card",
-  "School Leaving Certificate",
-  "Father / guardian CNIC copy",
+  { title: "Merit list",        desc: "Seats are filled on merit. Track your status anytime using the reference number." },
 ] as const;
 
 const lazySection = { contentVisibility: "auto", containIntrinsicSize: "0 360px" } as const;
@@ -78,11 +70,13 @@ export interface AdmissionHomeProps {
   onDownloadBlank: () => void;
   onDownloadAll: () => void;
   onLocked: () => void;
+  /** Rendered between "How it works" and Eligibility/Downloads (Classes & Seats, Merit Lists). */
+  children?: ReactNode;
 }
 
 function AdmissionHome({
   isOpen, sessionLabel, lastDate, bannerMessage, closedNote, downloading, hasLibFile,
-  onApply, onTrack, onDownloadItem, onDownloadBlank, onDownloadAll, onLocked,
+  onApply, onTrack, onDownloadItem, onDownloadBlank, onDownloadAll, onLocked, children,
 }: AdmissionHomeProps) {
   const [showElig, setShowElig] = useState(false);
 
@@ -109,7 +103,7 @@ function AdmissionHome({
       >
         <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-40 bg-gradient-to-r from-transparent via-gold to-transparent" aria-hidden />
 
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border ${
               isOpen
@@ -131,16 +125,18 @@ function AdmissionHome({
         </div>
 
         <h1
-          className="text-[1.9rem] sm:text-4xl font-extrabold leading-tight text-balance"
+          className="text-center text-[1.9rem] sm:text-4xl font-extrabold leading-tight text-balance"
           style={{ fontFamily: "var(--font-display)", color: "hsl(var(--primary-foreground))" }}
         >
           Admission Portal
         </h1>
-        <p className="mt-2 text-sm leading-relaxed max-w-md" style={{ color: "hsl(var(--primary-foreground) / 0.8)" }}>
-          Apply online in minutes. Once the school approves, print your form and complete admission at the office.
+        <p className="mt-2 text-center text-sm font-semibold leading-relaxed" style={{ color: "hsl(var(--primary-foreground) / 0.92)" }}>
+          {isOpen
+            ? `Admissions for session ${sessionLabel} are open`
+            : `Admissions for session ${sessionLabel} are closed`}
         </p>
 
-        <div className="mt-5 grid grid-cols-2 gap-2.5 sm:flex sm:max-w-md">
+        <div className="mt-5 mx-auto grid grid-cols-2 gap-2.5 sm:flex sm:max-w-md">
           <button
             type="button"
             onClick={guard(() => onApply())}
@@ -166,13 +162,13 @@ function AdmissionHome({
         </div>
 
         {/* key facts */}
-        <dl className="mt-5 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-white/15 bg-white/15 text-center">
+        <dl className="mt-5 mx-auto max-w-xl grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-white/15 bg-white/15 text-center">
           {[
             { k: "Classes", v: "6 – 10" },
             { k: "Intake", v: "Fresh & Migration" },
-            { k: isOpen ? "Last date" : "Status", v: isOpen ? lastLabel ?? "Open" : "Closed" },
+            { k: isOpen ? "Last date" : "Status", v: isOpen ? lastLabel ?? "31 Dec 2026" : "Closed" },
           ].map((f) => (
-            <div key={f.k} className="bg-black/15 px-2 py-2.5">
+            <div key={f.k} className="flex flex-col items-center justify-center bg-black/15 px-2 py-3">
               <dt className="text-[10px] uppercase tracking-wider text-white/60">{f.k}</dt>
               <dd className="mt-0.5 text-[13px] font-semibold text-white leading-snug">{f.v}</dd>
             </div>
@@ -180,7 +176,7 @@ function AdmissionHome({
         </dl>
 
         {isOpen && bannerMessage && (
-          <p className="mt-3 text-xs italic leading-relaxed text-white/75">“{bannerMessage}”</p>
+          <p className="mt-3 text-center text-xs italic leading-relaxed text-white/75">“{bannerMessage}”</p>
         )}
       </section>
 
@@ -199,7 +195,7 @@ function AdmissionHome({
 
       {/* ── HOW IT WORKS ─────────────────────────────────────────────────── */}
       <section className="mt-8" style={lazySection}>
-        <SectionTitle hint="Four simple steps from home to classroom">How it works</SectionTitle>
+        <SectionTitle hint="Simple steps from home to classroom">How it works</SectionTitle>
         <ol className="relative ml-3.5 border-l border-gold/40 pl-6 space-y-5">
           {STEPS.map((s, i) => (
             <li key={s.title} className="relative">
@@ -213,35 +209,8 @@ function AdmissionHome({
         </ol>
       </section>
 
-      {/* ── CHOOSE YOUR PATH ─────────────────────────────────────────────── */}
-      <section className="mt-8" style={lazySection}>
-        <SectionTitle hint="Pick the option that matches your child">Choose your path</SectionTitle>
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          {[
-            { type: "fresh" as AdmissionType, title: "Fresh Admission", desc: "New student joining Class 6 to 10", icon: Layers },
-            { type: "migration" as AdmissionType, title: "Migration / Transfer", desc: "Moving from another school — Class 9 & 10", icon: Repeat },
-          ].map((p) => (
-            <button
-              key={p.type}
-              type="button"
-              onClick={guard(() => onApply(undefined, p.type))}
-              aria-disabled={!isOpen}
-              className={`flex items-center gap-3 rounded-xl border border-border bg-card p-3.5 text-left touch-manipulation transition-colors ${
-                isOpen ? "active:bg-gold/10 hover:border-gold/60" : "opacity-60 cursor-not-allowed"
-              }`}
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gold/60 text-primary">
-                <p.icon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-foreground">{p.title}</span>
-                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{p.desc}</span>
-              </span>
-              {isOpen ? <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" /> : <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />}
-            </button>
-          ))}
-        </div>
-      </section>
+      {/* ── Classes & Seats + Merit Lists (injected by the page) ── */}
+      {children && <div className="mt-8 space-y-4">{children}</div>}
 
       {/* ── ELIGIBILITY (loaded on demand) ───────────────────────────────── */}
       <section className="mt-6" style={lazySection}>
@@ -271,38 +240,15 @@ function AdmissionHome({
         )}
       </section>
 
-      {/* ── DOCUMENTS NEEDED ─────────────────────────────────────────────── */}
-      <section className="mt-8" style={lazySection}>
-        <SectionTitle hint="Keep these ready before you visit the school office">Documents you need</SectionTitle>
-        <ul className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-xl border border-border bg-card p-4 sm:grid-cols-2">
-          {DOCUMENTS.map((d) => (
-            <li key={d} className="flex items-start gap-2 text-[13px] leading-snug text-foreground">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <span className="min-w-0">{d}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
       {/* ── DOWNLOADS ────────────────────────────────────────────────────── */}
       <section className="mt-8" style={lazySection}>
-        <div className="mb-3 flex items-end justify-between gap-3">
+        <div className="mb-3 text-center">
           <div className="min-w-0">
             <h2 className="text-base font-bold text-foreground" style={{ fontFamily: "var(--font-display)" }}>Downloads</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {isOpen ? "Printable forms and guides" : "Unlock when admissions reopen"}
             </p>
           </div>
-          {isOpen && (
-            <button
-              type="button"
-              disabled={!!downloading}
-              onClick={onDownloadAll}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold text-primary touch-manipulation active:bg-muted disabled:opacity-50"
-            >
-              <FileDown className="h-3.5 w-3.5" /> Download all
-            </button>
-          )}
         </div>
 
         <div className={`overflow-hidden rounded-xl border border-border bg-card divide-y divide-border ${isOpen ? "" : "opacity-60"}`}>
@@ -347,6 +293,17 @@ function AdmissionHome({
             </button>
           ))}
         </div>
+
+        {isOpen && (
+          <button
+            type="button"
+            disabled={!!downloading}
+            onClick={onDownloadAll}
+            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-full border border-gold/60 bg-gold/10 px-4 text-[13px] font-semibold text-primary touch-manipulation active:bg-gold/20 disabled:opacity-50"
+          >
+            <FileDown className="h-4 w-4" /> Download all
+          </button>
+        )}
       </section>
 
       {/* ── HELP ─────────────────────────────────────────────────────────── */}
@@ -365,8 +322,8 @@ function AdmissionHome({
           <li><strong>Class 9 &amp; 10 (Migration):</strong> School-to-school transfer on the BISE Peshawar portal, from another BISE-affiliated institution.</li>
           <li><strong>Class 6–8 (Transfer):</strong> Handled directly between schools, outside the BISE portal.</li>
         </ul>
-        <p>Documents (where applicable): B-Form (NADRA); passport size photo; previous result card; School Leaving Certificate (SLC) — required for all admissions; father's/guardian's CNIC copy. Class 9/10 migration from another Board may additionally require DMC and migration certificate (BISE requirements), submitted by the schools as part of BISEP's process.</p>
-        <p>How to apply: apply online for a preliminary eligibility check. If the school approves your application, download the printable admission form, fill it, and visit the school office with your documents. For Class 9/10 migration, board-level migration is completed by the schools on the BISEP portal separately from this online application.</p>
+        <p>Class 9/10 migration from another Board may additionally require DMC and migration certificate (BISE requirements), submitted by the schools as part of BISEP's process.</p>
+        <p>How to apply: apply online. Seats are filled through the published Merit List ranked on previous class marks; merit-listed students are then asked to submit their documents at the school office. For Class 9/10 migration, board-level migration is completed by the schools on the BISEP portal separately from this online application.</p>
       </section>
     </div>
   );
