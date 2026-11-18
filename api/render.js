@@ -714,9 +714,16 @@ function admissionFilesHtml(admissionFiles) {
 }
 
 /** Route-specific LIVE sections appended after the static blocks. */
+// CRITICAL FIX (2026-11-18): `bisep` was referenced inside the "/results"
+// case but never declared in this function's scope — a second ReferenceError
+// that crashed the whole /results render (function 500 → Googlebot served
+// the bare SPA shell). The live BISEP payload is threaded through `data`
+// instead, defaulting to null everywhere (same guard as before:
+// "if (bisep && bisep.ok && …)" simply skips the section).
 function liveSections(route, data) {
   const parts = [];
   const { admission, admissionFiles, notices, exams, teachers, meritLists, rollSlips, school } = data;
+  const bisep = data.bisep || null;
 
   switch (true) {
     case route === "/": {
@@ -1381,6 +1388,10 @@ async function renderHandler(req, res) {
   // 2026 Result". A short guard keeps a slow/unreachable board from ever
   // delaying the whole render — on any failure this just stays null and the
   // page falls back to its normal static content, exactly as before.
+  // CRITICAL FIX (2026-11-18): the payload is now attached to `data` (as
+  // data.bisep) BEFORE liveSections() is called — liveSections previously
+  // read an undeclared `bisep` variable inside its "/results" case, which
+  // crashed the entire render for /results.
   let bisep = null;
   if (route === "/results") {
     try {
@@ -1399,6 +1410,9 @@ async function renderHandler(req, res) {
       bisep = null;
     }
   }
+  // CRITICAL FIX (2026-11-18): expose the resolved payload to liveSections()
+  // through `data` (previously an undeclared-variable ReferenceError there).
+  data.bisep = bisep;
 
   // ── Title / description ────────────────────────────────────────────────────
   let title, description, h1;
@@ -1472,7 +1486,7 @@ ${detail.content ? detail.content.split(/\n{2,}|\n/).map((p) => `<p>${esc(p)}</p
         if (block.ul) parts.push(`<ul>${block.ul.map((li) => `<li>${esc(li)}</li>`).join("")}</ul>`);
         if (block.links?.nav) {
           parts.push(
-            `<ul>${NAV_LINKS.filter(([l, href]) => href !== effectiveRoute)
+            `<ul>${NAV_LINKS.filter(([l, href]) => href !== route)
               .map(([l, href]) => `<li><a href="${esc(href)}">${esc(l)}</a></li>`)
               .join("")}</ul>`
           );
@@ -1480,7 +1494,18 @@ ${detail.content ? detail.content.split(/\n{2,}|\n/).map((p) => `<p>${esc(p)}</p
         return parts.join("\n");
       })
       .join("\n");
-    contentHtml = staticBlocks + (effectiveRoute === "/faq" ? "" : "\n" + liveSections(effectiveRoute, data));
+    // CRITICAL FIX (2026-11-18): the two references below used the removed
+    // variable name `effectiveRoute` — a ReferenceError thrown on EVERY
+    // static-route render. This crashed the whole function in production
+    // (FUNCTION_INVOCATION_FAILED), so middleware.ts fell back to serving the
+    // bare SPA shell for every page Googlebot requested: homepage title,
+    // og:url=/, and NO canonical tag on /about, /results, /admission, …
+    // Search Console then reported "Duplicate without user-selected
+    // canonical" and "Discovered — currently not indexed" for months.
+    // `route` is the normalised, trailing-slash-stripped path used elsewhere
+    // in this handler (detail pages never reach this branch, which is why
+    // /notices/<id> alone kept working).
+    contentHtml = staticBlocks + (route === "/faq" ? "" : "\n" + liveSections(route, data));
   }
 
   // Live statistics into the static "School at a glance" placeholder — real
@@ -1493,6 +1518,9 @@ ${detail.content ? detail.content.split(/\n{2,}|\n/).map((p) => `<p>${esc(p)}</p
   }
 
   // ── Page shell ─────────────────────────────────────────────────────────────
+  // CRITICAL FIX (2026-11-18): pass the live BISEP payload into liveSections
+  // via `data` (see the liveSections comment) — the "/results" case used to
+  // read an undeclared `bisep` variable and crashed the render.
   const nav = NAV_LINKS.map(
     ([label, href]) => `<a href="${esc(href)}" style="margin-right:14px">${esc(label)}</a>`
   ).join("");

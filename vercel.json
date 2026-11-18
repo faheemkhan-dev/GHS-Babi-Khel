@@ -3,7 +3,23 @@
   "trailingSlash": false,
   "redirects": [
     { "source": "/result-card", "destination": "/results", "permanent": true },
-    { "source": "/duty", "destination": "/", "permanent": true },
+
+    { "source": "/duty", "destination": "/duties", "permanent": true },
+
+    { "source": "/calendar", "destination": "/notices", "permanent": true },
+    { "source": "/calendar/:path*", "destination": "/notices", "permanent": true },
+
+    { "source": "/gallery", "destination": "/about", "permanent": true },
+    { "source": "/gallery/:path*", "destination": "/about", "permanent": true },
+
+    { "source": "/news", "destination": "/notices", "permanent": true },
+    { "source": "/news/:path*", "destination": "/notices", "permanent": true },
+
+    { "source": "/notes", "destination": "/admission", "permanent": true },
+    { "source": "/notes/:path*", "destination": "/admission", "permanent": true },
+    { "source": "/library", "destination": "/admission", "permanent": true },
+    { "source": "/library/:path*", "destination": "/admission", "permanent": true },
+
     {
       "source": "/((?!sitemap\\.xml|robots\\.txt|\\.well-known/).*)",
       "has": [{ "type": "host", "value": "(.*\\.)?indevs\\.in" }],

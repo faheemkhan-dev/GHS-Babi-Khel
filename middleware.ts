@@ -268,6 +268,71 @@ function shouldLiveRender(pathname: string): boolean {
  */
 const RENDER_PROXY_TIMEOUT_MS = 6000;
 
+// ─── Prerendered-page fallback (2026-11-18 duplicate-content fix) ────────────
+// The build pipeline (scripts/prerender-lib.mjs) writes a full crawlable
+// dist/<route>/index.html for every public route. Those files are deployed as
+// static assets. This helper fetches the prerendered page for a route so the
+// crawler-fallback chain ends on the ROUTE'S OWN page (with its own title and
+// canonical tag) instead of the homepage SPA shell.
+//
+// The same allow-list as the live renderer: only public static routes have a
+// prerendered file, so /admin etc. simply returns null here. Notice-detail
+// pages are NOT prerendered (only the newest N are — see PRERENDER_DETAIL_LIMIT)
+// and keep falling through to the SPA shell exactly as before.
+const PRERENDERED_ROUTES = new Set([
+  "/",
+  "/about",
+  "/contact",
+  "/admission",
+  "/notices",
+  "/results",
+  "/merit-list",
+  "/roll-no-slip",
+  "/duties",
+  "/teachers",
+  "/faq",
+]);
+
+async function fetchPrerenderedPage(request: Request, pathname: string): Promise<Response | null> {
+  if (!PRERENDERED_ROUTES.has(pathname)) return null;
+  // "/" IS the shell (dist/index.html) — nothing better than the default
+  // fallthrough, so don't waste a hop.
+  if (pathname === "/") return null;
+  try {
+    const fileUrl = new URL(`${pathname.replace(/^\//, "")}/index.html`, request.url);
+    const resp = await fetch(fileUrl.toString(), {
+      method: "GET",
+      headers: { Accept: "text/html" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!resp.ok || !(resp.headers.get("content-type") || "").includes("text/html")) {
+      return null;
+    }
+    // Reject the bare SPA shell (≈17 KB, homepage title): if the prerendered
+    // file is missing for this deploy the static route file resolves to the
+    // SPA fallback and we must not serve it as this route's page.
+    const text = await resp.text();
+    if (text.length < 24 * 1024) return null;
+    const title = (text.match(/<title>([^<]*)<\/title>/) || [])[1] || "";
+    if (!title || title.includes("Government High School, District Mohmand KPK</title>")) {
+      // Homepage title on a non-home route = the shell was served.
+      // (Exact homepage title string from index.html.)
+      if (pathname !== "/") return null;
+    }
+    return new Response(text, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "public, s-maxage=120, stale-while-revalidate=600",
+        "X-GHS-Prerendered-Fallback": "1",
+      },
+    });
+  } catch {
+    return null;
+  }
+}
+
 async function proxyToLiveRender(request: Request, pathname: string): Promise<Response> {
   // NOTE: a renderer 404 is a DELIBERATE answer ("this route does not exist"),
   // not a failure. It MUST be passed through to the crawler — previously any
@@ -556,12 +621,22 @@ export default async function middleware(
 
   // 4) AI / search crawlers → live database-rendered HTML. The trusted-bot
   //    branch sits BEFORE the rate limiter, so recognised crawlers are never
-  //    throttled on page routes. On renderer failure we return undefined so
-  //    Vercel serves the build-time prerendered page — crawling never breaks.
+  //    throttled on page routes. On renderer failure we fall back, in order:
+  //      a) the build-time PRERENDERED page for this route (dist/<route>/index.html
+  //         is deployed as a static asset — a full, crawlable page with the
+  //         route's own title + canonical tag), then
+  //      b) undefined (the static pipeline) as the final safety net.
+  //    Previously this catch returned undefined directly, so the request hit
+  //    the SPA catch-all rewrite and Googlebot was served the HOMEPAGE shell
+  //    (homepage title, og:url=/, no canonical) for EVERY route whenever the
+  //    renderer was cold/slow — the exact byte-identical-shell behaviour that
+  //    produced Search Console's "Duplicate without user-selected canonical".
   if (!isApiRoute && isSearchOrAICrawler(ua) && shouldLiveRender(pathname)) {
     try {
       return await proxyToLiveRender(request, pathname);
     } catch {
+      const prerendered = await fetchPrerenderedPage(request, pathname);
+      if (prerendered) return prerendered;
       return undefined;
     }
   }
