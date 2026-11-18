@@ -598,34 +598,16 @@ const FeeStatusPill = ({ app }: { app: Admission }) => {
   );
 };
 
-/* ── Delete All (reset for the next session) ───────────────────────────── */
-function DeleteAllCard({ count }: { count: number }) {
+/* ── Delete All (reset for the next session) — confirm dialog ─────────── */
+function DeleteAllDialog({ count, open, onOpenChange }: { count: number; open: boolean; onOpenChange: (o: boolean) => void }) {
   const resetMut = useAdmissionResetAll();
-  const [open, setOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
-  const [exporting, setExporting] = useState(false);
-
-  const exportFirst = async () => {
-    setExporting(true);
-    try {
-      const { exportApplicationsExcel } = await import("@/lib/admissionExcel");
-      const { data, error } = await supabase
-        .from("admissions")
-        .select("id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, payment_status, payment_reference, payment_method, payment_receipt, processing_fee, fee_deadline, paid_at, father_cnic, occupation, created_at, updated_at")
-        .order("created_at", { ascending: false })
-        .limit(5000);
-      if (error) throw error;
-      await exportApplicationsExcel((data ?? []) as Admission[], null);
-    } catch (e: any) {
-      toast.error(e?.message || "Export failed.");
-    } finally { setExporting(false); }
-  };
 
   const doReset = async () => {
     try {
       const res: any = await resetMut.mutateAsync();
       toast.success(`${res?.admissions ?? 0} application(s) deleted. Ready for the next session.`);
-      setOpen(false);
+      onOpenChange(false);
       setConfirmText("");
     } catch (e: any) {
       toast.error(e?.message || "Reset failed.");
@@ -633,57 +615,36 @@ function DeleteAllCard({ count }: { count: number }) {
   };
 
   return (
-    <>
-      <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-3.5 sm:p-4">
-        <p className="text-xs font-bold text-red-700 dark:text-red-400 mb-1 flex items-center gap-1.5">
-          <AlertTriangle className="w-3.5 h-3.5" /> New Session Reset
+    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) setConfirmText(""); }}>
+      <DialogContent className="max-w-md rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-left">Delete EVERYTHING for the next session?</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          This permanently deletes <b>{count}</b> application(s), all applicant documents, timelines, every merit
+          list and the payment ledger. Classes, seats, settings and the students-register / fee-voucher records
+          are kept. Use <b>Export Excel</b> first if you want a backup. This cannot be undone.
         </p>
-        <p className="text-[11px] text-red-700/80 dark:text-red-300/80 mb-2.5">
-          Permanently deletes all {count} application(s), documents, timelines and merit lists.
-          Classes, seats, settings and the students-register / fee-voucher records are kept.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={exportFirst} disabled={exporting}
-            className="h-9 gap-1.5 rounded-full border-green-600/40 px-3.5 text-xs font-bold text-green-700 hover:bg-green-600/10 dark:text-green-400">
-            {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Download Excel Backup First
-          </Button>
-          <Button size="sm" disabled={!count} onClick={() => setOpen(true)}
-            className="h-9 gap-1.5 rounded-full bg-red-600 px-3.5 text-xs font-bold text-white hover:bg-red-700">
-            <Trash2 className="w-3.5 h-3.5" /> Delete All Applications
+        <div>
+          <Label className="text-xs font-bold mb-1.5 block">Type DELETE ALL to confirm</Label>
+          <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="DELETE ALL" className="h-9 text-sm font-mono" />
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { onOpenChange(false); setConfirmText(""); }}
+            className="h-9 flex-1 rounded-full text-xs font-bold">Cancel</Button>
+          <Button variant="destructive" disabled={confirmText !== "DELETE ALL" || resetMut.isPending} onClick={doReset}
+            className="h-9 flex-1 rounded-full text-xs font-bold">
+            {resetMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Everything"}
           </Button>
         </div>
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-left">Delete EVERYTHING for the next session?</DialogTitle>
-          </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            This permanently deletes <b>{count}</b> application(s), all applicant documents, every merit
-            list and the payment ledger. Classes, seats and settings are kept. This cannot be undone.
-          </p>
-          <div>
-            <Label className="text-xs font-bold mb-1.5 block">Type DELETE ALL to confirm</Label>
-            <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
-              placeholder="DELETE ALL" className="h-9 text-sm font-mono" />
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => { setOpen(false); setConfirmText(""); }}
-              className="h-10 flex-1 rounded-full text-xs font-bold">Cancel</Button>
-            <Button variant="destructive" disabled={confirmText !== "DELETE ALL" || resetMut.isPending} onClick={doReset}
-              className="h-10 flex-1 rounded-full text-xs font-bold">
-              {resetMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Everything"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 /* ── Settings Panel ─────────────────────────────────────────────────────── */
-function AdmissionSettingsPanel() {
+function AdmissionSettingsPanel({ embedded = false }: { embedded?: boolean }) {
   const { data: settings, isLoading } = useAdmissionSettings();
   const updateMut = useUpdateAdmissionSettings();
   const [saving, setSaving] = useState(false);
@@ -747,8 +708,8 @@ function AdmissionSettingsPanel() {
   if (isLoading) return <Skeleton className="h-40 rounded-xl" />;
 
   return (
-    <Card className="rounded-2xl border-border/60 shadow-sm">
-      <CardContent className="p-4 sm:p-5">
+    <Card className={embedded ? "border-0 bg-transparent shadow-none" : "rounded-2xl border-border/60 shadow-sm"}>
+      <CardContent className={embedded ? "p-0" : "p-4 sm:p-5"}>
         <PanelHeader icon={Settings2} title="Admission Settings" desc="Admission window, processing fee and payment accounts" />
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="flex items-center justify-between gap-3 p-3 bg-muted/40 border border-border/60 rounded-xl sm:col-span-2">
@@ -789,14 +750,6 @@ function AdmissionSettingsPanel() {
               placeholder="Admissions Open for Session 2026 — Apply Online Today"
               className="h-9 text-sm" />
           </div>
-          <div className="sm:col-span-2">
-            <Label className="text-xs font-semibold mb-1 block">WhatsApp Number for Payment Verification</Label>
-            <Input value={form.contact_whatsapp ?? ""}
-              onChange={e => setForm(f => ({ ...f, contact_whatsapp: e.target.value }))}
-              placeholder="03XX-XXXXXXX (manual-payment screenshots go here)"
-              className="h-9 text-sm" />
-          </div>
-
           {/* Online payment switch */}
           <div className="flex items-center justify-between gap-3 p-3 bg-muted/40 border border-border/60 rounded-xl sm:col-span-2">
             <div className="min-w-0">
@@ -876,206 +829,6 @@ function AdmissionSettingsPanel() {
   );
 }
 
-/* ── Interview Slots Panel ──────────────────────────────────────────────── *
- * Applicants can only book a slot from InterviewSlotBooking.tsx if a row
- * exists in `interview_slots`. Previously there was no admin UI to create
- * these, so "Book Interview Slot" always showed "No slots available" even
- * after an admin marked an applicant as interview_scheduled. This panel
- * lets the admin open slots (date, time, capacity, location) that then
- * appear live in every applicant's portal.
- */
-interface InterviewSlotRow {
-  id: string;
-  slot_date: string;
-  start_time: string;
-  duration_minutes: number;
-  capacity: number;
-  current_bookings: number;
-  location: string | null;
-  notes: string | null;
-  is_active: boolean;
-}
-
-function InterviewSlotsPanel() {
-  const qc = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    slot_date: "",
-    start_time: "",
-    duration_minutes: 15,
-    capacity: 10,
-    location: "",
-    notes: "",
-  });
-
-  const { data: slots = [], isLoading } = useQuery({
-    queryKey: ["admin-interview-slots"],
-    queryFn: async () => {
-      // Note: the `slots_read_public` RLS policy only allows reading rows
-      // where is_active = true, for both anon AND authenticated roles. That
-      // means an admin toggling a slot to "Inactive" would make it vanish
-      // from this list entirely instead of showing as inactive. If that
-      // happens, add a staff-only RLS policy on interview_slots granting
-      // authenticated admins SELECT on all rows regardless of is_active.
-      const { data, error } = await supabase
-        .from("interview_slots")
-        .select("*")
-        .order("slot_date", { ascending: true })
-        .order("start_time", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as InterviewSlotRow[];
-    },
-  });
-
-  const createSlot = async () => {
-    if (!form.slot_date || !form.start_time) {
-      toast.error("Date and time are required");
-      return;
-    }
-    setSaving(true);
-    try {
-      const { error } = await supabase.from("interview_slots").insert({
-        slot_date:         form.slot_date,
-        start_time:        form.start_time,
-        duration_minutes:  form.duration_minutes,
-        capacity:          form.capacity,
-        location:          form.location || null,
-        notes:             form.notes || null,
-        is_active:         true,
-      });
-      if (error) throw error;
-      toast.success("Interview slot created");
-      setForm({ slot_date: "", start_time: "", duration_minutes: 15, capacity: 10, location: "", notes: "" });
-      setShowForm(false);
-      qc.invalidateQueries({ queryKey: ["admin-interview-slots"] });
-    } catch (e) {
-      toast.error(e?.message || "Failed to create slot");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const toggleActive = async (slot: InterviewSlotRow) => {
-    try {
-      const { error } = await supabase
-        .from("interview_slots")
-        .update({ is_active: !slot.is_active })
-        .eq("id", slot.id);
-      if (error) throw error;
-      qc.invalidateQueries({ queryKey: ["admin-interview-slots"] });
-    } catch {
-      toast.error("Failed to update slot");
-    }
-  };
-
-  const deleteSlot = async (slot: InterviewSlotRow) => {
-    try {
-      const { error } = await supabase.from("interview_slots").delete().eq("id", slot.id);
-      if (error) throw error;
-      toast.success("Slot deleted");
-      qc.invalidateQueries({ queryKey: ["admin-interview-slots"] });
-    } catch (e) {
-      toast.error(e?.message || "Failed to delete slot (it may already have bookings)");
-    }
-  };
-
-  return (
-    <Card className="rounded-2xl border-border/60 shadow-sm">
-      <CardContent className="p-4 sm:p-5">
-        <PanelHeader
-          icon={Calendar}
-          title="Interview Slots"
-          desc="Open slots applicants can book from their portal"
-          action={
-            <Button size="sm" variant="outline" className="h-8 min-w-0 shrink-0 gap-1.5 whitespace-nowrap rounded-full border-border/60 px-3 text-xs font-semibold shadow-none" onClick={() => setShowForm(v => !v)}>
-              {showForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />} {showForm ? "Cancel" : "Add Slot"}
-            </Button>
-          }
-        />
-
-        {showForm && (
-          <div className="grid sm:grid-cols-2 gap-3 mb-4 p-3 bg-muted/40 border border-border/60 rounded-xl">
-            <div>
-              <Label className="text-xs font-semibold mb-1 block">Date</Label>
-              <Input type="date" value={form.slot_date}
-                onChange={e => setForm(f => ({ ...f, slot_date: e.target.value }))} className="h-9 text-sm" />
-            </div>
-            <div>
-              <Label className="text-xs font-semibold mb-1 block">Time</Label>
-              <Input type="time" value={form.start_time}
-                onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} className="h-9 text-sm" />
-            </div>
-            <div>
-              <Label className="text-xs font-semibold mb-1 block">Duration (min)</Label>
-              <Input type="number" min={5} max={120} value={form.duration_minutes}
-                onChange={e => setForm(f => ({ ...f, duration_minutes: Number(e.target.value) }))} className="h-9 text-sm" />
-            </div>
-            <div>
-              <Label className="text-xs font-semibold mb-1 block">Capacity</Label>
-              <Input type="number" min={1} max={100} value={form.capacity}
-                onChange={e => setForm(f => ({ ...f, capacity: Number(e.target.value) }))} className="h-9 text-sm" />
-            </div>
-            <div className="sm:col-span-2">
-              <Label className="text-xs font-semibold mb-1 block">Location</Label>
-              <Input value={form.location}
-                onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-                placeholder="Principal's Office / School Hall" className="h-9 text-sm" />
-            </div>
-            <div className="sm:col-span-2">
-              <Label className="text-xs font-semibold mb-1 block">Notes (shown to applicant)</Label>
-              <Textarea value={form.notes}
-                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="Bring original documents and B-Form." className="text-sm" rows={2} />
-            </div>
-            <div className="sm:col-span-2">
-              <Button onClick={createSlot} disabled={saving} className="h-9 w-full gap-1.5 whitespace-nowrap rounded-full bg-primary px-5 text-xs font-semibold text-primary-foreground shadow-none hover:bg-primary/90 sm:w-auto">
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                Create Slot
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {isLoading ? (
-          <Skeleton className="h-20 rounded-xl" />
-        ) : slots.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6">
-            No interview slots yet. Applicants won't be able to book until you add at least one.
-          </p>
-        ) : (
-          <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-            {slots.map(slot => (
-              <div key={slot.id}
-                className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border bg-card p-3 ${slot.is_active ? "border-border/60" : "border-border/60 opacity-55"}`}>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">
-                    {format(new Date(slot.slot_date + "T00:00:00"), "dd MMM yyyy")} · {slot.start_time.slice(0, 5)}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
-                    <Users className="w-3 h-3" /> {slot.current_bookings}/{slot.capacity}
-                    {slot.location && <><MapPin className="w-3 h-3 ml-1" /> {slot.location}</>}
-                    {!slot.is_active && <span className="text-red-500 font-semibold">· Inactive</span>}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button size="sm" variant="outline" className="h-8 min-w-0 whitespace-nowrap rounded-full border-border/60 px-3 text-xs font-semibold shadow-none"
-                    onClick={() => toggleActive(slot)}>
-                    {slot.is_active ? "Deactivate" : "Activate"}
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full p-0 text-red-500 shadow-none hover:bg-red-500/10 hover:text-red-700"
-                    onClick={() => deleteSlot(slot)}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 /* ── Shared premium UI pieces ───────────────────────────────────────────── */
 const StatusPill = ({ status }: { status: AdmissionStatus }) => (
   <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusConfig[status].badge}`}>
@@ -1239,6 +992,9 @@ const AdminAdmissions = () => {
   const [search,       setSearch]       = useState("");
   const [activeStatFilter, setActiveStatFilter] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const { data: admSettings } = useAdmissionSettings();
   const qc = useQueryClient();
   const deleteMut = useDeleteAdmission();
 
@@ -1275,13 +1031,19 @@ const AdminAdmissions = () => {
       })
     : null;
 
-  // Client-side search on loaded page
-  const filtered = search.trim()
-    ? admissions.filter(a =>
-        a.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        a.b_form_no.includes(search) ||
-        a.reference_no.toLowerCase().includes(search.toLowerCase()) ||
-        (a.payment_reference || "").includes(search.trim())
+  // Search across ALL applications: reference ID, name, CNIC / B-Form, payment ref
+  const q = search.trim().toLowerCase();
+  const qDigits = q.replace(/\D/g, "");
+  const filtered = q
+    ? all.filter(a =>
+        (a.reference_no || "").toLowerCase().includes(q) ||
+        (a.full_name || "").toLowerCase().includes(q) ||
+        (a.father_name || "").toLowerCase().includes(q) ||
+        (qDigits.length >= 3 && (
+          (a.b_form_no || "").replace(/\D/g, "").includes(qDigits) ||
+          (a.father_cnic || "").replace(/\D/g, "").includes(qDigits)
+        )) ||
+        (a.payment_reference || "").toLowerCase().includes(q)
       )
     : admissions;
 
@@ -1346,54 +1108,61 @@ const AdminAdmissions = () => {
       {/* ── Sub-tab pills (Applications · Classes & Seats · Merit Lists) ─── */}
       <SubTabPills subTab={subTab} onTab={setSubTab} />
 
-      {/* ── Premium header ─────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card p-3.5 shadow-sm sm:p-4">
-        <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-2xl" />
-        <div aria-hidden className="pointer-events-none absolute -left-12 -bottom-12 h-28 w-28 rounded-full bg-[hsl(43_89%_58%)]/10 blur-2xl" />
-        <div className="relative flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-md shadow-primary/20">
-            <ClipboardList className="h-[18px] w-[18px]" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-heading font-bold leading-tight tracking-tight text-foreground sm:text-xl">Admissions Management</h2>
-            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground sm:text-sm">
-              <span className="font-semibold text-foreground">{stats.total}</span> applications · review &amp; manage sessions
-            </p>
-          </div>
-        </div>
+      {/* ── Stats — 4 compact clickable blocks ───────────────────────── */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { key: "total",      label: "Applied", value: stats.total,      icon: ClipboardList, color: "text-primary",     activeBg: "border-primary bg-primary/10", clickable: true },
+          { key: "feePending", label: "Pending", value: stats.feePending, icon: Wallet,        color: "text-amber-600",   activeBg: "border-amber-400 bg-amber-500/10", clickable: true },
+          { key: "feePaid",    label: "Paid",    value: stats.feePaid,    icon: BadgeCheck,    color: "text-emerald-600", activeBg: "border-emerald-400 bg-emerald-500/10", clickable: true },
+          { key: "session",    label: "Session", value: admSettings?.session_year ?? "—", icon: Users, color: "text-primary", activeBg: "", clickable: false },
+        ].map(s => (
+          <button
+            type="button"
+            key={s.key}
+            disabled={!s.clickable}
+            onClick={() => s.clickable && handleStatClick(s.key)}
+            className={`flex min-w-0 flex-col items-center justify-center rounded-2xl border px-1 py-2.5 text-center shadow-sm transition-all duration-200 disabled:opacity-100 ${
+              s.clickable ? "active:scale-[0.97]" : "cursor-default"
+            } ${activeStatFilter === s.key ? s.activeBg : "border-border/60 bg-card"}`}
+          >
+            <span className="font-heading text-xl font-bold leading-none tabular-nums text-foreground sm:text-2xl">{s.value}</span>
+            <span className="mt-1.5 flex items-center justify-center gap-1 text-[10px] font-bold uppercase leading-none tracking-wide text-muted-foreground sm:text-[11px]">
+              <s.icon className={`h-3 w-3 shrink-0 ${s.color}`} />{s.label}
+            </span>
+          </button>
+        ))}
       </div>
 
-      {/* Stats — CLICKABLE cards */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-7 [&>*:first-child]:col-span-2 sm:[&>*:first-child]:col-span-1">
-        {[
-          { key: "total",     label: "Total",      value: stats.total,      icon: Users,        color: "text-primary",    dot: "bg-primary",    activeBg: "border-primary bg-primary/10" },
-          { key: "pending",   label: "Pending",    value: stats.pending,    icon: Clock,        color: "text-blue-600",   dot: "bg-blue-500",   activeBg: "border-blue-400 bg-blue-500/10" },
-          { key: "approved",  label: "Approved",   value: stats.approved,   icon: CheckCircle2, color: "text-green-600",  dot: "bg-emerald-500", activeBg: "border-green-400 bg-green-500/10" },
-          { key: "rejected",  label: "Rejected",   value: stats.rejected,   icon: XCircle,      color: "text-red-500",    dot: "bg-red-500",    activeBg: "border-red-400 bg-red-500/10" },
-          { key: "migration", label: "Migration",  value: stats.migration,  icon: RefreshCw,    color: "text-purple-600", dot: "bg-purple-500", activeBg: "border-purple-400 bg-purple-500/10" },
-          { key: "feePaid",   label: "Fee Paid",    value: stats.feePaid,   icon: BadgeCheck,   color: "text-emerald-600", dot: "bg-emerald-500", activeBg: "border-emerald-400 bg-emerald-500/10" },
-          { key: "feePending", label: "Fee Pending", value: stats.feePending, icon: Wallet,     color: "text-amber-600",  dot: "bg-amber-500",  activeBg: "border-amber-400 bg-amber-500/10" },
-        ].map(s => (
-          <Card
-            key={s.key}
-            className={`cursor-pointer rounded-2xl border px-3 py-2.5 shadow-sm transition-all duration-200 active:scale-[0.98] ${
-              activeStatFilter === s.key ? s.activeBg : "border-border/60 bg-card hover:border-primary/30"
-            }`}
-            onClick={() => handleStatClick(s.key)}
-          >
-            <CardContent className="flex items-center gap-3 p-0">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted/60">
-                <s.icon className={`w-4 h-4 ${s.color}`} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xl font-bold leading-none tabular-nums sm:text-2xl">{s.value}</p>
-                <p className="mt-1.5 flex items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${s.dot}`} />{s.label}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      {/* ── Search ───────────────────────────────────────────────────── */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search ID, name or CNIC"
+          className="h-11 rounded-full border-border/60 bg-card pl-11 text-sm shadow-none" />
+      </div>
+
+      {/* ── Toolbar: Settings · Delete All / Export · Walk-in ─────────── */}
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}
+            className="h-9 gap-1.5 whitespace-nowrap rounded-full border-border/60 bg-card px-4 text-xs font-bold shadow-none">
+            <Settings2 className="h-3.5 w-3.5" /> Settings
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setDeleteAllOpen(true)} disabled={!stats.total}
+            className="h-9 gap-1.5 whitespace-nowrap rounded-full border-red-300/70 bg-card px-4 text-xs font-bold text-red-600 shadow-none hover:bg-red-500/10 hover:text-red-700">
+            <Trash2 className="h-3.5 w-3.5" /> Delete All
+          </Button>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button size="sm" onClick={exportExcel} disabled={exporting || !stats.total}
+            className="h-9 gap-1.5 whitespace-nowrap rounded-full bg-emerald-600 px-4 text-xs font-bold text-white shadow-none hover:bg-emerald-700">
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Export Excel
+          </Button>
+          <Button size="sm" onClick={() => setWalkinOpen(true)}
+            className="h-9 gap-1.5 whitespace-nowrap rounded-full bg-primary px-4 text-xs font-bold text-primary-foreground shadow-none hover:bg-primary/90">
+            <UserPlus className="h-3.5 w-3.5" /> Add Walk-in / Import
+          </Button>
+        </div>
       </div>
 
       {/* Clickable stat filtered list — shows when a stat card is clicked */}
@@ -1429,58 +1198,6 @@ const AdminAdmissions = () => {
         </Card>
       )}
 
-      {/* Toolbar — Export · Walk-in · Delete All */}
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={exportExcel} disabled={exporting || !stats.total}
-          className="h-9 gap-1.5 rounded-full bg-emerald-600 px-3.5 text-xs font-bold text-white hover:bg-emerald-700">
-          {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Export Excel
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setWalkinOpen(true)}
-          className="h-9 gap-1.5 rounded-full border-border/60 px-3.5 text-xs font-bold">
-          <UserPlus className="w-3.5 h-3.5" /> Add Walk-in / Import
-        </Button>
-      </div>
-
-      {/* Settings */}
-      <AdmissionSettingsPanel />
-
-      {/* Interview Slots */}
-      <InterviewSlotsPanel />
-
-      {/* Filters */}
-      <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
-        <div className="relative col-span-3 sm:min-w-[220px] sm:flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name / B-Form / ref / payment ref..."
-            className="h-10 rounded-full border-border/60 bg-card pl-10 text-sm shadow-none" />
-        </div>
-        <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="h-10 w-full rounded-full border-border/60 text-xs shadow-none sm:w-36"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            {(Object.keys(statusConfig) as AdmissionStatus[]).map(s => (
-              <SelectItem key={s} value={s}>{statusConfig[s].label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={classFilter} onValueChange={v => { setClassFilter(v); setPage(0); }}>
-          <SelectTrigger className="h-10 w-full rounded-full border-border/60 text-xs shadow-none sm:w-28"><SelectValue placeholder="Class" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Classes</SelectItem>
-            {["6","7","8","9","10"].map(c => <SelectItem key={c} value={c}>Class {c}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={typeFilter} onValueChange={v => { setTypeFilter(v); setPage(0); }}>
-          <SelectTrigger className="h-10 w-full rounded-full border-border/60 text-xs shadow-none sm:w-32"><SelectValue placeholder="Type" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="fresh">Fresh</SelectItem>
-            <SelectItem value="migration">Migration</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       {/* Table */}
       <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm">
         <div>
@@ -1499,7 +1216,7 @@ const AdminAdmissions = () => {
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {totalPages > 1 && !q && (
           <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border bg-muted/20">
             <p className="text-xs text-muted-foreground">
               Page {page + 1} of {totalPages} ({data?.count} total)
@@ -1514,8 +1231,16 @@ const AdminAdmissions = () => {
         )}
       </Card>
 
-      {/* New-session reset (delete all) */}
-      <DeleteAllCard count={stats.total} />
+      {/* Settings dialog */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="max-h-[88vh] max-w-lg overflow-y-auto rounded-2xl p-4 sm:p-5">
+          <DialogHeader className="sr-only"><DialogTitle>Admission Settings</DialogTitle></DialogHeader>
+          <AdmissionSettingsPanel embedded />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete-all confirm dialog */}
+      <DeleteAllDialog count={stats.total} open={deleteAllOpen} onOpenChange={setDeleteAllOpen} />
 
       {/* Detail Dialog */}
       {selected && (
@@ -1554,18 +1279,20 @@ function SubTabPills({ subTab, onTab }: { subTab: SubTab; onTab: (t: SubTab) => 
     { id: "merit", label: "Merit Lists", icon: Trophy },
   ];
   return (
-    <div className="flex flex-wrap gap-1.5 rounded-full border border-border/60 bg-muted/40 p-1">
+    <div className="grid grid-cols-3 gap-1 rounded-2xl border border-border/60 bg-muted/40 p-1">
       {pills.map(p => (
         <button
           key={p.id}
+          type="button"
           onClick={() => onTab(p.id)}
-          className={`flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-xs font-bold transition-colors sm:flex-none sm:px-4 ${
+          className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center text-[11px] font-bold leading-tight transition-colors sm:flex-row sm:gap-1.5 sm:text-xs ${
             subTab === p.id
-              ? "bg-card text-foreground shadow-sm border border-border/60"
-              : "text-muted-foreground hover:text-foreground"
+              ? "border border-border/60 bg-card text-primary shadow-sm"
+              : "border border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <p.icon className="w-3.5 h-3.5" /> {p.label}
+          <p.icon className="h-4 w-4 shrink-0" />
+          <span>{p.label}</span>
         </button>
       ))}
     </div>
