@@ -39,6 +39,7 @@ export interface Admission {
   previous_class: string | null; previous_marks: string | null; year_of_passing: string | null;
   status: AdmissionStatus; admin_note: string | null; rejection_reason: string | null;
   admission_roll_no: string | null; migration_step: number | null;
+  father_cnic: string | null; occupation: string | null;
   // Processing-fee payment (file 20 migration)
   payment_status: AdmissionPaymentStatus; payment_reference: string | null;
   payment_method: string | null; payment_receipt: string | null;
@@ -74,7 +75,7 @@ export interface AdmissionDocumentPayload {
   file_name: string | null;
 }
 
-const ADMISSION_FIELDS = "id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, payment_status, payment_reference, payment_method, payment_receipt, processing_fee, fee_deadline, paid_at, created_at, updated_at";
+const ADMISSION_FIELDS = "id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, father_cnic, occupation, payment_status, payment_reference, payment_method, payment_receipt, processing_fee, fee_deadline, paid_at, created_at, updated_at";
 const ADMISSION_DOCUMENT_FIELDS = "id, admission_id, doc_type, file_path, file_name, uploaded_at";
 
 function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
@@ -181,6 +182,45 @@ export function useTrackAdmission(query: string) {
     // spinner render at the same time, which looks broken/fake.
     placeholderData: undefined,
     gcTime: 0,
+  });
+}
+
+/** The applicant's OWN application + timeline for the Applicant Dashboard
+ *  (GHSS-Ghallanai portal model). The server verifies the reference-no +
+ *  B-Form pair (migration 21 `admission_portal_state`) before returning
+ *  anything — the dashboard never trusts the browser alone. */
+export interface AdmissionPortalState {
+  ok: boolean;
+  error?: string;
+  application: Admission & { father_cnic?: string | null; occupation?: string | null };
+  timeline: Array<{
+    id: string;
+    from_status: string | null;
+    to_status: string;
+    note: string | null;
+    actor: string;
+    created_at: string;
+  }>;
+}
+
+export function useAdmissionPortalState(referenceNo: string | null, bFormNo: string | null) {
+  const enabled = !!referenceNo && !!bFormNo;
+  return useQuery<AdmissionPortalState | null>({
+    queryKey: ["admission-portal-state", referenceNo],
+    queryFn: async () => {
+      if (!enabled) return null;
+      const { data, error } = await supabase.rpc("admission_portal_state", {
+        p_reference_no: referenceNo!,
+        p_b_form_no: bFormNo!,
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.ok) return { ok: false, error: row?.error || "Session expired.", application: null as any, timeline: [] };
+      return row as AdmissionPortalState;
+    },
+    enabled,
+    staleTime: 15 * 1000,
+    retry: 1,
   });
 }
 
@@ -356,21 +396,22 @@ export function useAdmissionResetAll() {
   });
 }
 
-/** Admin list of ALL merit lists (drafts included) per class. */
+/** Admin list of ALL merit lists (drafts included) per class — with real
+ *  listed / not-listed counts (each list carries its entries' is_listed). */
 export function useAdminAdmissionMeritLists() {
   return useQuery({
     queryKey: ["admin-admission-merit-lists"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("admission_merit_lists")
-        .select("id, class, list_no, title, session_year, admission_start_date, admission_last_date, is_published, published_at, created_at")
+        .select("id, class, list_no, title, session_year, admission_start_date, admission_last_date, is_published, published_at, created_at, admission_merit_list_entries(is_listed)")
         .order("class", { ascending: true })
         .order("list_no", { ascending: false });
       if (error) throw error;
       return (data ?? []).map((m: any) => ({
         ...m,
-        listed_count: 0,
-        not_listed_count: 0,
+        listed_count: (m.admission_merit_list_entries ?? []).filter((e: any) => e.is_listed).length,
+        not_listed_count: (m.admission_merit_list_entries ?? []).filter((e: any) => !e.is_listed).length,
       }));
     },
   });

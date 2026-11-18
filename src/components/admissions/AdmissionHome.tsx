@@ -1,8 +1,8 @@
 import { lazy, Suspense, memo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight, BookOpen, Banknote, Mail, ScrollText, FileDown, Download,
-  Loader2, Lock, ChevronDown, GraduationCap, Search,
+  Loader2, Lock, ChevronDown, GraduationCap, Search, LayoutDashboard,
   AlertCircle, Sparkles, CalendarClock,
 } from "lucide-react";
 import type { AdmissionType } from "@/hooks/useAdmission";
@@ -70,15 +70,19 @@ export interface AdmissionHomeProps {
   onDownloadBlank: () => void;
   onDownloadAll: () => void;
   onLocked: () => void;
+  /** GHSS behaviour: with a saved applicant session the primary CTA becomes
+   *  "My Application" → /admission/portal (the Applicant Dashboard). */
+  hasSession?: boolean;
   /** Rendered between "How it works" and Eligibility/Downloads (Classes & Seats, Merit Lists). */
   children?: ReactNode;
 }
 
 function AdmissionHome({
   isOpen, sessionLabel, lastDate, bannerMessage, closedNote, downloading, hasLibFile,
-  onApply, onTrack, onDownloadItem, onDownloadBlank, onDownloadAll, onLocked, children,
+  onApply, onTrack, onDownloadItem, onDownloadBlank, onDownloadAll, onLocked, hasSession, children,
 }: AdmissionHomeProps) {
   const [showElig, setShowElig] = useState(false);
+  const navigate = useNavigate();
 
   const last = parseDay(lastDate);
   const lastLabel = last
@@ -137,17 +141,28 @@ function AdmissionHome({
         </p>
 
         <div className="mt-5 mx-auto grid grid-cols-2 gap-2.5 sm:flex sm:max-w-md">
-          <button
-            type="button"
-            onClick={guard(() => onApply())}
-            aria-disabled={!isOpen}
-            className={`h-10 inline-flex items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-semibold sm:flex-1 touch-manipulation transition-opacity active:opacity-80 ${
-              isOpen ? "bg-gold text-[hsl(var(--primary-strong))]" : "bg-white/15 text-white/60 cursor-not-allowed"
-            }`}
-          >
-            {isOpen ? <GraduationCap className="h-4 w-4 shrink-0" /> : <Lock className="h-3.5 w-3.5 shrink-0" />}
-            <span>Apply Now</span>
-          </button>
+          {hasSession ? (
+            <button
+              type="button"
+              onClick={() => navigate("/admission/portal")}
+              className="h-10 inline-flex items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-semibold bg-gold text-[hsl(var(--primary-strong))] sm:flex-1 touch-manipulation transition-opacity active:opacity-80"
+            >
+              <LayoutDashboard className="h-4 w-4 shrink-0" />
+              <span>My Application</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={guard(() => onApply())}
+              aria-disabled={!isOpen}
+              className={`h-10 inline-flex items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-semibold sm:flex-1 touch-manipulation transition-opacity active:opacity-80 ${
+                isOpen ? "bg-gold text-[hsl(var(--primary-strong))]" : "bg-white/15 text-white/60 cursor-not-allowed"
+              }`}
+            >
+              {isOpen ? <GraduationCap className="h-4 w-4 shrink-0" /> : <Lock className="h-3.5 w-3.5 shrink-0" />}
+              <span>Apply Now</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={guard(onTrack)}

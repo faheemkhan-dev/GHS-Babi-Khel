@@ -1,5 +1,20 @@
+// src/components/admissions/TrackResult.tsx — the public Track Application
+// result (GHSS Ghallanai §8 layout, ported to the GHS Babi Khel model):
+//
+//   • header block — "REFERENCE NUMBER" kicker + big mono id + ONE status
+//     badge + note when closed
+//   • progress — the gold stepper (Applied → Fee Paid → Review → Merit →
+//     Admitted); a red banner replaces it when the application is closed
+//   • amber warning strip when the workflow moved on but the fee is unpaid
+//   • "Next:" line — what the applicant should do now
+//   • Application summary review table + downloads (Application PDF / Fee
+//     Challan) + payment (online Safepay + manual transfer) + timeline
+//   • GHS-specific sections kept and restyled: migration progress stepper,
+//     interview slot booking, admit card, admission-fee challan voucher.
+// ═══════════════════════════════════════════════════════════════════════════
+
 import { lazy, Suspense, useState, useEffect, useCallback } from "react";
-import { AlertCircle, Download, RefreshCw, FileDown, FileText, Loader2, BadgeCheck, XCircle } from "lucide-react";
+import { XCircle, FileDown, FileText, Loader2, BadgeCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,9 +24,13 @@ import { useSchoolSettings } from "@/hooks/useSchoolSettings";
 import {
   ensurePaymentReference,
   formatDeadline,
+  formatFeeDate,
   paymentMethodLabel,
+  PAYMENT_STATUS_LABELS,
   type AdmissionPaymentAccount,
 } from "@/lib/admissionPayment";
+import AdmissionStepper, { resolveAdmissionStage } from "@/components/admissions/AdmissionStepper";
+import AdmissionReviewTable from "@/components/admissions/AdmissionReviewTable";
 import toast from "react-hot-toast";
 const ApplicationTracker = lazy(() => import("@/components/admissions/ApplicationTracker"));
 const InterviewSlotBooking = lazy(() => import("@/components/admissions/InterviewSlotBooking"));
@@ -27,29 +46,13 @@ const OnlinePayPanel = lazy(() => import("@/components/admissions/OnlinePayPanel
 // declaration through 31 December). We deliberately avoid inventing per-step
 // day-counts, since BISEP does not publish those — only the overall window.
 const MIGRATION_STEPS = [
-  { label: "Student submits online eligibility application to our school", time: "Done instantly", action: null },
-  { label: "Merit list is published — merit-listed students submit documents (incl. School Leaving Certificate)", time: "Varies by school", action: null },
-  { label: "Current school initiates migration on the BISEP portal (school-to-school)", time: "Within BISEP's annual migration window", action: null },
-  { label: "Our school accepts the migration on the BISEP portal", time: "Within BISEP's annual migration window", action: null },
-  { label: "Any BISEP fee/challan (if applicable) is paid", time: "As per BISEP schedule", action: null },
-  { label: "School admission & enrollment confirmed", time: "Complete!", action: null },
+  { label: "Student submits online eligibility application to our school", time: "Done instantly" },
+  { label: "Merit list is published — merit-listed students submit documents (incl. School Leaving Certificate)", time: "Varies by school" },
+  { label: "Current school initiates migration on the BISEP portal (school-to-school)", time: "Within BISEP's annual migration window" },
+  { label: "Our school accepts the migration on the BISEP portal", time: "Within BISEP's annual migration window" },
+  { label: "Any BISEP fee/challan (if applicable) is paid", time: "As per BISEP schedule" },
+  { label: "School admission & enrollment confirmed", time: "Complete!" },
 ];
-
-const statusConfig: Record<string, { label: string; color: string }> = {
-  pending:           { label: "Pending",           color: "bg-blue-100 text-blue-800" },
-  under_review:      { label: "Under Review",      color: "bg-purple-100 text-purple-800" },
-  approved:          { label: "Approved ✅",        color: "bg-green-100 text-green-800" },
-  rejected:          { label: "Rejected",           color: "bg-red-100 text-red-800" },
-  documents_missing: { label: "Documents Missing", color: "bg-orange-100 text-orange-800" },
-  documents_verified:{ label: "Documents Verified", color: "bg-emerald-100 text-emerald-800" },
-  interview_scheduled:{ label: "Interview Scheduled", color: "bg-cyan-100 text-cyan-800" },
-  interview_completed:{ label: "Interview Completed", color: "bg-teal-100 text-teal-800" },
-  waitlisted:        { label: "Waitlisted",         color: "bg-amber-100 text-amber-800" },
-  merit_listed:      { label: "Merit Listed 🎉",    color: "bg-amber-100 text-amber-800" },
-  admitted:          { label: "Admitted ✅",        color: "bg-green-100 text-green-800" },
-  admit_card_issued: { label: "Admit Card Issued",  color: "bg-green-100 text-green-800" },
-};
-
 
 function formatSlotTime(time: string): string {
   const [h, m] = time.split(":").map(Number);
@@ -59,7 +62,7 @@ function formatSlotTime(time: string): string {
 }
 
 export default function TrackResult({ result }: { result: any }) {
-  const cfg = statusConfig[result.status] ?? { label: result.status, color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200" };
+  const stage = resolveAdmissionStage(result.status, result.payment_status, result.processing_fee);
   const isMigration = result.admission_type === "migration";
   const currentStep = result.migration_step ?? 0;
   const status = result.status;
@@ -175,28 +178,63 @@ export default function TrackResult({ result }: { result: any }) {
 
   const canBookInterview = ["documents_verified", "under_review", "interview_scheduled"].includes(status);
   const canDownloadAdmitCard = ["interview_scheduled", "admitted", "admit_card_issued"].includes(status);
-
   const feePaid = result.payment_status === "paid";
 
   return (
     <div className="space-y-4">
-      <Card className="border-2 border-primary/20">
+      {/* ══ 1 · Header block + progress (GHSS track result) ═══════════════ */}
+      <Card className="overflow-hidden rounded-2xl border-gold/30 shadow-card">
+        <div aria-hidden className="h-1 bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
         <CardContent className="p-5 space-y-4">
-          <div className="flex items-start justify-between flex-wrap gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Reference Number</p>
-              <p className="text-lg font-bold font-mono text-primary">{result.reference_no}</p>
+          {/* header */}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                Reference Number
+              </p>
+              <p className="mt-1 break-all font-mono text-xl font-extrabold text-primary">{result.reference_no}</p>
+              <p className="mt-1 text-sm font-semibold">{result.full_name} · Class {result.applying_class}</p>
             </div>
-            <Badge className={`${cfg.color} text-xs font-bold px-3 py-1`}>{cfg.label}</Badge>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div><p className="text-xs text-muted-foreground">Student Name</p><p className="font-semibold">{result.full_name}</p></div>
-            <div><p className="text-xs text-muted-foreground">Class Applied</p><p className="font-semibold">Class {result.applying_class}</p></div>
-            <div><p className="text-xs text-muted-foreground">Type</p><p className="font-semibold capitalize">{result.admission_type}</p></div>
-            <div><p className="text-xs text-muted-foreground">Applied On</p><p className="font-semibold">{new Date(result.created_at).toLocaleDateString("en-PK")}</p></div>
+            <span className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-bold ${stage.tone}`}>
+              {stage.label}
+            </span>
           </div>
 
-          {/* Document downloads — always available (GHSS-style) */}
+          {/* progress: stepper, or the red closed banner (GHSS) */}
+          {stage.closed ? (
+            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3.5 dark:border-red-900 dark:bg-red-950/25">
+              <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+              <div>
+                <p className="text-sm font-bold text-red-700 dark:text-red-400">Application not accepted</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-red-700/80 dark:text-red-400/80">
+                  {result.rejection_reason || stage.note}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-4">
+              <AdmissionStepper current={stage.step} complete={stage.complete} />
+            </div>
+          )}
+
+          {/* warning strip (GHSS) */}
+          {stage.warning && (
+            <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-relaxed text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+              <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0" />
+              {stage.warning}
+            </p>
+          )}
+
+          {/* note + next (GHSS) */}
+          <div>
+            <p className="text-sm font-semibold leading-relaxed">{stage.note}</p>
+            <p className="mt-1 flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
+              <BadgeCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+              <span><span className="font-bold text-primary">Next:</span> {stage.next}</span>
+            </p>
+          </div>
+
+          {/* downloads (GHSS row) */}
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={downloadApplicationPdf} disabled={!!pdfBusy}
               className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-bold">
@@ -211,36 +249,10 @@ export default function TrackResult({ result }: { result: any }) {
               </Button>
             )}
           </div>
-
-          {result.admin_note && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
-              <p className="font-semibold mb-1">Message from Admin:</p>
-              <p>{result.admin_note}</p>
-            </div>
-          )}
-          {result.rejection_reason && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">
-              <p className="font-semibold mb-1">Rejection Reason:</p>
-              <p>{result.rejection_reason}</p>
-            </div>
-          )}
-          {/* If approved, show next steps reminder */}
-          {["approved", "admitted"].includes(status) && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-800">
-              <p className="font-semibold mb-1">🎉 Great news! You're approved!</p>
-              <p>Your application is approved. Watch the Merit List for seat allotment.</p>
-            </div>
-          )}
-          {status === "merit_listed" && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">
-              <p className="font-semibold mb-1">🎉 You are on the merit list!</p>
-              <p>Congratulations — you have been selected for a seat in Class {result.applying_class}. Bring your original documents to the school office by the last date shown on the merit list to confirm your admission.</p>
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* Processing Fee (application fee) — GHSS-style payment card */}
+      {/* ══ 2 · Processing Fee (GHSS payment card / paid state) ═══════════ */}
       {hasProcessingFee && (
         feePaid ? (
           <Card className="border-2 border-green-300/60 dark:border-green-900/60">
@@ -248,14 +260,14 @@ export default function TrackResult({ result }: { result: any }) {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-bold text-foreground">Processing Fee — Rs {Number(processingFee).toLocaleString("en-PK")}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {result.paid_at ? `Paid on ${new Date(result.paid_at).toLocaleDateString("en-PK")}` : "Fee received"}
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {result.paid_at ? `Paid on ${formatFeeDate(result.paid_at)}` : "Fee received"}
                     {result.payment_method ? ` · via ${paymentMethodLabel(result.payment_method)}` : ""}
                     {result.payment_receipt ? ` · Ref ${result.payment_receipt}` : ""}
                   </p>
                 </div>
-                <Badge className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1">
-                  <BadgeCheck className="w-3.5 h-3.5 mr-1" /> Paid
+                <Badge className="bg-green-500/15 text-green-700 text-xs font-bold px-3 py-1 dark:text-green-400">
+                  <BadgeCheck className="mr-1 h-3.5 w-3.5" /> Paid
                 </Badge>
               </div>
               {liveRef && (
@@ -284,11 +296,11 @@ export default function TrackResult({ result }: { result: any }) {
         )
       )}
       {hasProcessingFee && !feePaid && result.payment_status === "rejected" && (
-        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-2xl p-4 flex items-start gap-3">
-          <XCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/20">
+          <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
           <div>
-            <p className="font-semibold text-foreground text-sm">Payment could not be verified</p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-sm font-semibold text-foreground">Payment could not be verified</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               The school office could not verify your processing fee payment. Please contact the office
               {formatDeadline(result.fee_deadline) !== "—" ? ` before ${formatDeadline(result.fee_deadline)}` : ""}.
             </p>
@@ -296,8 +308,55 @@ export default function TrackResult({ result }: { result: any }) {
         </div>
       )}
 
-      {/* Fee Challan - Show when approved or admitted (admission fee voucher —
-          created by the office at approval; separate from the processing fee) */}
+      {/* ══ 3 · Application summary table (GHSS) ═════════════════════════ */}
+      <AdmissionReviewTable
+        title="Application"
+        rows={[
+          { label: "Class", value: `Class ${result.applying_class}` },
+          { label: "Admission Type", value: result.admission_type === "migration" ? "Migration / Transfer" : "Fresh Admission" },
+          { label: "Previous School", value: result.previous_school },
+          { label: "Previous Marks", value: result.previous_marks },
+          ...(hasProcessingFee ? [{
+            label: "Fee",
+            value: `Rs ${Number(processingFee).toLocaleString("en-PK")} · ${PAYMENT_STATUS_LABELS[result.payment_status] || result.payment_status}`,
+          }] : []),
+          { label: "Applied On", value: formatFeeDate(result.created_at) },
+          ...(result.payment_method && feePaid ? [{ label: "Paid Via", value: paymentMethodLabel(result.payment_method) }] : []),
+          ...(result.payment_receipt && feePaid ? [{ label: "Receipt No.", value: result.payment_receipt }] : []),
+          ...(feePaid && liveRef
+            ? [{ label: "Payment Reference", value: <span className="font-mono">{liveRef}</span> }]
+            : hasProcessingFee && result.fee_deadline
+              ? [{ label: "Fee Deadline", value: formatDeadline(result.fee_deadline) }]
+              : []),
+          ...(result.admission_roll_no ? [{ label: "Admission No.", value: result.admission_roll_no }] : []),
+        ]}
+      />
+
+      {/* ══ 4 · Office messages (GHS) ═══════════════════════════════════ */}
+      {result.admin_note && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3.5 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-300">
+          <p className="mb-1 font-semibold">Message from Admin:</p>
+          <p className="leading-relaxed">{result.admin_note}</p>
+        </div>
+      )}
+      {!stage.closed && result.rejection_reason && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/20 dark:text-red-300">
+          <p className="mb-1 font-semibold">Rejection Reason:</p>
+          <p className="leading-relaxed">{result.rejection_reason}</p>
+        </div>
+      )}
+      {status === "merit_listed" && (
+        <div className="rounded-2xl border border-green-200 bg-green-50 p-3.5 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/20 dark:text-green-300">
+          <p className="mb-1 font-semibold">You are on the merit list!</p>
+          <p className="leading-relaxed">
+            Congratulations — you have been selected for a seat in Class {result.applying_class}. Bring your
+            original documents to the school office by the last date shown on the merit list to confirm your
+            admission.
+          </p>
+        </div>
+      )}
+
+      {/* ══ 5 · Admission-fee challan voucher (GHS — approved / admitted) ═ */}
       {(status === "approved" || status === "admitted") && (
         <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" aria-label="Loading fee details" />}><FeeChallan
           admissionId={result.id}
@@ -308,11 +367,13 @@ export default function TrackResult({ result }: { result: any }) {
         /></Suspense>
       )}
 
+      {/* ══ 6 · Migration progress (GHS) ═════════════════════════════════ */}
       {isMigration && (
         <Card>
           <CardContent className="p-5">
-            <p className="font-bold text-sm mb-4 flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-primary" /> Migration Progress
+            <p className="mb-4 flex items-center gap-2 text-sm font-bold">
+              <svg className="h-4 w-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v9h-9"/></svg>
+              Migration Progress
             </p>
             {/* Horizontal stepper for migration */}
             <div className="overflow-x-auto pb-2">
@@ -342,10 +403,12 @@ export default function TrackResult({ result }: { result: any }) {
         </Card>
       )}
 
+      {/* ══ 7 · Timeline (GHSS card) ════════════════════════════════════ */}
       {!timelineLoading && timeline.length > 0 && (
         <Suspense fallback={<div className="h-28 rounded-2xl bg-muted" aria-label="Loading application timeline" />}><ApplicationTracker timeline={timeline} currentStatus={status} /></Suspense>
       )}
 
+      {/* ══ 8 · Interview booking + waitlist + admit card (GHS) ══════════ */}
       {canBookInterview && bookingChecked && (
         <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" aria-label="Loading interview slots" />}><InterviewSlotBooking
           admissionId={result.id}
@@ -355,11 +418,11 @@ export default function TrackResult({ result }: { result: any }) {
       )}
 
       {status === "waitlisted" && (
-        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-2xl p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+          <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
           <div>
-            <p className="font-semibold text-foreground text-sm">You're on the waitlist</p>
-            <p className="text-xs text-muted-foreground mt-1">All interview slots are currently full. We'll promote you automatically when a seat opens up.</p>
+            <p className="text-sm font-semibold text-foreground">You&rsquo;re on the waitlist</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">All interview slots are currently full. We&rsquo;ll promote you automatically when a seat opens up.</p>
           </div>
         </div>
       )}

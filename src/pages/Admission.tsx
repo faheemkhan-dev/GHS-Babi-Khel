@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useCallback, useEffect, useMemo } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Search, ChevronRight, ChevronLeft, Loader2, AlertCircle, User, BookOpen, Download, Shield, XCircle, MapPin, Phone, GraduationCap, TrendingUp, Calendar, Send, Eye, Edit3, Save, Trash2, Info, X, Briefcase, FileText, FileDown, BadgeCheck } from "lucide-react";
+import { CheckCircle2, Search, ChevronRight, ChevronLeft, Loader2, AlertCircle, User, BookOpen, Download, Shield, XCircle, MapPin, Phone, GraduationCap, TrendingUp, Calendar, Send, Eye, Edit3, Save, Trash2, Info, X, Briefcase, FileText, FileDown, BadgeCheck, LayoutDashboard, ArrowRight } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,11 @@ import toast from "react-hot-toast";
 import { PushOptIn } from "@/components/shared/PushOptIn";
 import { useQuery } from "@tanstack/react-query";
 import AdmissionHome from "@/components/admissions/AdmissionHome";
+import AdmissionReviewTable from "@/components/admissions/AdmissionReviewTable";
+import {
+  setAdmissionSession, hasAdmissionSession, ADMISSION_SESSION_EVENT,
+} from "@/lib/admissionSession";
+import { ensurePaymentReference, formatDeadline } from "@/lib/admissionPayment";
 const TrackResult = lazy(() => import("@/components/admissions/TrackResult"));
 const ClassesAndSeats = lazy(() => import("@/components/admissions/ClassesAndSeats"));
 const AdmissionMeritLists = lazy(() => import("@/components/admissions/AdmissionMeritLists"));
@@ -149,6 +154,7 @@ const Admission = () => {
   // BLANK content area (looked like a crashed page). The apply flow IS the
   // eligibility check, so it now maps to "apply".
   const location = useLocation();
+  const navigate = useNavigate();
   const [view, setView]           = useState<View>(
     (() => {
       const state = location.state as { view?: View } | null;
@@ -161,15 +167,32 @@ const Admission = () => {
   const [step, setStep]           = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [referenceNo, setReferenceNo] = useState("");
-  const [trackQuery, setTrackQuery]   = useState("");
-  const [doTrack, setDoTrack]         = useState(false);
+  const [trackQuery, setTrackQuery]   = useState<string>(() => {
+    const state = location.state as { query?: string } | null;
+    return state?.query ?? "";
+  });
+  const [doTrack, setDoTrack]         = useState<boolean>(() => {
+    const state = location.state as { view?: string; query?: string } | null;
+    return !!(state?.view === "track" && state?.query);
+  });
   const [downloading, setDownloading] = useState<string | null>(null);
 
   // ── Processing-fee payment state (success view + Safepay return) ─────────
   const [paymentRef, setPaymentRef]   = useState<string | null>(null);
+  const [payBefore, setPayBefore]     = useState<string | null>(null);
   const [pdfBusy, setPdfBusy]         = useState<string | null>(null);
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // ── Applicant session (GHSS portal model) ────────────────────────────────
+  // While a session is saved on this device the home hero CTA becomes
+  // "My Application" → /admission/portal, exactly like GHSS Ghallanai.
+  const [hasSession, setHasSession] = useState(() => hasAdmissionSession());
+  useEffect(() => {
+    const onChange = () => setHasSession(hasAdmissionSession());
+    window.addEventListener(ADMISSION_SESSION_EVENT, onChange);
+    return () => window.removeEventListener(ADMISSION_SESSION_EVENT, onChange);
+  }, []);
 
   // Safepay checkout return: /admission?payment=return&ref=… (poll until the
   // webhook flips the fee to paid) or ?payment=cancelled&ref=… (calm toast).
@@ -601,11 +624,30 @@ const Admission = () => {
 
       if (insErr) throw new Error(`Submission failed: ${insErr.message}`);
       const refNo = inserted?.reference_no ?? "";
+      const appId = inserted?.id ?? "";
 
       setReferenceNo(refNo);
       setView("success");
       clearDraft(); setHasDraft(false);
       toast.success("Application submitted successfully!");
+
+      // GHSS portal model: keep a private session on this device (My
+      // Application dashboard) and auto-create the payment reference —
+      // the GHSS done-step behaviour (finishSubmission → proceed payment).
+      setAdmissionSession({
+        reference_no: refNo,
+        b_form_no: (form.b_form_no || "").replace(/[^0-9]/g, ""),
+        application_id: appId,
+      });
+      setHasSession(true);
+      if (Number(settings?.processing_fee ?? 0) > 0) {
+        ensurePaymentReference(refNo, (form.b_form_no || "").replace(/[^0-9]/g, ""))
+          .then((res) => {
+            if (res.ok && res.payment_reference) setPaymentRef(res.payment_reference);
+            if (res.ok && res.fee_deadline) setPayBefore(res.fee_deadline);
+          })
+          .catch(() => { /* the applicant can generate it from the challan button */ });
+      }
     } catch (err) {
       toast.error(err?.message ?? "Submission failed. Please try again.");
     } finally {
@@ -663,6 +705,7 @@ const Admission = () => {
               onDownloadBlank={generateEmptyForm}
               onDownloadAll={downloadAll}
               onLocked={() => toast.error(nextOpeningNote || "Admissions are currently closed.")}
+              hasSession={hasSession}
             >
               {/* Classes & Seats + Merit Lists sit above Eligibility / Downloads */}
               <Suspense fallback={null}><ClassesAndSeats processingFee={settings?.processing_fee ?? null} /></Suspense>
@@ -1026,86 +1069,115 @@ const Admission = () => {
           </div>
         )}
 
-        {/* ══════════ SUCCESS VIEW ══════════ */}
+        {/* ══════════ SUCCESS VIEW — GHSS “Done” screen ══════════ */}
         {view === "success" && (
-          <div className="container mx-auto px-4 pt-10 max-w-md text-center">
-            <div>
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 className="w-8 h-8 text-green-600" />
+          <div className="container mx-auto px-4 pt-8 max-w-md">
+            <div className="space-y-4">
+              {/* Green success strip (GHSS) */}
+              <div className="rounded-2xl border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950/25">
+                <p className="flex items-start gap-2.5 text-sm font-semibold leading-relaxed text-green-800 dark:text-green-300">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                  <span><b>Submitted successfully</b> — keep your Reference Number safe. Use it to track
+                  your application any time.</span>
+                </p>
               </div>
-              <h2 className="text-xl font-bold mb-2">Application Submitted!</h2>
-              <p className="text-muted-foreground text-sm mb-6">
-                Your application has been received. Seats are filled through the Merit List.
-              </p>
-              <div className="bg-primary/10 border border-primary/30 rounded-2xl p-5 mb-6">
+
+              {/* Reference number */}
+              <div className="bg-primary/10 border border-primary/30 rounded-2xl p-5 text-center">
                 <p className="text-xs text-muted-foreground mb-1">Your Reference Number</p>
                 <p className="text-2xl font-bold font-mono text-primary">{referenceNo}</p>
               </div>
+
               {referenceNo && (
                 <PushOptIn
                   context="admission"
                   admissionRef={referenceNo}
                   title="Get your application updates"
                   text="Alert when your status changes"
-                  className="mb-6 text-left"
+                  className="text-left"
                 />
               )}
 
-              {/* ── Processing fee: reference + downloads + pay (GHSS-style) ── */}
-              {referenceNo && Number(settings?.processing_fee ?? 0) > 0 && (
-                <div className="space-y-3 mb-6 text-left">
-                  <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-2xl p-4">
-                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-1.5">
-                      <BadgeCheck className="w-4 h-4" /> Processing Fee — Rs {Number(settings?.processing_fee).toLocaleString("en-PK")}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mb-3">
-                      Pay online (Easypaisa · JazzCash · wallet) or by manual transfer to the school account, then verify on WhatsApp.
-                      Your application enters the merit list once the fee is confirmed.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={() => downloadSuccessPdf("challan")} disabled={!!pdfBusy}
-                        className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-bold">
-                        {pdfBusy === "challan" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
-                        {paymentRef ? "Fee Challan" : "Generate + Fee Challan"}
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => downloadSuccessPdf("application")} disabled={!!pdfBusy}
-                        className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-bold">
-                        {pdfBusy === "application" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
-                        Application PDF
-                      </Button>
-                    </div>
-                  </div>
-                  <Suspense fallback={null}>
-                    <OnlinePayPanel
-                      referenceNo={referenceNo}
-                      bFormNo={(form.b_form_no || "").replace(/[^0-9]/g, "")}
-                      processingFee={Number(settings?.processing_fee ?? 0)}
-                      paymentReference={paymentRef}
-                      feeDeadline={null}
-                      accounts={(settings?.payment_accounts ?? []) as any[]}
-                      whatsappNumber={settings?.contact_whatsapp ?? null}
-                      schoolPhone={school?.phone ?? null}
-                      onReference={(ref) => setPaymentRef(ref)}
-                      onDownloadChallan={() => downloadSuccessPdf("challan")}
-                      challanBusy={pdfBusy === "challan"}
-                    />
-                  </Suspense>
+              {/* Submission Details (GHSS done-step table) */}
+              {referenceNo && Number(settings?.processing_fee ?? 0) > 0 ? (
+                <AdmissionReviewTable
+                  title="Submission Details"
+                  rows={[
+                    { label: "Reference No.", value: <span className="font-mono">{referenceNo}</span> },
+                    {
+                      label: "Payment Reference",
+                      value: paymentRef
+                        ? <span className="font-mono font-extrabold tracking-wider text-primary">{paymentRef}</span>
+                        : <span className="inline-flex items-center gap-1.5 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</span>,
+                    },
+                    { label: "Amount", value: `Rs ${Number(settings?.processing_fee).toLocaleString("en-PK")}` },
+                    { label: "Pay Before", value: payBefore ? formatDeadline(payBefore) : "See Fee Challan" },
+                    { label: "Fee Status", value: <span className="text-amber-600">Pending</span> },
+                  ]}
+                />
+              ) : null}
+
+              {/* Downloads row (GHSS grid-cols-2) */}
+              {referenceNo && Number(settings?.processing_fee ?? 0) > 0 ? (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <Button variant="outline" onClick={() => downloadSuccessPdf("challan")} disabled={!!pdfBusy}
+                    className="h-11 gap-2 rounded-full text-xs font-bold">
+                    {pdfBusy === "challan" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                    {paymentRef ? "Fee Challan" : "Generate + Fee Challan"}
+                  </Button>
+                  <Button variant="outline" onClick={() => downloadSuccessPdf("application")} disabled={!!pdfBusy}
+                    className="h-11 gap-2 rounded-full text-xs font-bold">
+                    {pdfBusy === "application" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    Application PDF
+                  </Button>
                 </div>
+              ) : referenceNo ? (
+                <Button variant="outline" onClick={() => downloadSuccessPdf("application")} disabled={!!pdfBusy}
+                  className="h-11 w-full gap-2 rounded-full text-xs font-bold">
+                  {pdfBusy === "application" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                  Application PDF
+                </Button>
+              ) : null}
+
+              {/* Pay Processing Fee card (GHSS OnlinePayPanel) */}
+              {referenceNo && Number(settings?.processing_fee ?? 0) > 0 && (
+                <Suspense fallback={null}>
+                  <OnlinePayPanel
+                    referenceNo={referenceNo}
+                    bFormNo={(form.b_form_no || "").replace(/[^0-9]/g, "")}
+                    processingFee={Number(settings?.processing_fee ?? 0)}
+                    paymentReference={paymentRef}
+                    feeDeadline={payBefore}
+                    accounts={(settings?.payment_accounts ?? []) as any[]}
+                    whatsappNumber={settings?.contact_whatsapp ?? null}
+                    schoolPhone={school?.phone ?? null}
+                    onReference={(ref) => setPaymentRef(ref)}
+                    onDownloadChallan={() => downloadSuccessPdf("challan")}
+                    challanBusy={pdfBusy === "challan"}
+                  />
+                </Suspense>
               )}
 
-              <div className="bg-card border border-border rounded-2xl p-4 text-left text-xs space-y-2 mb-6 text-muted-foreground">
+              {/* GHSS ghost button — the dashboard is one tap away */}
+              <Button variant="ghost" onClick={() => navigate("/admission/portal")}
+                className="h-11 w-full gap-2 rounded-full text-xs font-bold text-muted-foreground hover:text-foreground">
+                <LayoutDashboard className="h-4 w-4" /> Pay Later · Go to Dashboard
+              </Button>
+
+              <div className="bg-card border border-border rounded-2xl p-4 text-left text-xs space-y-2 text-muted-foreground">
                 <p className="font-semibold text-foreground text-sm">What happens next:</p>
                 <p className="flex items-start gap-2"><span className="text-primary font-bold">1.</span> Save your reference number</p>
                 <p className="flex items-start gap-2"><span className="text-primary font-bold">2.</span> Seats are allotted through the Merit List</p>
                 <p className="flex items-start gap-2"><span className="text-primary font-bold">3.</span> Track your status anytime using B-Form or reference number</p>
               </div>
-              <div className="flex flex-col gap-3">
+
+              <div className="flex flex-col gap-3 pb-4">
                 <Button onClick={() => { setView("track"); setTrackQuery(referenceNo); setDoTrack(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                  className="gap-2 rounded-xl">
+                  className="h-11 gap-2 rounded-full font-bold">
                   <Search className="w-4 h-4" /> Track This Application
                 </Button>
                 <Button variant="outline" onClick={() => { resetForm(); setView("home"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                  className="gap-2 rounded-xl">
+                  className="h-11 gap-2 rounded-full font-bold">
                   Submit Another Application
                 </Button>
               </div>
@@ -1113,42 +1185,49 @@ const Admission = () => {
           </div>
         )}
 
-        {/* ══════════ TRACK VIEW ══════════ */}
+        {/* ══════════ TRACK VIEW — GHSS search pill ══════════ */}
         {view === "track" && (
-          <div className="container mx-auto px-4 pt-6 max-w-lg">
+          <div className="container mx-auto px-4 pt-6 max-w-lg pb-8">
             <button onClick={() => { setView("home"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
               className="flex items-center gap-1.5 text-sm text-muted-foreground mb-6 hover:text-foreground">
               <ChevronLeft className="w-4 h-4" /> Back
             </button>
             <div className="text-center mb-6">
-              <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <Search className="w-6 h-6 text-blue-500" />
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-gold/40 bg-gold/10 text-gold-strong">
+                <Search className="w-[19px] h-[19px]" strokeWidth={1.4} />
               </div>
-              <h2 className="text-xl font-bold">Track Application</h2>
+              <h2 className="text-xl font-bold" style={{ fontFamily: "var(--font-display)" }}>Track Application</h2>
               <p className="text-sm text-muted-foreground mt-1">
                 Enter your B-Form number, Reference Number, or Contact Number
               </p>
             </div>
 
-            {/* Search input with phone support */}
-            <div className="flex gap-2 mb-3">
-              <Input
+            {/* GHSS pill search: icon + input + primary pill Track button */}
+            <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card pl-4 pr-1.5 shadow-sm transition-colors focus-within:border-gold/60 focus-within:ring-2 focus-within:ring-gold/20">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <input
                 value={trackQuery}
-                onChange={e => { setTrackQuery(e.target.value); setDoTrack(false); }}
+                onChange={(e) => { setTrackQuery(e.target.value); setDoTrack(false); }}
+                onKeyDown={(e) => e.key === "Enter" && trackQuery.length >= 5 && setDoTrack(true)}
                 placeholder="B-Form, Reference No., or Phone"
-                className="text-sm h-11"
-                onKeyDown={e => e.key === "Enter" && setDoTrack(true)}
+                className="h-11 min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-wide outline-none placeholder:font-normal placeholder:tracking-normal placeholder:text-muted-foreground/70"
               />
-              <Button onClick={() => setDoTrack(true)} disabled={trackQuery.length < 5}
-                className="gap-1.5 rounded-xl px-4 h-11">
-                {trackLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              </Button>
+              <button
+                type="button"
+                onClick={() => setDoTrack(true)}
+                disabled={trackQuery.length < 5 || trackLoading}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {trackLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                Track
+              </button>
             </div>
 
-            {/* Forgot reference link */}
-            <div className="text-center mb-6">
-              <p className="text-[10px] text-muted-foreground">
-                Forgot your reference number? Search by your contact number or B-Form number instead. Only your own application (matched by exact number) is shown — your B-Form number is never displayed publicly.
+            {/* Forgot reference note */}
+            <div className="text-center mb-6 mt-3">
+              <p className="text-[10px] leading-relaxed text-muted-foreground">
+                Forgot your reference number? Search by your contact number or B-Form number instead. Only your
+                own application (matched by exact number) is shown — your B-Form number is never displayed publicly.
               </p>
             </div>
 

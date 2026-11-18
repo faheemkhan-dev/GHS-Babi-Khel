@@ -43,6 +43,10 @@ export const ROUTE_LOADERS: Record<string, Loader> = {
   "/notices":        () => import("@/pages/Notices"),
   // Actions
   "/admission":      () => import("@/pages/Admission"),
+  // Applicant Dashboard family (GHSS portal flow) — prefetched on intent only,
+  // they matter after an apply, not on every visit.
+  "/admission/portal":          () => import("@/pages/admission/AdmissionPortal"),
+  "/admission/application/:id": () => import("@/pages/admission/ApplicationView"),
   "/search":         () => import("@/pages/Search"),
 };
 

@@ -260,13 +260,17 @@ async function kindCreate(req, res) {
   }
 
   // 4. Hosted checkout URL (identical to the SDK's checkout.create).
+  //    GHSS-Ghallanai pattern: return to the applicant's Application View
+  //    page, which polls the fee status until the webhook confirms it. The
+  //    reference no. rides along as &ref= so a visitor without a dashboard
+  //    session (paid straight from Track) still lands on a helpful screen.
   const site = siteUrl(req);
   const params = new URLSearchParams({
     beacon: tracker,
-    cancel_url: `${site}/admission?payment=cancelled&ref=${encodeURIComponent(ctx.tracking_id)}`,
+    cancel_url: `${site}/admission/application/${ctx.admission_id}?payment=cancelled&ref=${encodeURIComponent(ctx.tracking_id)}`,
     env: cfg.env,
     order_id: ctx.tracking_id,
-    redirect_url: `${site}/admission?payment=return&ref=${encodeURIComponent(ctx.tracking_id)}`,
+    redirect_url: `${site}/admission/application/${ctx.admission_id}?payment=return&ref=${encodeURIComponent(ctx.tracking_id)}`,
     source: "custom",
     webhooks: "true",
   });

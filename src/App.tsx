@@ -96,6 +96,9 @@ const AdminDashboard   = lazyWithRetry(() => import("./pages/admin/AdminDashboar
 const RollNoSlip       = lazyWithRetry(() => import("./pages/ExamRollNumbers"));
 const NotFound         = lazyWithRetry(() => import("./pages/NotFound"));
 const Admission        = lazyWithRetry(() => import("./pages/Admission"));
+// Applicant Dashboard + Application View (GHSS-Ghallanai portal flow)
+const AdmissionPortal  = lazyWithRetry(() => import("./pages/admission/AdmissionPortal"));
+const ApplicationView  = lazyWithRetry(() => import("./pages/admission/ApplicationView"));
 const Search           = lazyWithRetry(() => import("./pages/Search"));
 const NoticeDetail     = lazyWithRetry(() => import("./pages/NoticeDetail"));
 const Contact          = lazyWithRetry(() => import("./pages/Contact"));
@@ -255,6 +258,8 @@ const App = () => (
                 />
                 <Route path="/roll-no-slip"            element={<RollNoSlip />} />
                 <Route path="/admission"               element={<Admission />} />
+                <Route path="/admission/portal"          element={<AdmissionPortal />} />
+                <Route path="/admission/application/:id" element={<ApplicationView />} />
                 <Route path="/faq"                    element={<FAQ />} />
                 <Route path="*"                        element={<NotFound />} />
               </Routes>

@@ -26,7 +26,7 @@ import {
   Clock, FileText, Download, RefreshCw, ChevronLeft,
   ChevronRight, Settings2, Users, Loader2, Search,
   UserCheck, AlertTriangle, Trash2, X,
-  Wallet, Calendar, MapPin, Plus, BadgeCheck, Armchair, Trophy, UserPlus
+  Wallet, Calendar, MapPin, Plus, BadgeCheck, Armchair, Trophy, UserPlus, FileSpreadsheet
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
@@ -599,7 +599,9 @@ const FeeStatusPill = ({ app }: { app: Admission }) => {
 };
 
 /* ── Delete All (reset for the next session) — confirm dialog ─────────── */
-function DeleteAllDialog({ count, open, onOpenChange }: { count: number; open: boolean; onOpenChange: (o: boolean) => void }) {
+function DeleteAllDialog({ count, open, onOpenChange, onBackup, backingUp }: {
+  count: number; open: boolean; onOpenChange: (o: boolean) => void; onBackup?: () => void; backingUp?: boolean;
+}) {
   const resetMut = useAdmissionResetAll();
   const [confirmText, setConfirmText] = useState("");
 
@@ -618,13 +620,22 @@ function DeleteAllDialog({ count, open, onOpenChange }: { count: number; open: b
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) setConfirmText(""); }}>
       <DialogContent className="max-w-md rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="text-left">Delete EVERYTHING for the next session?</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-left text-red-600 dark:text-red-400">
+            <AlertTriangle className="h-4 w-4" /> Delete All Applications
+          </DialogTitle>
         </DialogHeader>
         <p className="text-xs leading-relaxed text-muted-foreground">
           This permanently deletes <b>{count}</b> application(s), all applicant documents, timelines, every merit
           list and the payment ledger. Classes, seats, settings and the students-register / fee-voucher records
-          are kept. Use <b>Export Excel</b> first if you want a backup. This cannot be undone.
+          are kept. This cannot be undone.
         </p>
+        {onBackup && (
+          <Button variant="outline" onClick={onBackup} disabled={backingUp}
+            className="h-9 w-full gap-1.5 rounded-full border-green-600/50 text-xs font-bold text-green-700 hover:bg-green-600/10 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300">
+            {backingUp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+            Download Excel backup first
+          </Button>
+        )}
         <div>
           <Label className="text-xs font-bold mb-1.5 block">Type DELETE ALL to confirm</Label>
           <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
@@ -635,7 +646,7 @@ function DeleteAllDialog({ count, open, onOpenChange }: { count: number; open: b
             className="h-9 flex-1 rounded-full text-xs font-bold">Cancel</Button>
           <Button variant="destructive" disabled={confirmText !== "DELETE ALL" || resetMut.isPending} onClick={doReset}
             className="h-9 flex-1 rounded-full text-xs font-bold">
-            {resetMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Everything"}
+            {resetMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete All"}
           </Button>
         </div>
       </DialogContent>
@@ -890,8 +901,8 @@ function ApplicationsList({ apps, onView, onDelete, onFee, deleting }: {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/60 text-left">
-              {["Applicant", "Class", "Type", "Fee", "Status", "Applied", ""].map((h, i) => (
-                <th key={i} className={`whitespace-nowrap px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground ${i === 6 ? "text-right" : ""}`}>{h}</th>
+              {["Applicant", "Class", "Type", "Marks", "Fee", "Status", "Applied", ""].map((h, i) => (
+                <th key={i} className={`whitespace-nowrap px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground ${i === 7 ? "text-right" : "text-center"}`}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -909,6 +920,7 @@ function ApplicationsList({ apps, onView, onDelete, onFee, deleting }: {
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">Class {app.applying_class}</td>
                 <td className="px-4 py-3 capitalize whitespace-nowrap">{app.admission_type}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{app.previous_marks || "—"}</td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="flex flex-col items-start gap-0.5">
                     <FeeStatusPill app={app} />
@@ -953,6 +965,12 @@ function ApplicationsList({ apps, onView, onDelete, onFee, deleting }: {
               <span>Class {app.applying_class}</span>
               <span className="h-1 w-1 rounded-full bg-border" />
               <span className="capitalize">{app.admission_type}</span>
+              {app.previous_marks && (
+                <>
+                  <span className="h-1 w-1 rounded-full bg-border" />
+                  <span>{app.previous_marks}</span>
+                </>
+              )}
               <span className="h-1 w-1 rounded-full bg-border" />
               <span>{format(new Date(app.created_at), "dd MMM yyyy")}</span>
             </div>
@@ -1208,7 +1226,9 @@ const AdminAdmissions = () => {
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center text-muted-foreground text-sm">
               <GraduationCap className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              No applications found
+              {q
+                ? "No applications match your search."
+                : "No applications yet, they will appear here as students apply."}
             </div>
           ) : (
             <ApplicationsList apps={filtered} onView={setSelected} onFee={setFeeApp} onDelete={handleDeleteAdmission} deleting={deleteMut.isPending} />
@@ -1240,7 +1260,8 @@ const AdminAdmissions = () => {
       </Dialog>
 
       {/* Delete-all confirm dialog */}
-      <DeleteAllDialog count={stats.total} open={deleteAllOpen} onOpenChange={setDeleteAllOpen} />
+      <DeleteAllDialog count={stats.total} open={deleteAllOpen} onOpenChange={setDeleteAllOpen}
+        onBackup={exportExcel} backingUp={exporting} />
 
       {/* Detail Dialog */}
       {selected && (
