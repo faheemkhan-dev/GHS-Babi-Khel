@@ -57,7 +57,6 @@ export const NAV_LINKS = [
   ["Roll No. Slip", "/roll-no-slip"],
   ["Exam Duties", "/duties"],
   ["Teachers", "/teachers"],
-  ["Gallery", "/gallery"],
   ["FAQ", "/faq"],
 ];
 
@@ -68,13 +67,13 @@ const PAGES = {
   "/": {
     title: "GHS Babi Khel — Government High School, District Mohmand KPK",
     description:
-      "Official website of Government High School (GHS) Babi Khel, District Mohmand, KPK, Pakistan. Online admission applications, exam results by roll number, notices, free past papers, teacher directory and photo gallery for classes 6 to 10.",
+      "Official website of Government High School (GHS) Babi Khel, District Mohmand, KPK, Pakistan. Online admission applications, exam results by roll number, notices, free past papers and a teacher directory for classes 6 to 10.",
     h1: "Government High School Babi Khel — District Mohmand, KPK",
     blocks: [
       {
         p: [
           "Government High School (GHS) Babi Khel is a government high school in Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan, established in 2018 (EMIS code 60673). The school offers classes 6 to 10 and is affiliated with BISE Peshawar, the Board of Intermediate and Secondary Education Peshawar, whose examinations our class 9 and 10 students sit every year. Mr. Imdad Ullah is the principal of the school.",
-          "This official website is the school's digital front door. Students and parents can apply for admission online, search exam results by roll number, read official notices, download free past papers, browse the teacher directory and view photos of school events. The site also works as a Progressive Web App (PWA), so it can be installed on a phone and used offline.",
+          "This official website is the school's digital front door. Students and parents can apply for admission online, search exam results by roll number, read official notices, download free past papers and browse the teacher directory. The site also works as a Progressive Web App (PWA), so it can be installed on a phone and used offline.",
         ],
       },
       // Filled at build time with the REAL numbers from school_settings —
@@ -236,22 +235,6 @@ const PAGES = {
           "Government High School Babi Khel is staffed by qualified subject teachers appointed through the Khyber Pakhtunkhwa Elementary & Secondary Education Department. The staff directory on this page lists the teaching staff with their subjects and qualifications, led by the principal, Mr. Imdad Ullah. Teachers cover Mathematics, Physics, Chemistry, Biology, English, Urdu, Islamiat, Pakistan Studies and Computer Science for classes 6 to 10.",
         ],
       },
-    ],
-  },
-
-  "/gallery": {
-    title: "Photo Gallery — GHS Babi Khel",
-    description:
-      "Photo gallery of Government High School Babi Khel — albums of sports day, science fair, study tours, national days like 14 August, prize distributions and everyday school life in District Mohmand, KPK, with album descriptions and photo captions.",
-    h1: "Photo Gallery",
-    blocks: [
-      {
-        p: [
-          "Browse photo albums from Government High School Babi Khel: sports days and tournaments, science fairs and exhibitions, study tours, annual prize distributions, national days such as 14 August and Pakistan Day, tree plantation drives, and everyday teaching and learning in our classrooms. Photos are added by the school administration as events take place during the academic year.",
-          "Each album on the page shows a cover photo, a description of the event and every photo inside it. Open an album to view all of its photos with captions; albums can also include short video clips of school events. The gallery is viewable without signing in, and photos of school events are public information published by the school itself.",
-        ],
-      },
-      { h2: "Current photo albums", links: { source: "gallery", empty: "Photo albums will appear here as soon as the school administration publishes them." } },
     ],
   },
 

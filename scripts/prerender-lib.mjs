@@ -96,7 +96,6 @@ export const STATIC_ROUTES = [
   "/roll-no-slip",   // ← was missing — root cause of Googlebot index failures
   "/duties",
   "/teachers",
-  "/gallery",
   "/faq",
 ];
 
@@ -208,27 +207,13 @@ async function fetchIds(table, limit) {
 
 /**
  * Latest published items for the static fallback lists. Returns
- * { notices, gallery, stats } — empty values when the
- * env vars are missing or a fetch fails (fallback stays fully functional).
- *
- * EXTENDED (2026-08): previously only notices were injected at build
- * time, so the STATIC fallback page for /gallery was
- * almost content-free for any crawler that does not receive the live render
- * (weak AI tools with browser-like user-agents, offline archives, …). Now
- * the build-time snapshot carries the same public data the live renderer
- * serves: gallery albums
- * and the school's real statistics.
+ * { notices, admissionFiles, stats } — empty values when env vars are missing
+ * or a fetch fails (fallback stays fully functional).
  */
 async function fetchLatestLists(limit = 10) {
   const { url, key } = supabaseEnv();
-  const out = {
-    notices: [],
-    gallery: [],
-    admissionFiles: [],
-    stats: null,
-  };
+  const out = { notices: [], admissionFiles: [], stats: null };
   if (!url || !key) return out;
-
   const withTimeout = async (label, run) => {
     try {
       const controller = new AbortController();
@@ -243,64 +228,20 @@ async function fetchLatestLists(limit = 10) {
     }
   };
   const headers = { apikey: key, Authorization: `Bearer ${key}` };
-
-  const grab = (table) =>
-    withTimeout(table, (signal) =>
-      fetch(
-        `${url}/rest/v1/${table}?select=id,title,created_at&is_published=eq.true&order=created_at.desc&limit=${limit}`,
-        { headers, signal }
-      )
-    );
-
-  const [notices, galleryRows, settingsRow, admissionFileRows] =
-    await Promise.all([
-      grab("notices"),
-      withTimeout("gallery_albums", (signal) =>
-        fetch(
-          `${url}/rest/v1/gallery_albums?select=id,title,description,cover_url,created_at&order=created_at.desc&limit=10`,
-          { headers, signal }
-        )
-      ),
-      withTimeout("school_settings", (signal) =>
-        fetch(
-          `${url}/rest/v1/school_settings?select=total_students,total_teachers,pass_percentage,established_year&id=eq.1`,
-          { headers, signal }
-        )
-      ),
-      // Admin-uploaded admission documents (prospectus, fee structure, …).
-      // Baked into the static /admission page so even browser-UA AI tools
-      // that never receive the live render see the real form URLs.
-      withTimeout("library_files:admission", (signal) =>
-        fetch(
-          `${url}/rest/v1/library_files?select=id,title,description,file_url,file_type,created_at&category=ilike.Admission&order=created_at.desc&limit=20`,
-          { headers, signal }
-        )
-      ),
-    ]);
-
+  const grab = (table) => withTimeout(table, (signal) =>
+    fetch(`${url}/rest/v1/${table}?select=id,title,created_at&is_published=eq.true&order=created_at.desc&limit=${limit}`, { headers, signal })
+  );
+  const [notices, settingsRow, admissionFileRows] = await Promise.all([
+    grab("notices"),
+    withTimeout("school_settings", (signal) =>
+      fetch(`${url}/rest/v1/school_settings?select=total_students,total_teachers,pass_percentage,established_year&id=eq.1`, { headers, signal })
+    ),
+    withTimeout("library_files:admission", (signal) =>
+      fetch(`${url}/rest/v1/library_files?select=id,title,description,file_url,file_type,created_at&category=ilike.Admission&order=created_at.desc&limit=20`, { headers, signal })
+    ),
+  ]);
   out.notices = Array.isArray(notices) ? notices.filter((r) => r && r.id && r.title) : [];
-  out.admissionFiles = Array.isArray(admissionFileRows)
-    ? admissionFileRows.filter((r) => r && r.title && r.file_url)
-    : [];
-
-  if (Array.isArray(galleryRows) && galleryRows.length) {
-    // Photo counts per album (single lightweight query).
-    const photoRows = await withTimeout("gallery_photos", (signal) =>
-      fetch(
-        `${url}/rest/v1/gallery_photos?select=id,album_id&limit=200`,
-        { headers, signal }
-      )
-    );
-    const counts = new Map();
-    for (const p of Array.isArray(photoRows) ? photoRows : []) {
-      if (p && p.album_id) counts.set(p.album_id, (counts.get(p.album_id) || 0) + 1);
-    }
-    out.gallery = galleryRows.map((a) => ({
-      ...a,
-      photo_count: counts.get(a.id) || 0,
-    }));
-  }
-
+  out.admissionFiles = Array.isArray(admissionFileRows) ? admissionFileRows.filter((r) => r && r.title && r.file_url) : [];
   if (Array.isArray(settingsRow) && settingsRow[0]) {
     const s = settingsRow[0];
     out.stats = {
@@ -435,14 +376,13 @@ async function renderPage(context, route, outPath, originalPreloads) {
  * Fill dynamic lists inside a fallback page with build-time public data.
  * Handles:
  *   • <ul data-ghs-list="notices"></ul>   — latest published items
- *   • <ul data-ghs-list="gallery"></ul>        — photo albums with counts
  *   • <ul data-ghs-stats></ul>                 — real school statistics
  * Each list's "empty" paragraph is removed when real items exist (or the
  * marker is removed when the list is empty).
  */
 function makeListFiller(lists) {
   return (html) => {
-    for (const source of ["notices", "gallery", "admission-files"]) {
+    for (const source of ["notices", "admission-files"]) {
       const items = source === "admission-files" ? (lists && lists.admissionFiles) || [] : (lists && lists[source]) || [];
       const ulRe = new RegExp(`<ul data-ghs-list="${source}"></ul>`);
       const pRe = new RegExp(`\\s*<p data-ghs-empty="${source}">[\\s\\S]*?</p>`);
@@ -465,21 +405,6 @@ function makeListFiller(lists) {
             .map((f) => {
               const meta = f.file_type ? ` — ${esc(f.file_type)}` : "";
               return `<li><a href="${esc(f.file_url)}">${esc(f.title)}</a>${meta}</li>`;
-            })
-            .join("");
-        } else if (source === "gallery") {
-          lis = items
-            .map((a) => {
-              const date = a.created_at ? new Date(a.created_at) : null;
-              const nice = date && !isNaN(date.getTime())
-                ? date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
-                : "";
-              const desc = a.description ? ` — ${esc(String(a.description).replace(/\s+/g, " ").slice(0, 160))}` : "";
-              const count =
-                typeof a.photo_count === "number"
-                  ? ` — ${a.photo_count} photo${a.photo_count === 1 ? "" : "s"}`
-                  : "";
-              return `<li>${esc(a.title)}${count}${nice ? ` · ${nice}` : ""}${desc}</li>`;
             })
             .join("");
         }
@@ -521,7 +446,7 @@ async function fillMissingRoutesWithStaticContent() {
   if (!existsSync(shellPath)) return { filled: [], skipped: "dist/index.html missing" };
 
   const shellHtml = await readFile(shellPath, "utf8");
-  // Always fetch build-time data (gallery/notice lists + stats blocks).
+  // Always fetch build-time data (notice lists + stats blocks).
   const lists = await fetchLatestLists(10);
 
   const filler = makeListFiller(lists);

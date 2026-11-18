@@ -41,7 +41,7 @@ const CATEGORY_META: Record<
   },
   "School Information": {
     icon: School,
-    blurb: "Location, timings, teachers, events and the photo gallery",
+    blurb: "Location, timings, teachers, events and school information",
   },
   "Website & Contact": {
     icon: Globe,

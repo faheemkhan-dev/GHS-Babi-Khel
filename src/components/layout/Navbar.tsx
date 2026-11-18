@@ -5,7 +5,7 @@ import {
   Menu, X, GraduationCap, LogIn, UserPlus, ArrowRight,
   LayoutDashboard, LogOut, Shield, Search, ChevronDown, ChevronRight,
   Home, Landmark, Mail, Megaphone,
-  Trophy, Medal, BookOpen, Images, ClipboardList, HelpCircle, Users,
+  Trophy, Medal, BookOpen, ClipboardList, HelpCircle, Users,
   Hash, Timer, Command as CommandIcon,
   Ticket, FileSignature, type LucideIcon,
 } from "lucide-react";
@@ -87,7 +87,6 @@ const NAV_SECTIONS: NavSection[] = [
     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light",
     links: [
       { to: "/about",   label: "About",   icon: Landmark,   desc: "History, mission & facilities",      tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
-      { to: "/gallery", label: "Gallery", icon: Images,     desc: "Photos & videos of school life",     tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
       { to: "/contact", label: "Contact", icon: Mail,       desc: "Address, phone & location map",      tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
       { to: "/faq",     label: "FAQs",    icon: HelpCircle, desc: "Answers to common questions",        tint: "bg-secondary text-primary dark:bg-primary/15 dark:text-primary-light" },
     ],

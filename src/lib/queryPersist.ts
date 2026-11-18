@@ -60,10 +60,6 @@ const PERSISTED_KEY_PREFIXES = [
   // banner paint with the correct open/closed state offline instead of
   // falling through to the closed-CTA fallback.
   "admission-settings",
-  // Gallery → album grid on /gallery + photos inside an album.
-  // Lets students view previously-visited gallery albums and photos offline.
-  "gallery-albums",
-  "gallery-photos",
   // Result Card → "which exam is currently available" heading shown before
   // any search (Results.tsx useLatestPublishedExam). Small, cheap, and lets
   // the page paint its title instantly instead of a blank heading while

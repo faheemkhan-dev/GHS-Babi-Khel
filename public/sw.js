@@ -19,7 +19,7 @@
 //   Failure 2 (v1 of this file): intercepted image requests with
 //   event.respondWith() and returned whatever the SW's own fetch() got
 //   back. Cross-origin opaque responses and edge cases in that logic
-//   caused logo/banner/gallery images to render as broken icons — because
+//   caused logo/banner images to render as broken icons — because
 //   respondWith() controls EXACTLY what bytes the <img> tag receives, so
 //   any mistake in that response is a broken image, full stop.
 //

@@ -104,7 +104,7 @@ function escapeHtml(s: string): string {
 }
 
 // Known site pages → rendered as tappable in-app links (SPA navigation).
-const PATH_RE = /(^|[\s(])(\/(?:results|admission|notices|news|contact|about|calendar|gallery|faq|merit-list|roll-no-slip|teachers|dashboard|search|auth\/signin|auth\/forgot-password))(?=[\s).,;:!?]|$)/g;
+const PATH_RE = /(^|[\s(])(\/(?:results|admission|notices|news|contact|about|calendar|faq|merit-list|roll-no-slip|teachers|dashboard|search|auth\/signin|auth\/forgot-password))(?=[\s).,;:!?]|$)/g;
 const URL_RE = /(https?:\/\/[^\s<)]+[^\s<).,;:!?])/g;
 
 function renderInline(s: string): string {

@@ -179,16 +179,8 @@ export const FAQ_ITEMS = [
     category: "School Information",
     question: "What school events and activities take place during the year?",
     answer:
-      "The school holds sports days and tournaments, science fairs and exhibitions, annual prize distributions, national-day programmes such as 14 August and Pakistan Day, tree plantation drives and parent-teacher meetings. Photos of past events are in the Gallery (ghsbabikhel.dpdns.org/gallery), and notices about upcoming events are posted on the Notices page.",
+      "The school holds sports days and tournaments, science fairs and exhibitions, annual prize distributions, national-day programmes such as 14 August and Pakistan Day, tree plantation drives and parent-teacher meetings. Notices about upcoming events are posted on the Notices page.",
   },
-  {
-    id: "sch-gallery",
-    category: "School Information",
-    question: "Where can I see photos of the school and past events?",
-    answer:
-      "The Photo Gallery (ghsbabikhel.dpdns.org/gallery) has pictures of the school building, classrooms, sports days, science fairs, prize distributions and other events, organised so you can browse by event or date. New photos are added by the school after each event.",
-  },
-
   // ── Website & Contact ─────────────────────────────────────────────────────
   {
     id: "web-pwa",
@@ -202,7 +194,7 @@ export const FAQ_ITEMS = [
     category: "Website & Contact",
     question: "Is there any cost or account required to use the website?",
     answer:
-      "The website is completely free, and all public sections — notices, results and gallery — can be used without any account. You only sign in if you are a student or guardian tracking an admission application or dashboard features, or if you are staff. There are no ads and no charges for any feature of the site.",
+      "The website is completely free, and all public sections — notices and results — can be used without any account. You only sign in if you are a student or guardian tracking an admission application or dashboard features, or if you are staff. There are no ads and no charges for any feature of the site.",
   },
   {
     id: "web-contact",
@@ -216,7 +208,7 @@ export const FAQ_ITEMS = [
     category: "Website & Contact",
     question: "Do I need to create an account, and what does it unlock?",
     answer:
-      "You don't need an account to browse notices, results or gallery — those are open to everyone. Creating a free account (Sign Up, ghsbabikhel.dpdns.org/auth/signup) is only useful if you want a personal dashboard to track your admission application status in one place, or if you are a teacher who needs access to staff features. Signing in is never required just to check a result.",
+      "You don't need an account to browse notices or results — those are open to everyone. Creating a free account (Sign Up, ghsbabikhel.dpdns.org/auth/signup) is only useful if you want a personal dashboard to track your admission application status in one place, or if you are a teacher who needs access to staff features. Signing in is never required just to check a result.",
   },
   {
     id: "web-notices",

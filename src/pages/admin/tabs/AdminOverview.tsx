@@ -5,7 +5,7 @@ import { useSchoolSettings } from "@/hooks/useSchoolSettings";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Users, GraduationCap, Bell, BookOpen, Image as ImageIcon,
+  Users, GraduationCap, Bell, BookOpen,
   UserCog, ClipboardList, Calendar, CheckCircle, AlertCircle, Activity,
   ArrowUpRight, FileText, BookMarked, MapPin, Landmark, Phone, Mail, Hash,
   Settings, RefreshCw, CalendarDays, Trophy, Sparkles,
@@ -19,12 +19,11 @@ const useAdminStats = () =>
     queryFn: async () => {
       const head = { count: "exact" as const, head: true };
       const [
-        teachers, notices, albums, users, results,
+        teachers, notices, users, results,
         pendingUsers, admissions, pendingAdmissions,
       ] = await Promise.all([
         supabase.from("teachers").select("id", head),
         supabase.from("notices").select("id", head),
-        supabase.from("gallery_albums").select("id", head),
         supabase.from("profiles").select("id", head),
         supabase.from("results").select("id", head),
         supabase.from("profiles").select("id", head).eq("status", "pending"),
@@ -34,7 +33,6 @@ const useAdminStats = () =>
       return {
         teachers: teachers.count ?? 0,
         notices: notices.count ?? 0,
-        albums: albums.count ?? 0,
         users: users.count ?? 0,
         results: results.count ?? 0,
         pendingUsers: pendingUsers.count ?? 0,
@@ -211,7 +209,6 @@ const AdminOverview = () => {
   ];
   const contentTiles = [
     { to: "/admin?tab=announcements", label: "Notices",        value: stats?.notices, icon: Bell,       tone: TONES.amber },
-    { to: "/admin?tab=videos",        label: "Gallery Albums", value: stats?.albums,  icon: ImageIcon,  tone: TONES.pink },
   ];
 
   /* Shortcuts only point at pages that have NO tile above. */

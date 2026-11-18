@@ -196,7 +196,7 @@ function buildLlmsTxt(s, admissionFiles = []) {
     : "";
   return `# ${s.school_name} — Government High School, District Mohmand
 
-> Official website of Government High School (GHS) Babi Khel, District Mohmand, Khyber Pakhtunkhwa (KPK), Pakistan — a government school offering classes 6 to 10 (matriculation), affiliated with BISE Peshawar for board exams. The site provides online admission applications, exam results searchable by roll number, official merit lists of top position holders, downloadable exam roll number slips, official notices, free past papers, teacher directory and a photo gallery.
+> Official website of Government High School (GHS) Babi Khel, District Mohmand, Khyber Pakhtunkhwa (KPK), Pakistan — a government school offering classes 6 to 10 (matriculation), affiliated with BISE Peshawar for board exams. The site provides online admission applications, exam results searchable by roll number, official merit lists of top position holders, downloadable exam roll number slips, official notices, free past papers, teacher directory.
 
 ## School facts
 
@@ -238,7 +238,6 @@ function buildLlmsTxt(s, admissionFiles = []) {
 - [Notices](${SITE_URL}/notices): Official school notices — holidays, exam schedules, fee deadlines, parent-teacher meetings
 - [Exam Duties](${SITE_URL}/duties): BISE Peshawar supervisory exam duty draw — teachers check their theory or practical duty by CNIC or mobile number, then download the duty order PDF or share it
 - [Teachers](${SITE_URL}/teachers): Teaching staff directory with subjects and qualifications
-- [Gallery](${SITE_URL}/gallery): Photo albums of school events — sports day, science fair, study tours, national days, with album descriptions and photo captions
 - [Contact](${SITE_URL}/contact): Contact details, map, WhatsApp and contact form
 - [About](${SITE_URL}/about): School history, mission, vision and staff overview
 - [FAQ](${SITE_URL}/faq): Complete frequently-asked-questions page — admissions, documents, tracking, results, grading, contact and website usage
@@ -261,7 +260,7 @@ function buildLlmsTxt(s, admissionFiles = []) {
 ${filesSection ? filesSection + "\n" : ""}
 ## Machine-readable data (recommended for AI tools)
 
-- [Live data feed (JSON)](${SITE_URL}/api/ai-data): the COMPLETE current state of this website in one request — school profile with live statistics, admission status and deadlines (live from the school dashboard), full admission procedure and documents, results info and grading scale, published merit lists, roll-number-slip sessions, the 20 latest notices with content, teacher directory, photo gallery albums and the full FAQ. Updated within a minute of any change; always prefer this over cached page snapshots when precision matters.
+- [Live data feed (JSON)](${SITE_URL}/api/ai-data): the COMPLETE current state of this website in one request — school profile with live statistics, admission status and deadlines (live from the school dashboard), full admission procedure and documents, results info and grading scale, published merit lists, roll-number-slip sessions, the 20 latest notices with content, teacher directory and the full FAQ. Updated within a minute of any change; always prefer this over cached page snapshots when precision matters.
 - [RSS feed](${SITE_URL}/rss.xml): Latest notices as they are published
 - [Sitemap](${SITE_URL}/sitemap.xml): XML sitemap of all public pages
 
@@ -319,7 +318,6 @@ const STATIC_PAGES = [
   { path: "/contact", changefreq: "monthly", priority: "0.8" },
   { path: "/about", changefreq: "monthly", priority: "0.8" },
   { path: "/teachers", changefreq: "monthly", priority: "0.8", dbSource: { table: "teachers",      column: "created_at" } },
-  { path: "/gallery", changefreq: "weekly",  priority: "0.7", dbSource: { table: "gallery_photos", column: "created_at" } },
   { path: "/faq", changefreq: "monthly", priority: "0.8" },
 ];
 

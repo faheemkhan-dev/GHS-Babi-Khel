@@ -338,21 +338,6 @@ const ROUTES: RouteSEO[] = [
     breadcrumbs: () => [baseBreadcrumb, { name: "Merit List", path: "/merit-list" }],
   },
   {
-    pattern: "/gallery",
-    title: "Photo Gallery — GHS Babi Khel School Events & Activities",
-    description:
-      "Explore the photo and video gallery of Government High School Babi Khel — events, sports, academic activities and celebrations.",
-    keywords: "school gallery, photos, videos, school events, GHS Babi Khel gallery",
-    breadcrumbs: () => [baseBreadcrumb, { name: "Gallery", path: "/gallery" }],
-    jsonLd: () => ({
-      "@context": "https://schema.org",
-      "@type": "ImageGallery",
-      name: "GHS Babi Khel Photo Gallery",
-      url: `${SITE_URL}/gallery`,
-      creator: { "@id": `${SITE_URL}#organization` },
-    }),
-  },
-  {
     pattern: "/contact",
     title: "Contact GHS Babi Khel — Address, Phone & Email | District Mohmand",
     description:
