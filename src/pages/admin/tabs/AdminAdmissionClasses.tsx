@@ -9,12 +9,10 @@ import { GraduationCap, Loader2, Save, Armchair, Lock, Unlock } from "lucide-rea
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import toast from "react-hot-toast";
 import { useAdminAdmissionClasses, useSetAdmissionClassSeats } from "@/hooks/useAdmission";
-import { format } from "date-fns";
 
 export default function AdminAdmissionClasses() {
   const { data: rows, isLoading } = useAdminAdmissionClasses();
@@ -62,22 +60,16 @@ export default function AdminAdmissionClasses() {
   return (
     <div className="space-y-4 pb-16">
       <Card className="rounded-2xl border-border/60 shadow-sm">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex items-start gap-3 mb-1">
-            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Armchair className="w-4 h-4" />
+        <CardContent className="p-3 sm:p-5">
+          <div className="mb-4 flex flex-col items-center text-center">
+            <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Armchair className="h-5 w-5" />
             </span>
-            <div className="min-w-0">
-              <h2 className="text-[15px] font-heading font-bold tracking-tight text-foreground sm:text-lg">Classes &amp; Seats</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground leading-snug">
-                Seats per class for the new session. The auto merit list fills these seats — every
-                fee-paid applicant competes on merit, no quotas.
-              </p>
-            </div>
+            <h2 className="font-heading text-base font-bold tracking-tight text-foreground sm:text-lg">Classes &amp; Seats</h2>
           </div>
 
           {isLoading ? (
-            <div className="mt-4 space-y-2">
+            <div className="space-y-2">
               {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
             </div>
           ) : !rows || rows.length === 0 ? (
@@ -85,58 +77,56 @@ export default function AdminAdmissionClasses() {
               No classes configured yet — run Supabase migration 20.
             </p>
           ) : (
-            <div className="mt-4 overflow-hidden rounded-xl border border-border/60">
-              <table className="w-full text-sm">
+            <div className="mx-auto max-w-md overflow-hidden rounded-2xl border border-primary/20 shadow-sm">
+              <table className="w-full table-fixed text-center">
                 <thead>
-                  <tr className="bg-muted/60 text-left">
-                    {["Class", "Seats", "Open for Admission", ""].map((h, i) => (
-                      <th key={h} className={`px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground ${i >= 2 ? "text-right" : ""}`}>{h}</th>
+                  <tr className="bg-primary/10">
+                    {["Class", "Seats", "Status"].map((h) => (
+                      <th key={h} className="px-2 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-primary">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {rows.map((r) => (
-                    <tr key={r.class} className="hover:bg-primary/5 transition-colors">
-                      <td className="px-4 py-3">
-                        <span className="flex items-center gap-2 font-semibold">
-                          <GraduationCap className="w-4 h-4 text-primary shrink-0" />
-                          Class {r.class}
+                  {rows.map((r, i) => (
+                    <tr key={r.class} className={i % 2 ? "bg-muted/30" : "bg-card"}>
+                      <td className="px-2 py-3 align-middle">
+                        <span className="inline-flex flex-col items-center gap-0.5 sm:flex-row sm:gap-1.5">
+                          <GraduationCap className="h-4 w-4 shrink-0 text-primary" />
+                          <span className="whitespace-nowrap text-[13px] font-bold">Class {r.class}</span>
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                      <td className="px-2 py-3 align-middle">
+                        <div className="flex flex-col items-center gap-1.5">
                           <Input
                             type="number"
+                            inputMode="numeric"
                             min={0}
                             max={10000}
                             value={drafts[r.class] ?? r.seats}
                             onChange={(e) => setDrafts((d) => ({ ...d, [r.class]: Number(e.target.value) }))}
-                            className="h-9 w-24 text-sm tabular-nums"
+                            className="h-8 w-16 rounded-lg px-1 text-center text-sm font-bold tabular-nums"
                           />
                           {dirty(r.class) && (
                             <Button size="sm" onClick={() => saveSeats(r.class)} disabled={setSeatsMut.isPending}
-                              className="h-9 gap-1.5 rounded-full px-3 text-xs font-bold">
-                              {setSeatsMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save
+                              className="h-7 gap-1 whitespace-nowrap rounded-full px-3 text-[11px] font-bold shadow-none">
+                              {setSeatsMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save
                             </Button>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          {r.is_open ? (
-                            <Badge className="border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900 text-green-700 dark:text-green-300 text-[10px] font-bold">
-                              <Unlock className="w-3 h-3 mr-1" /> Open
-                            </Badge>
-                          ) : (
-                            <Badge className="border border-border bg-muted/50 text-muted-foreground text-[10px] font-bold">
-                              <Lock className="w-3 h-3 mr-1" /> Closed
-                            </Badge>
-                          )}
+                      <td className="px-2 py-3 align-middle">
+                        <div className="flex flex-col items-center gap-1.5">
                           <Switch checked={r.is_open} onCheckedChange={(v) => toggleOpen(r.class, v)} />
+                          {r.is_open ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-300">
+                              <Unlock className="h-3 w-3" /> Open
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-muted-foreground">
+                              <Lock className="h-3 w-3" /> Closed
+                            </span>
+                          )}
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-right text-[10px] text-muted-foreground whitespace-nowrap">
-                        {format(new Date(r.updated_at), "dd MMM yy")}
                       </td>
                     </tr>
                   ))}
@@ -144,12 +134,6 @@ export default function AdminAdmissionClasses() {
               </table>
             </div>
           )}
-
-          <p className="mt-3 text-[11px] text-muted-foreground leading-relaxed">
-            <b>Seats filled by earlier published lists are never double-counted</b> — generating merit
-            list #2 only fills the seats left over after list #1. Setting seats to 0 with applications
-            still pending means nobody new is selected (everyone appears as Not Merit Listed).
-          </p>
         </CardContent>
       </Card>
     </div>
