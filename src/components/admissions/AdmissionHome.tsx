@@ -1,27 +1,36 @@
+// src/components/admissions/AdmissionHome.tsx — the public Admission home
+// (GHSS Ghallanai layout, GHS Babi Khel High School flow: Class 6–10,
+// fresh + migration, seats per class, no quotas / programs).
+//
+//   hero             light premium hero · Session / Days Left / Last Date tiles ·
+//                    Apply Online (or My Application) + Track Application
+//   closed notice    only Apply / eligibility / downloads lock — Track stays open
+//   how to apply     7-step gold-rail card
+//   (children)       Classes & Seats + Merit Lists, injected by the page
+//   eligibility      on-demand checker (unchanged)
+//   downloads        printable forms & guides (unchanged)
+//   instructions     7 numbered cards, the last one red
+//   helpline         Call / Email tiles
+//
+// Performance notes (this screen is the first thing parents open, often on
+// slow mobile data) are unchanged: pure CSS (no framer-motion, no blur
+// filters, no images), the eligibility checker is a lazy chunk, document
+// generators load on the first download tap and below-the-fold sections use
+// content-visibility:auto. The props are IDENTICAL to the previous version,
+// so pages/Admission.tsx needs no change.
+// ═══════════════════════════════════════════════════════════════════════════
+
 import { lazy, Suspense, memo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  ArrowRight, BookOpen, Banknote, Mail, ScrollText, FileDown, Download,
-  Loader2, Lock, ChevronDown, GraduationCap, Search, LayoutDashboard,
-  AlertCircle, Sparkles, CalendarClock,
+  BookOpen, Banknote, Mail, ScrollText, FileDown, Download, Loader2, Lock,
+  ChevronDown, GraduationCap, Search, LayoutDashboard, AlertCircle, Sparkles,
+  CalendarDays, CalendarCheck2, Hourglass, Phone, ListChecks,
 } from "lucide-react";
 import type { AdmissionType } from "@/hooks/useAdmission";
 import type { ReactNode } from "react";
+import { useSchoolSettings } from "@/hooks/useSchoolSettings";
 
-/**
- * Admission Portal — home view.
- *
- * Performance notes (this screen is the first thing parents open, often on
- * slow mobile data):
- *  • Pure CSS — no framer-motion, no blur/backdrop filters, no infinite
- *    animations, no images. Everything is gradients, borders and SVG icons.
- *  • The eligibility checker (Radix Select + date input + logic) is a separate
- *    chunk fetched only when the visitor opens it.
- *  • The document text / printable-form generators live in lib/admissionDocs
- *    and are fetched on the first download tap.
- *  • Below-the-fold sections use content-visibility:auto so the browser skips
- *    their layout/paint until they scroll near the viewport.
- */
 const EligibilityChecker = lazy(() => import("@/components/admissions/EligibilityChecker"));
 
 const DOWNLOADS = [
@@ -32,9 +41,23 @@ const DOWNLOADS = [
 ] as const;
 
 const STEPS = [
-  { title: "Check eligibility", desc: "A quick class and age check — takes under a minute." },
-  { title: "Apply online",      desc: "Fill a simple 3-step form and get your reference number." },
-  { title: "Merit list",        desc: "Seats are filled on merit. Track your status anytime using the reference number." },
+  { title: "Check Eligibility",   desc: "A quick class and age check — takes under a minute." },
+  { title: "Student Information", desc: "Name, father's name, B-Form number, contact and address." },
+  { title: "Academic Information", desc: "Class, fresh or migration, previous school and marks." },
+  { title: "Review & Submit",     desc: "Check everything, solve the security question and submit. You get a Reference Number." },
+  { title: "Pay the Fee",         desc: "If a processing fee applies, pay online or by manual transfer using your fee challan." },
+  { title: "Track Status",        desc: "Check payment and application status with your Reference Number, B-Form or mobile." },
+  { title: "Merit List & Visit",  desc: "Seats are filled on merit. Merit-listed students bring original documents to the school office." },
+] as const;
+
+const INSTRUCTIONS = [
+  "Submit only one application per student for the session.",
+  "Choose the correct class and admission type (Fresh or Migration) carefully.",
+  "Fields marked * are mandatory.",
+  "Enter your mobile number carefully (03XXXXXXXXX). It is used for fee payment and status updates.",
+  "Seats are filled through the published Merit List, ranked on previous class marks.",
+  "Class 9 and 10 migration is completed school-to-school on the BISEP portal. Follow the Migration Progress in your tracker.",
+  "Any false information will cancel your application.",
 ] as const;
 
 const lazySection = { contentVisibility: "auto", containIntrinsicSize: "0 360px" } as const;
@@ -45,13 +68,37 @@ function parseDay(d?: string | null): Date | null {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-function SectionTitle({ children, hint }: { children: React.ReactNode; hint?: string }) {
+/** Kicker + serif title, centred (Ghallanai section heading). */
+function SectionTitle({ kicker, children, hint }: { kicker?: string; children: ReactNode; hint?: string }) {
   return (
-    <div className="mb-3">
-      <h2 className="text-base font-bold text-foreground" style={{ fontFamily: "var(--font-display)" }}>
+    <div className="mb-4 text-center">
+      {kicker && (
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.22em] text-gold-strong">{kicker}</p>
+      )}
+      <h2 className="text-xl font-bold text-foreground sm:text-2xl" style={{ fontFamily: "var(--font-display)" }}>
         {children}
       </h2>
-      {hint && <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>}
+      {hint && <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/** One hero stat tile (Session / Days Left / Last Date). */
+function StatTile({ icon: Icon, label, value, highlight }: {
+  icon: typeof CalendarDays; label: string; value: string; highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border px-2 py-3 text-center shadow-card ${
+        highlight
+          ? "border-primary/40 bg-gradient-to-b from-primary to-primary/90 text-primary-foreground"
+          : "border-gold/30 bg-card"
+      }`}
+    >
+      <span aria-hidden className={`absolute inset-x-0 top-0 h-[3px] ${highlight ? "bg-gold" : "bg-gradient-to-r from-primary via-emerald-500 to-amber-400"}`} />
+      <Icon className={`mx-auto h-4 w-4 ${highlight ? "text-gold" : "text-primary"}`} />
+      <p className={`mt-1 text-[9.5px] font-bold uppercase tracking-[0.14em] ${highlight ? "text-white/75" : "text-muted-foreground"}`}>{label}</p>
+      <p className="mt-0.5 break-words text-[15px] font-bold leading-tight sm:text-lg" style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}>{value}</p>
     </div>
   );
 }
@@ -70,10 +117,10 @@ export interface AdmissionHomeProps {
   onDownloadBlank: () => void;
   onDownloadAll: () => void;
   onLocked: () => void;
-  /** GHSS behaviour: with a saved applicant session the primary CTA becomes
+  /** With a saved applicant session the primary CTA becomes
    *  "My Application" → /admission/portal (the Applicant Dashboard). */
   hasSession?: boolean;
-  /** Rendered between "How it works" and Eligibility/Downloads (Classes & Seats, Merit Lists). */
+  /** Rendered between "How to apply" and Eligibility/Downloads (Classes & Seats, Merit Lists). */
   children?: ReactNode;
 }
 
@@ -83,6 +130,7 @@ function AdmissionHome({
 }: AdmissionHomeProps) {
   const [showElig, setShowElig] = useState(false);
   const navigate = useNavigate();
+  const { data: school } = useSchoolSettings();
 
   const last = parseDay(lastDate);
   const lastLabel = last
@@ -91,255 +139,332 @@ function AdmissionHome({
   let daysLeft: number | null = null;
   if (last && isOpen) {
     const today = new Date(new Date().toDateString());
-    daysLeft = Math.round((last.getTime() - today.getTime()) / 86_400_000);
+    daysLeft = Math.max(0, Math.round((last.getTime() - today.getTime()) / 86_400_000)) + 1;
   }
-  const urgency =
-    daysLeft === null ? null : daysLeft <= 0 ? "Last day today" : daysLeft === 1 ? "1 day left" : daysLeft <= 30 ? `${daysLeft} days left` : null;
+  // Inclusive count: on the last date itself there is still 1 day left.
+  const daysValue = !isOpen ? "—" : daysLeft === null ? "Open" : String(daysLeft);
+  const daysLabel = daysLeft === 1 ? "Day Left" : "Days Left";
 
   const guard = (fn: () => void) => () => (isOpen ? fn() : onLocked());
 
+  const phone = school?.phone || null;
+  const email = school?.email || "ghsbabikhel@gmail.com";
+
   return (
-    <div className="container mx-auto px-4 max-w-3xl">
+    <div>
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
-      <section
-        className="relative -mx-4 sm:mx-0 sm:rounded-2xl rounded-b-3xl overflow-hidden px-5 pt-7 pb-6 sm:px-8 sm:pt-9 sm:pb-8 border-b sm:border border-gold/40"
-        style={{ background: "linear-gradient(160deg, hsl(var(--primary-strong)) 0%, hsl(var(--primary)) 65%, hsl(var(--primary-dark)) 100%)" }}
-      >
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-40 bg-gradient-to-r from-transparent via-gold to-transparent" aria-hidden />
+      <section className="relative overflow-hidden border-b border-gold/30 bg-gradient-to-br from-[hsl(42_65%_95%)] via-[hsl(100_22%_95%)] to-[hsl(152_30%_93%)] px-4 pb-8 pt-9 dark:from-card dark:via-card dark:to-background sm:pb-10 sm:pt-12">
+        {/* soft blobs */}
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gold/20 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-primary/15 blur-3xl" />
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent" />
 
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border ${
-              isOpen
-                ? "bg-gold-soft text-[hsl(var(--gold-ink))] border-gold/50"
-                : "bg-white/10 text-white/85 border-white/25"
-            }`}
-          >
-            <span className={`h-2 w-2 rounded-full ${isOpen ? "bg-gold" : "bg-red-400"}`} />
-            {isOpen ? "Admissions Open" : "Admissions Closed"}
-          </span>
-          <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border border-white/25 text-white/85">
-            Session {sessionLabel}
-          </span>
-          {urgency && (
-            <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold bg-white/15 text-white border border-white/20">
-              <CalendarClock className="h-3 w-3" /> {urgency}
-            </span>
-          )}
-        </div>
-
-        <h1
-          className="text-center text-[1.9rem] sm:text-4xl font-extrabold leading-tight text-balance"
-          style={{ fontFamily: "var(--font-display)", color: "hsl(var(--primary-foreground))" }}
-        >
-          Admission Portal
-        </h1>
-        <p className="mt-2 text-center text-sm font-semibold leading-relaxed" style={{ color: "hsl(var(--primary-foreground) / 0.92)" }}>
-          {isOpen
-            ? `Admissions for session ${sessionLabel} are open`
-            : `Admissions for session ${sessionLabel} are closed`}
-        </p>
-
-        <div className="mt-5 mx-auto grid grid-cols-2 gap-2.5 sm:flex sm:max-w-md">
-          {hasSession ? (
-            <button
-              type="button"
-              onClick={() => navigate("/admission/portal")}
-              className="h-10 inline-flex items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-semibold bg-gold text-[hsl(var(--primary-strong))] sm:flex-1 touch-manipulation transition-opacity active:opacity-80"
-            >
-              <LayoutDashboard className="h-4 w-4 shrink-0" />
-              <span>My Application</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={guard(() => onApply())}
-              aria-disabled={!isOpen}
-              className={`h-10 inline-flex items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-semibold sm:flex-1 touch-manipulation transition-opacity active:opacity-80 ${
-                isOpen ? "bg-gold text-[hsl(var(--primary-strong))]" : "bg-white/15 text-white/60 cursor-not-allowed"
+        <div className="relative mx-auto max-w-3xl text-center">
+          <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold ${
+                isOpen
+                  ? "border-green-300/70 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300"
+                  : "border-red-300/70 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
               }`}
             >
-              {isOpen ? <GraduationCap className="h-4 w-4 shrink-0" /> : <Lock className="h-3.5 w-3.5 shrink-0" />}
-              <span>Apply Now</span>
+              <span className={`h-2 w-2 rounded-full ${isOpen ? "animate-pulse bg-green-500" : "bg-red-500"}`} />
+              {isOpen ? "Admissions Open" : "Admissions Closed"}
+            </span>
+          </div>
+
+          <h1
+            className="text-[2.6rem] font-extrabold leading-[1.05] tracking-tight text-foreground sm:text-6xl"
+            style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}
+          >
+            High School{" "}
+            <em className="bg-gradient-to-r from-gold-strong via-gold to-gold-strong bg-clip-text pr-1 italic text-transparent">
+              Admissions
+            </em>
+          </h1>
+
+          {/* ornament */}
+          <div aria-hidden className="mx-auto my-3 flex max-w-[11rem] items-center gap-2">
+            <span className="h-px flex-1 bg-gradient-to-r from-transparent to-gold/70" />
+            <i className="h-1.5 w-1.5 rotate-45 bg-gold" />
+            <span className="h-px flex-1 bg-gradient-to-l from-transparent to-gold/70" />
+          </div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary dark:text-gold">
+            GHS Babi Khel, District Mohmand · Class 6 – 10
+          </p>
+
+          {/* stat tiles */}
+          <div className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-2.5">
+            <StatTile icon={CalendarDays} label="Session" value={isOpen ? sessionLabel : "—"} />
+            <StatTile icon={Hourglass} label={daysLabel} value={daysValue} highlight />
+            <StatTile icon={CalendarCheck2} label="Last Date" value={isOpen ? (lastLabel ?? "To be announced") : "—"} />
+          </div>
+
+          {/* actions */}
+          <div className="mx-auto mt-5 grid max-w-md grid-cols-2 gap-2.5">
+            {hasSession ? (
+              <button
+                type="button"
+                onClick={() => navigate("/admission/portal")}
+                className="inline-flex h-10 touch-manipulation items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-sm transition-opacity active:opacity-80"
+              >
+                <LayoutDashboard className="h-4 w-4 shrink-0" />
+                <span>My Application</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={guard(() => onApply())}
+                aria-disabled={!isOpen}
+                className={`inline-flex h-10 touch-manipulation items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-semibold transition-opacity active:opacity-80 ${
+                  isOpen
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "cursor-not-allowed bg-muted text-muted-foreground"
+                }`}
+              >
+                {isOpen ? <GraduationCap className="h-4 w-4 shrink-0" /> : <Lock className="h-3.5 w-3.5 shrink-0" />}
+                <span>Apply Online</span>
+              </button>
+            )}
+            {/* Track is NEVER locked — applicants must be able to follow their application after the deadline */}
+            <button
+              type="button"
+              onClick={onTrack}
+              className="inline-flex h-10 touch-manipulation items-center justify-center gap-1.5 rounded-full border border-gold/60 bg-card px-4 text-[13px] font-semibold text-primary transition-colors hover:bg-gold/10 active:bg-gold/15"
+            >
+              <Search className="h-4 w-4 shrink-0" />
+              <span>Track Application</span>
             </button>
+          </div>
+
+          {isOpen && bannerMessage && (
+            <p className="mt-4 text-xs italic leading-relaxed text-muted-foreground">“{bannerMessage}”</p>
           )}
+        </div>
+      </section>
+
+      <div className="container mx-auto max-w-3xl px-4">
+        {/* ── CLOSED NOTICE ──────────────────────────────────────────────── */}
+        {!isOpen && (
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/20">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-red-700 dark:text-red-400">Admissions are currently closed</p>
+              <p className="mt-1 text-xs leading-relaxed text-red-700/80 dark:text-red-400/80">
+                {closedNote} Applying, the eligibility check and downloads unlock when admissions reopen.
+                You can still <b>track your application</b> and view published merit lists.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── HOW TO APPLY ───────────────────────────────────────────────── */}
+        <section className="mt-10" style={lazySection}>
+          <SectionTitle kicker="Process" hint="Simple steps from home to classroom">How to Apply</SectionTitle>
+          <div className="relative mx-auto max-w-2xl overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card">
+            <div aria-hidden className="h-1 bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
+            <ol className="relative ml-8 space-y-3 border-l-2 border-gold/30 py-5 pl-6 pr-4 sm:ml-10">
+              {STEPS.map((s, i) => {
+                const isLast = i === STEPS.length - 1;
+                return (
+                  <li key={s.title} className="relative">
+                    <span
+                      className={`absolute -left-[2.55rem] top-1 flex h-[26px] w-[26px] items-center justify-center rounded-full border text-[11px] font-bold ${
+                        isLast
+                          ? "border-primary bg-primary text-primary-foreground ring-4 ring-primary/10"
+                          : "border-gold bg-card text-primary"
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
+                    <div className="rounded-xl border border-border/60 bg-muted/20 px-3.5 py-2.5">
+                      <p className="text-[9.5px] font-bold uppercase tracking-[0.2em] text-gold-strong">Step {String(i + 1).padStart(2, "0")}</p>
+                      <p className="mt-0.5 text-[1.05rem] font-bold leading-snug text-foreground" style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}>{s.title}</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{s.desc}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        </section>
+
+        {/* ── Classes & Seats + Merit Lists (injected by the page) ── */}
+        {children && <div className="mt-10 space-y-4">{children}</div>}
+
+        {/* ── ELIGIBILITY (loaded on demand) ───────────────────────────── */}
+        <section className="mt-8" style={lazySection}>
           <button
             type="button"
-            onClick={guard(onTrack)}
+            onClick={() => (isOpen ? setShowElig((v) => !v) : onLocked())}
+            aria-expanded={showElig}
             aria-disabled={!isOpen}
-            className={`h-10 inline-flex items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-semibold border sm:flex-1 touch-manipulation transition-colors active:bg-white/10 ${
-              isOpen ? "border-white/40 text-white" : "border-white/20 text-white/50 cursor-not-allowed"
+            className={`flex h-11 w-full touch-manipulation items-center gap-2.5 rounded-xl border border-gold/30 bg-card px-3 text-left ${
+              isOpen ? "active:bg-muted/60" : "cursor-not-allowed opacity-60"
             }`}
           >
-            {isOpen ? <Search className="h-4 w-4 shrink-0" /> : <Lock className="h-3.5 w-3.5 shrink-0" />}
-            <span>Track Status</span>
+            <Sparkles className="h-4 w-4 shrink-0 text-gold-strong" />
+            <span className="min-w-0 flex-1 text-[13px] font-semibold leading-tight text-foreground">Check your eligibility</span>
+            {isOpen ? (
+              <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 ${showElig ? "rotate-180" : ""}`} />
+            ) : (
+              <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            )}
           </button>
-        </div>
-
-        {/* key facts */}
-        <dl className="mt-5 mx-auto max-w-xl grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-white/15 bg-white/15 text-center">
-          {[
-            { k: "Classes", v: "6 – 10" },
-            { k: "Intake", v: "Fresh & Migration" },
-            { k: isOpen ? "Last date" : "Status", v: isOpen ? lastLabel ?? "31 Dec 2026" : "Closed" },
-          ].map((f) => (
-            <div key={f.k} className="flex flex-col items-center justify-center bg-black/15 px-2 py-3">
-              <dt className="text-[10px] uppercase tracking-wider text-white/60">{f.k}</dt>
-              <dd className="mt-0.5 text-[13px] font-semibold text-white leading-snug">{f.v}</dd>
+          {isOpen && showElig && (
+            <div className="mt-2.5">
+              <Suspense fallback={<div className="h-56 rounded-xl bg-muted" aria-label="Loading eligibility checker" />}>
+                <EligibilityChecker onApply={(cls, type) => onApply(cls, type)} />
+              </Suspense>
             </div>
-          ))}
-        </dl>
-
-        {isOpen && bannerMessage && (
-          <p className="mt-3 text-center text-xs italic leading-relaxed text-white/75">“{bannerMessage}”</p>
-        )}
-      </section>
-
-      {/* ── CLOSED NOTICE ────────────────────────────────────────────────── */}
-      {!isOpen && (
-        <div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/20">
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-red-700 dark:text-red-400">Admissions are currently closed</p>
-            <p className="mt-1 text-xs leading-relaxed text-red-700/80 dark:text-red-400/80">
-              {closedNote} Applications, tracking, eligibility check and downloads will unlock when admissions reopen.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ── HOW IT WORKS ─────────────────────────────────────────────────── */}
-      <section className="mt-8" style={lazySection}>
-        <SectionTitle hint="Simple steps from home to classroom">How it works</SectionTitle>
-        <ol className="relative ml-3.5 border-l border-gold/40 pl-6 space-y-5">
-          {STEPS.map((s, i) => (
-            <li key={s.title} className="relative">
-              <span className="absolute -left-[2.35rem] top-0 flex h-7 w-7 items-center justify-center rounded-full border border-gold bg-background text-xs font-bold text-primary">
-                {i + 1}
-              </span>
-              <p className="text-sm font-semibold text-foreground leading-snug">{s.title}</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{s.desc}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      {/* ── Classes & Seats + Merit Lists (injected by the page) ── */}
-      {children && <div className="mt-8 space-y-4">{children}</div>}
-
-      {/* ── ELIGIBILITY (loaded on demand) ───────────────────────────────── */}
-      <section className="mt-6" style={lazySection}>
-        <button
-          type="button"
-          onClick={() => (isOpen ? setShowElig((v) => !v) : onLocked())}
-          aria-expanded={showElig}
-          aria-disabled={!isOpen}
-          className={`flex h-11 w-full items-center gap-2.5 rounded-lg border border-border bg-card px-3 text-left touch-manipulation ${
-            isOpen ? "active:bg-muted/60" : "opacity-60 cursor-not-allowed"
-          }`}
-        >
-          <Sparkles className="h-4 w-4 shrink-0 text-gold-strong" />
-          <span className="min-w-0 flex-1 text-[13px] font-semibold leading-tight text-foreground">Check your eligibility</span>
-          {isOpen ? (
-            <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 ${showElig ? "rotate-180" : ""}`} />
-          ) : (
-            <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
-        </button>
-        {isOpen && showElig && (
-          <div className="mt-2.5">
-            <Suspense fallback={<div className="h-56 rounded-xl bg-muted" aria-label="Loading eligibility checker" />}>
-              <EligibilityChecker onApply={(cls, type) => onApply(cls, type)} />
-            </Suspense>
-          </div>
-        )}
-      </section>
+        </section>
 
-      {/* ── DOWNLOADS ────────────────────────────────────────────────────── */}
-      <section className="mt-8" style={lazySection}>
-        <div className="mb-3 text-center">
-          <div className="min-w-0">
-            <h2 className="text-base font-bold text-foreground" style={{ fontFamily: "var(--font-display)" }}>Downloads</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {isOpen ? "Printable forms and guides" : "Unlock when admissions reopen"}
-            </p>
-          </div>
-        </div>
+        {/* ── DOWNLOADS ──────────────────────────────────────────────────── */}
+        <section className="mt-10" style={lazySection}>
+          <SectionTitle kicker="Resources" hint={isOpen ? "Printable forms and guides" : "Unlock when admissions reopen"}>Downloads</SectionTitle>
 
-        <div className={`overflow-hidden rounded-xl border border-border bg-card divide-y divide-border ${isOpen ? "" : "opacity-60"}`}>
-          <button
-            type="button"
-            disabled={!!downloading}
-            onClick={guard(onDownloadBlank)}
-            className="flex w-full items-center gap-3 bg-gold/5 p-3.5 text-left touch-manipulation active:bg-gold/10 disabled:opacity-60"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gold/60 text-primary">
-              {downloading === "empty_form" ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-foreground">Admission Form</span>
-              <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">Blank form — print, fill by hand and submit at the office</span>
-            </span>
-            {isOpen ? <FileDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />}
-          </button>
-
-          {DOWNLOADS.map((d) => (
+          <div className={`overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card divide-y divide-border ${isOpen ? "" : "opacity-60"}`}>
             <button
-              key={d.key}
               type="button"
               disabled={!!downloading}
-              onClick={guard(() => onDownloadItem(d.key))}
-              className="flex w-full items-center gap-3 p-3.5 text-left touch-manipulation active:bg-muted/60 disabled:opacity-60"
+              onClick={guard(onDownloadBlank)}
+              className="flex w-full touch-manipulation items-center gap-3 bg-gold/5 p-3.5 text-left active:bg-gold/10 disabled:opacity-60"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-primary">
-                {downloading === d.key ? <Loader2 className="h-5 w-5 animate-spin" /> : <d.icon className="h-5 w-5" />}
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gold/60 text-primary">
+                {downloading === "empty_form" ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-foreground">{d.title}</span>
-                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{d.desc}</span>
+                <span className="block text-sm font-semibold text-foreground">Admission Form</span>
+                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">Blank form — print, fill by hand and submit at the office</span>
               </span>
-              {isOpen ? (
-                hasLibFile(d.key)
-                  ? <FileDown className="h-4 w-4 shrink-0 text-green-600" />
-                  : <FileDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-              ) : (
-                <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
-              )}
+              {isOpen ? <FileDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />}
             </button>
-          ))}
-        </div>
 
-        {isOpen && (
-          <button
-            type="button"
-            disabled={!!downloading}
-            onClick={onDownloadAll}
-            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-full border border-gold/60 bg-gold/10 px-4 text-[13px] font-semibold text-primary touch-manipulation active:bg-gold/20 disabled:opacity-50"
-          >
-            <FileDown className="h-4 w-4" /> Download all
-          </button>
-        )}
-      </section>
+            {DOWNLOADS.map((d) => (
+              <button
+                key={d.key}
+                type="button"
+                disabled={!!downloading}
+                onClick={guard(() => onDownloadItem(d.key))}
+                className="flex w-full touch-manipulation items-center gap-3 p-3.5 text-left active:bg-muted/60 disabled:opacity-60"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-primary">
+                  {downloading === d.key ? <Loader2 className="h-5 w-5 animate-spin" /> : <d.icon className="h-5 w-5" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-foreground">{d.title}</span>
+                  <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{d.desc}</span>
+                </span>
+                {isOpen ? (
+                  hasLibFile(d.key)
+                    ? <FileDown className="h-4 w-4 shrink-0 text-green-600" />
+                    : <FileDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                )}
+              </button>
+            ))}
+          </div>
 
-      {/* ── HELP ─────────────────────────────────────────────────────────── */}
-      <p className="mt-8 text-center text-xs leading-relaxed text-muted-foreground">
-        Need help with admission? Visit the school office during working hours or{" "}
-        <Link to="/contact" className="font-semibold text-primary underline-offset-2 hover:underline">contact us</Link>.
-      </p>
+          {isOpen && (
+            <button
+              type="button"
+              disabled={!!downloading}
+              onClick={onDownloadAll}
+              className="mt-3 inline-flex h-10 w-full touch-manipulation items-center justify-center gap-1.5 rounded-full border border-gold/60 bg-gold/10 px-4 text-[13px] font-semibold text-primary active:bg-gold/20 disabled:opacity-50"
+            >
+              <FileDown className="h-4 w-4" /> Download all
+            </button>
+          )}
+        </section>
 
-      {/* ── SEO content (screen-reader / crawler only) ───────────────────── */}
-      <section aria-label="Admission information" className="sr-only">
-        <h2>Admission at Government High School Babi Khel</h2>
-        <p>Government High School Babi Khel, District Mohmand, KPK welcomes admissions for Class 6 to Class 10. Admissions are open every academic session for both fresh students and migration/transfer cases.</p>
-        <ul>
-          <li><strong>Class 6, 7, 8 (Fresh):</strong> School-level admission.</li>
-          <li><strong>Class 9 (Fresh):</strong> Student is enrolled with BISE Peshawar by the school after admission.</li>
-          <li><strong>Class 9 &amp; 10 (Migration):</strong> School-to-school transfer on the BISE Peshawar portal, from another BISE-affiliated institution.</li>
-          <li><strong>Class 6–8 (Transfer):</strong> Handled directly between schools, outside the BISE portal.</li>
-        </ul>
-        <p>Class 9/10 migration from another Board may additionally require DMC and migration certificate (BISE requirements), submitted by the schools as part of BISEP's process.</p>
-        <p>How to apply: apply online. Seats are filled through the published Merit List ranked on previous class marks; merit-listed students are then asked to submit their documents at the school office. For Class 9/10 migration, board-level migration is completed by the schools on the BISEP portal separately from this online application.</p>
-      </section>
+        {/* ── IMPORTANT INSTRUCTIONS ─────────────────────────────────────── */}
+        <section className="mt-10" style={lazySection}>
+          <div className="overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card">
+            <div aria-hidden className="h-1 bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
+            <div className="p-4 sm:p-5">
+              <div className="mb-4 text-center">
+                <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-gold/15 text-gold-strong ring-2 ring-gold/25">
+                  <ListChecks className="h-5 w-5" />
+                </span>
+                <h2 className="text-lg font-bold text-foreground sm:text-xl" style={{ fontFamily: "var(--font-display)" }}>Important Instructions</h2>
+                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Please read before applying</p>
+              </div>
+              <ol className="space-y-2">
+                {INSTRUCTIONS.map((text, i) => {
+                  const danger = i === INSTRUCTIONS.length - 1;
+                  return (
+                    <li
+                      key={text}
+                      className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 ${
+                        danger
+                          ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20"
+                          : "border-border/60 bg-muted/20"
+                      }`}
+                    >
+                      <span
+                        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                          danger ? "bg-red-500 text-white" : "bg-primary/10 text-primary"
+                        }`}
+                      >
+                        {i + 1}
+                      </span>
+                      <p className={`text-xs leading-relaxed ${danger ? "font-semibold text-red-700 dark:text-red-400" : "text-foreground/85"}`}>{text}</p>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        {/* ── HELPLINE ───────────────────────────────────────────────────── */}
+        <section className="mt-10" style={lazySection}>
+          <SectionTitle kicker="Support">School Helpline</SectionTitle>
+          <div className="mx-auto grid max-w-lg grid-cols-2 gap-3">
+            {phone ? (
+              <a href={`tel:${phone.replace(/[^0-9+]/g, "")}`}
+                className="flex flex-col items-center gap-1 rounded-2xl border border-gold/30 bg-card p-4 text-center shadow-card transition-colors hover:bg-gold/5">
+                <Phone className="h-5 w-5 text-primary" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Call</span>
+                <span className="break-all text-[13px] font-bold">{phone}</span>
+              </a>
+            ) : (
+              <Link to="/contact"
+                className="flex flex-col items-center gap-1 rounded-2xl border border-gold/30 bg-card p-4 text-center shadow-card transition-colors hover:bg-gold/5">
+                <Phone className="h-5 w-5 text-primary" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Call</span>
+                <span className="text-[13px] font-bold">See Contact page</span>
+              </Link>
+            )}
+            <a href={`mailto:${email}`}
+              className="flex flex-col items-center gap-1 rounded-2xl border border-gold/30 bg-card p-4 text-center shadow-card transition-colors hover:bg-gold/5">
+              <Mail className="h-5 w-5 text-primary" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Email</span>
+              <span className="break-all text-[13px] font-bold">{email}</span>
+            </a>
+          </div>
+          <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
+            Need more help? Visit the school office during working hours or{" "}
+            <Link to="/contact" className="font-semibold text-primary underline-offset-2 hover:underline">contact us</Link>.
+          </p>
+        </section>
+
+        {/* ── SEO content (screen-reader / crawler only) ───────────────────── */}
+              <section aria-label="Admission information" className="sr-only">
+                <h2>Admission at Government High School Babi Khel</h2>
+                <p>Government High School Babi Khel, District Mohmand, KPK welcomes admissions for Class 6 to Class 10. Admissions are open every academic session for both fresh students and migration/transfer cases.</p>
+                <ul>
+                  <li><strong>Class 6, 7, 8 (Fresh):</strong> School-level admission.</li>
+                  <li><strong>Class 9 (Fresh):</strong> Student is enrolled with BISE Peshawar by the school after admission.</li>
+                  <li><strong>Class 9 &amp; 10 (Migration):</strong> School-to-school transfer on the BISE Peshawar portal, from another BISE-affiliated institution.</li>
+                  <li><strong>Class 6–8 (Transfer):</strong> Handled directly between schools, outside the BISE portal.</li>
+                </ul>
+                <p>Class 9/10 migration from another Board may additionally require DMC and migration certificate (BISE requirements), submitted by the schools as part of BISEP's process.</p>
+                <p>How to apply: apply online. Seats are filled through the published Merit List ranked on previous class marks; merit-listed students are then asked to submit their documents at the school office. For Class 9/10 migration, board-level migration is completed by the schools on the BISEP portal separately from this online application.</p>
+              </section>
+      </div>
     </div>
   );
 }
