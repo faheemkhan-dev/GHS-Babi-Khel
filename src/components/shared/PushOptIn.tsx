@@ -127,36 +127,36 @@ export const PushOptIn = ({
       : (text && text.length <= 48 ? text : ctx.shortText);
     return (
       <div role="region" aria-label="Notification alerts"
-        className={`relative overflow-hidden rounded-[22px] border border-black/5 bg-white text-[#0b2e1f] shadow-[0_22px_48px_-16px_rgba(11,46,31,0.38),0_2px_8px_rgba(11,46,31,0.08)] ring-1 ring-gold/30 dark:border-border dark:bg-card dark:text-foreground ${className}`}>
+        className={`relative overflow-hidden rounded-2xl border border-black/5 bg-white text-[#0b2e1f] shadow-[0_14px_32px_-14px_rgba(11,46,31,0.35),0_1px_4px_rgba(11,46,31,0.08)] ring-1 ring-gold/30 dark:border-border dark:bg-card dark:text-foreground ${className}`}>
         {/* gold accent rail + hairline */}
-        <span className="pointer-events-none absolute bottom-3 left-0 top-3 w-1 rounded-r-full bg-gradient-to-b from-gold to-gold-strong" aria-hidden="true" />
+        <span className="pointer-events-none absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-gradient-to-b from-gold to-gold-strong" aria-hidden="true" />
         <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" aria-hidden="true" />
-        <div className="flex items-center gap-3 py-3 pl-4 pr-2.5">
-          <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[hsl(150_45%_24%)] text-gold shadow-[0_8px_18px_-8px_hsl(var(--primary)/0.7)]">
-            {status === "denied" ? <BellOff className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+        <div className="flex items-center gap-2.5 py-1.5 pl-3.5 pr-2">
+          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[hsl(150_45%_24%)] text-gold shadow-[0_6px_12px_-6px_hsl(var(--primary)/0.7)]">
+            {status === "denied" ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
             {off && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3" aria-hidden="true">
+              <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5" aria-hidden="true">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold/70" />
-                <span className="relative inline-flex h-3 w-3 rounded-full bg-gold ring-2 ring-white dark:ring-card" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-gold ring-2 ring-white dark:ring-card" />
               </span>
             )}
           </span>
           <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate font-heading text-[14.5px] font-bold tracking-tight">{sTitle}</p>
-            <p className="mt-1 truncate text-[12px] font-medium text-[#0b2e1f]/60 dark:text-muted-foreground">{sText}</p>
+            <p className="truncate font-heading text-[13px] font-bold tracking-tight">{sTitle}</p>
+            <p className="mt-px truncate text-[11px] font-medium text-[#0b2e1f]/60 dark:text-muted-foreground">{sText}</p>
           </div>
           {off && (
             <button
               onClick={enable} disabled={busy}
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-[hsl(150_45%_24%)] px-4 text-[12.5px] font-bold text-white shadow-[0_8px_18px_-8px_hsl(var(--primary)/0.75)] ring-1 ring-gold/40 transition-transform active:scale-95 disabled:opacity-70"
+              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-primary to-[hsl(150_45%_24%)] px-3.5 text-[11.5px] font-bold text-white shadow-[0_6px_12px_-6px_hsl(var(--primary)/0.75)] ring-1 ring-gold/40 transition-transform active:scale-95 disabled:opacity-70"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Turn on
             </button>
           )}
           {onDismiss && (
-            <button onClick={onDismiss} aria-label="Dismiss" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0b2e1f]/5 text-[#0b2e1f]/55 transition-colors hover:bg-[#0b2e1f]/10 hover:text-[#0b2e1f] dark:bg-secondary dark:text-muted-foreground dark:hover:text-foreground">
-              <X className="h-4 w-4" />
+            <button onClick={onDismiss} aria-label="Dismiss" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0b2e1f]/5 text-[#0b2e1f]/55 transition-colors hover:bg-[#0b2e1f]/10 hover:text-[#0b2e1f] dark:bg-secondary dark:text-muted-foreground dark:hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
