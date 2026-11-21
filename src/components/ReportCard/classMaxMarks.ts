@@ -1,24 +1,21 @@
 // src/components/ReportCard/classMaxMarks.ts
-// Fixed total marks per class for BISE Peshawar SSC results — confirmed and
-// used everywhere in this school's reporting: Class 9th papers total 600,
-// Class 10th papers total 1200. These are NOT configurable in the UI on
-// purpose: they don't vary by year or admin, so a settings field would only
-// add a place to get it wrong. If the board ever changes these totals,
+// Fixed total marks per class for BISE Peshawar results — confirmed and used
+// everywhere in this school's reporting (Annual-I and Annual-II alike):
+//   SSC : Class 9th  = 600 (9 papers),   Class 10th    = 1200 (9 + 9 = 18 papers)
+//   HSSC: 1st Year   = 600 (7 papers),   2nd Year      = 1200 (7 + 7 = 14 papers)
+// The 10th / 2nd Year marksheet carries BOTH the Part-I and the Part-II
+// papers, which is why its total is double. These are NOT configurable in the
+// UI on purpose: they don't vary by year or admin, so a settings field would
+// only add a place to get it wrong. If the board ever changes these totals,
 // update this one constant — every percentage calculation across the
 // Report Card and Merit List features reads from here.
-//
-// College (HSSC) classes were added later: 1st Year (Part-I) and 2nd Year
-// (Part-II) are 550 marks each for the standard BISE Peshawar groups
-// (Pre-Medical / Pre-Engineering / ICS / Humanities). If a group at your
-// college has a different total, change the two constants below — nothing
-// else needs touching.
 import type { ClassName } from "./types";
 
 export const CLASS_MAX_MARKS: Record<ClassName, number> = {
   "9th": 600,
   "10th": 1200,
-  "1st Year": 550,
-  "2nd Year": 550,
+  "1st Year": 600,
+  "2nd Year": 1200,
 };
 
 /** Human label for titles: "Class 9th" for school classes, "1st Year" for
