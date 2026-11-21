@@ -57,7 +57,7 @@ export interface NormalizedResult {
    *  it by summing all subject theory + practical marks. */
   totalMarks: number;
   /** totalMarks expressed as a percentage of the class's fixed total
-   *  (600 for 9th, 1200 for 10th, 550 for 1st/2nd Year) — see classMaxMarks.ts. This is what
+   *  (600 for 9th, 1200 for 10th, 600 for 1st Year, 1200 for 2nd Year) — see classMaxMarks.ts. This is what
    *  Merit List ranking uses; raw totalMarks is never comparable across
    *  9th and 10th since their maximums differ. */
   percentage: number;
