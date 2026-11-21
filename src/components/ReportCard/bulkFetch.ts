@@ -176,7 +176,7 @@ async function pool<T, R>(
 /** Fetch results for a list of roll numbers, with progress reporting.
  *  Returns a list of NormalizedResult in the SAME ORDER as the input.
  *  `className` is required — it's what percentage is computed against
- *  (600 for 9th, 1200 for 10th, 550 for 1st/2nd Year; see classMaxMarks.ts).
+ *  (600 for 9th, 1200 for 10th, 600 for 1st Year, 1200 for 2nd Year; see classMaxMarks.ts).
  *  `examKey` (optional but strongly recommended — ReportCardModal passes
  *  `${examType}-${year}-${className}`) namespaces the device cache so a
  *  different exam never serves stale marksheets for the same roll number.
