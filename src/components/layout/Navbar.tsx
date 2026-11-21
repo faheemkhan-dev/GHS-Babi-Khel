@@ -7,7 +7,7 @@ import {
   Home, Landmark, Mail, Megaphone,
   Trophy, Medal, BookOpen, ClipboardList, HelpCircle, Users,
   Hash, Timer, Command as CommandIcon,
-  Ticket, FileSignature, type LucideIcon,
+  FileSignature, type LucideIcon,
 } from "lucide-react";
 import { useRollSlipCountdown, compactCountdown, prefetchPublicRolls } from "@/hooks/useRollSlipCountdown";
 import { useResultsCountdown, splitCountdown } from "@/hooks/useResultsCountdown";
@@ -579,6 +579,26 @@ const MobileAccordionSection = memo(function MobileAccordionSection({
   );
 });
 
+/* Stylish "menu lines" icon for the mobile bottom dock — three rounded lines
+   of DIFFERENT lengths, left-aligned: one long, one medium, one short. */
+function MenuLinesIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M3 12h12" />
+      <path d="M3 18h6" />
+    </svg>
+  );
+}
+
 /* Brand wordmark — Playfair bold, last word in heritage gold ("GHS Babi <Khel>") */
 function BrandName({ name }: { name: string }) {
   const parts = name.trim().split(/\s+/);
@@ -720,6 +740,7 @@ const MobileMenu = memo(function MobileMenu({
   isAdmin,
   signOut,
   onNavigate,
+  maxHeightPx,
 }: {
   open: boolean;
   pathname: string;
@@ -728,6 +749,8 @@ const MobileMenu = memo(function MobileMenu({
   isAdmin: boolean;
   signOut: () => void;
   onNavigate: () => void;
+  /** Space between the top bar and the bottom dock (measured by Navbar). */
+  maxHeightPx: number | null;
 }) {
   const [mobileOpenSection, setMobileOpenSection] = useState<string | null>(null);
   const revealTimer = useRef(0);
@@ -773,7 +796,7 @@ const MobileMenu = memo(function MobileMenu({
           // is on the className) this isolates the drawer's scroll and layout
           // completely from the page behind it.
           className="xl:hidden border-t border-border bg-background overflow-y-auto overflow-x-hidden overscroll-contain"
-          style={{ maxHeight: "calc(100svh - 64px)", WebkitTapHighlightColor: "transparent", contain: "content" }}
+          style={{ maxHeight: maxHeightPx != null ? `${maxHeightPx}px` : "calc(100svh - 64px)", WebkitTapHighlightColor: "transparent", contain: "content" }}
         >
           <ul className="px-4 pt-1">
             <li className="border-b border-border/60">
@@ -854,6 +877,12 @@ const Navbar = () => {
   // Desktop inline search open state (the typing lives in NavSearchBox)
   const [searchOpen, setSearchOpen] = useState(false);
   const desktopNavRef = useRef<HTMLDivElement>(null);
+  const topBarRef = useRef<HTMLDivElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  // Height available for the mobile drawer = from the bottom of the top bar
+  // down to the top of the bottom dock (the dock now owns the Menu button
+  // and must stay visible / tappable while the drawer is open).
+  const [drawerMaxH, setDrawerMaxH] = useState<number | null>(null);
   const hoverTimers = useRef<{ enter?: number; leave?: number }>({});
 
   const [scrolled, setScrolled]   = useState(false);
@@ -915,6 +944,20 @@ const Navbar = () => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      const bar = topBarRef.current;
+      const dock = dockRef.current;
+      if (!bar || !dock) return;
+      const h = Math.floor(dock.getBoundingClientRect().top - bar.getBoundingClientRect().bottom);
+      // dock is display:none on lg+ (rect = 0) → fall back to the CSS default
+      setDrawerMaxH(h > 120 ? h : null);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, [open]);
   const prevPathnameRef = useRef(location.pathname);
   useEffect(() => {
@@ -1091,6 +1134,10 @@ const Navbar = () => {
       } ${navHidden ? "-translate-y-full" : "translate-y-0"}`}
       style={{ transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1), background-color 300ms, box-shadow 300ms, border-color 300ms" }}
     >
+      {/* Green headline ticker — right → left, at the very TOP, above the
+          school name (and above the results / roll-slip countdown strips) */}
+      <NewsTicker />
+
       {/* Golden results strip — above the school name (mobile / tablet) */}
       <ResultsTopStrip />
 
@@ -1099,7 +1146,7 @@ const Navbar = () => {
       <RollSlipCountdown variant="strip" />
 
       {/* ── Top bar ── */}
-      <div className="container mx-auto flex items-center justify-between gap-3 2xl:gap-6 h-16 px-4 lg:px-6">
+      <div ref={topBarRef} className="container mx-auto flex items-center justify-between gap-3 2xl:gap-6 h-16 px-4 lg:px-6">
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-3 2xl:gap-4 shrink-0 no-underline">
@@ -1316,7 +1363,10 @@ const Navbar = () => {
           )}
         </div>
 
-        {/* Mobile: Theme toggle + Hamburger — outside the drawer.
+        {/* Mobile: Theme toggle. On phones (< lg) the Menu button now lives in
+            the BOTTOM DOCK (5th slot); this top hamburger only shows on
+            tablets / small laptops (lg → xl) where the dock is hidden but
+            the desktop nav is not yet visible.
             The search icon now opens the full ⌘K command palette (fuzzy
             search + quick actions + recents) instead of the old inline
             search bar, so mobile gets the exact same experience as
@@ -1325,7 +1375,7 @@ const Navbar = () => {
           <ThemeToggleButton />
           <button
             onClick={() => { setSearchOpen(false); setOpen(!open); }}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground hover:bg-secondary transition-colors"
+            className="hidden lg:inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground hover:bg-secondary transition-colors"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             aria-controls="mobile-menu"
@@ -1334,9 +1384,6 @@ const Navbar = () => {
           </button>
         </div>
       </div>
-
-      {/* Green headline ticker — right → left, directly under the school name */}
-      <NewsTicker />
 
       {/* subtle gold hairline glowing along the navbar's bottom edge — base
           wash stays static so the line is never fully invisible, and the
@@ -1358,6 +1405,7 @@ const Navbar = () => {
         isAdmin={isAdmin}
         signOut={signOut}
         onNavigate={closeAllMenus}
+        maxHeightPx={drawerMaxH}
       />
     </nav>
     {/* ── Mobile bottom dock (X-style, global) ─────────────────────────────
@@ -1371,6 +1419,7 @@ const Navbar = () => {
         element must not live inside the transformed <nav>, or "bottom: 0"
         pins it to the navbar instead of the viewport. */}
       <div
+        ref={dockRef}
         className={`dock-bar lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-card/95 border-t border-border transition-transform duration-300 ease-out ${
           navHidden ? "translate-y-full" : "translate-y-0"
         }`}
@@ -1415,19 +1464,6 @@ const Navbar = () => {
               <Trophy className="w-[22px] h-[22px]" fill={location.pathname === "/results" ? "currentColor" : "none"} />
             </Link>
 
-            {/* Roll No. Slip */}
-            <Link
-              to="/roll-no-slip"
-              aria-label="Roll No. Slip"
-              data-active={location.pathname === "/roll-no-slip" || undefined}
-              onClick={closeAllMenus}
-              className={`dock-item flex-1 flex flex-col items-center justify-center py-3 ${
-                location.pathname === "/roll-no-slip" ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <Ticket className="w-[22px] h-[22px]" fill={location.pathname === "/roll-no-slip" ? "currentColor" : "none"} />
-            </Link>
-
             {/* Admission */}
             <Link
               to="/admission"
@@ -1440,6 +1476,22 @@ const Navbar = () => {
             >
               <FileSignature className="w-[22px] h-[22px]" fill={location.pathname === "/admission" ? "currentColor" : "none"} />
             </Link>
+
+            {/* Menu — 5th slot. Opens / closes the full navigation drawer
+                (moved here from the top bar). Stylish 3-line icon: long,
+                medium, short. Turns into an X while the drawer is open. */}
+            <button
+              type="button"
+              aria-label={open ? "Close menu" : "Open menu"}
+              aria-expanded={open}
+              aria-controls="mobile-menu"
+              onClick={() => { setSearchOpen(false); setOpen((v) => !v); }}
+              className={`dock-item flex-1 flex flex-col items-center justify-center py-3 ${
+                open ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              {open ? <X className="w-[22px] h-[22px]" /> : <MenuLinesIcon className="w-[22px] h-[22px]" />}
+            </button>
           </div>
       </div>
     </>
