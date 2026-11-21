@@ -1354,12 +1354,15 @@ const Home = () => {
       <section className="py-10 md:py-16 relative">
         <div className="container mx-auto px-4">
           {admLoading ? (
-            <div className="mx-auto max-w-3xl h-56 rounded-3xl border border-border bg-card animate-pulse" />
+            <div className="mx-auto max-w-4xl h-56 rounded-[28px] border border-border bg-card animate-pulse" />
           ) : (
-            <div className="relative mx-auto max-w-3xl rounded-3xl p-px bg-gradient-to-br from-gold/70 via-primary/30 to-gold/40 shadow-elevated">
-              <div className="relative overflow-hidden rounded-[23px] gradient-hero text-white px-5 py-7 sm:px-10 sm:py-10">
-                <div className="orb orb-gold w-64 h-64 -top-28 -right-20 opacity-80" />
+            <div className="relative mx-auto max-w-4xl rounded-[28px] p-px bg-gradient-to-br from-gold/80 via-white/10 to-gold/40 shadow-[0_32px_64px_-28px_hsl(var(--primary)/0.6)]">
+              <div className="relative overflow-hidden rounded-[27px] gradient-hero text-white px-5 py-8 sm:px-12 sm:py-12">
+                <div className="orb orb-gold w-72 h-72 -top-32 -right-24 opacity-80" />
                 <div className="absolute inset-0 dot-grid opacity-[0.08]" />
+                {/* concentric gold rings — soft decorative depth */}
+                <div className="pointer-events-none absolute -bottom-24 -left-20 h-64 w-64 rounded-full border border-gold/20" aria-hidden="true" />
+                <div className="pointer-events-none absolute -bottom-36 -left-32 h-96 w-96 rounded-full border border-white/10" aria-hidden="true" />
                 <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-gold/80 to-transparent" />
 
                 {isAdmissionEffectivelyOpen ? (
@@ -1410,23 +1413,48 @@ const Home = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="relative">
-                    <span className="inline-flex items-center gap-2 rounded-full border border-gold/50 bg-white/10 px-3.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-gold">
-                      <Heart className="w-3 h-3" /> Join Our Community
-                    </span>
-                    <h2 className="mt-4 font-heading text-[1.7rem] sm:text-4xl font-bold leading-tight text-on-hero">
-                      Ready to Begin Your <span className="text-gold">Educational Journey?</span>
-                    </h2>
-                    <p className="mt-2.5 text-sm sm:text-base text-on-hero-soft max-w-xl leading-relaxed">
-                      Access your student portal to view results, attendance, timetables, and stay connected with your academic progress.
-                    </p>
-                    <div className="mt-5 flex flex-row flex-wrap items-center gap-2.5">
-                      <Link to="/auth/signin" className="inline-flex items-center gap-1.5 h-9 px-5 rounded-full bg-gradient-to-r from-gold-strong to-[hsl(41_90%_24%)] dark:from-gold dark:to-gold-strong text-white dark:text-gold-ink text-[13px] font-semibold shadow-[0_6px_16px_-8px_hsl(var(--gold)/0.6)] transition-shadow">
-                        Sign In to Portal <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
-                      <Link to="/results" className="inline-flex items-center gap-1.5 h-9 px-5 rounded-full border border-white/25 text-white text-[13px] font-medium hover:border-gold/70 transition-colors">
-                        Check Results
-                      </Link>
+                  <div className="relative grid items-center gap-8 sm:grid-cols-[1fr_auto]">
+                    <div>
+                      <span className="inline-flex items-center gap-2 rounded-full border border-gold/50 bg-white/10 px-3.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-gold backdrop-blur-sm">
+                        <Heart className="w-3 h-3" /> Join Our Community
+                      </span>
+                      <h2 className="mt-4 font-heading text-[1.75rem] sm:text-[2.6rem] font-bold leading-[1.15] text-on-hero">
+                        Ready to Begin Your <span className="bg-gradient-to-r from-gold to-[hsl(42_90%_72%)] bg-clip-text text-transparent">Educational Journey?</span>
+                      </h2>
+                      <div className="mt-3 h-[3px] w-16 rounded-full bg-gradient-to-r from-gold to-transparent" aria-hidden="true" />
+                      <p className="mt-4 text-sm sm:text-base text-on-hero-soft max-w-xl leading-relaxed">
+                        Access your student portal to view results, attendance, timetables, and stay connected with your academic progress.
+                      </p>
+
+                      <div className="mt-5 flex flex-wrap items-center gap-2">
+                        {[
+                          { icon: Trophy, label: "Results" },
+                          { icon: BarChart3, label: "Attendance" },
+                          { icon: Clock, label: "Timetables" },
+                        ].map(({ icon: Icon, label }) => (
+                          <span key={label} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white/90 backdrop-blur-sm">
+                            <Icon className="w-3.5 h-3.5 text-gold" /> {label}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="mt-6">
+                        <Link
+                          to="/auth/signin"
+                          className="group inline-flex items-center gap-2 h-11 px-7 rounded-full bg-gradient-to-r from-gold to-[hsl(42_90%_68%)] text-[#0B2E19] text-sm font-bold shadow-[0_10px_26px_-10px_hsl(var(--gold)/0.8)] ring-1 ring-white/30 transition-all hover:shadow-[0_14px_32px_-10px_hsl(var(--gold)/0.95)] active:scale-[0.98]"
+                        >
+                          Sign In to Portal <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                        </Link>
+                      </div>
+                    </div>
+
+                    {/* decorative emblem — desktop / tablet only */}
+                    <div className="relative hidden sm:flex h-44 w-44 items-center justify-center" aria-hidden="true">
+                      <span className="absolute inset-0 rounded-full border border-gold/30" />
+                      <span className="absolute inset-4 rounded-full border border-white/15" />
+                      <span className="flex h-24 w-24 items-center justify-center rounded-3xl border border-gold/40 bg-white/10 shadow-[0_16px_40px_-16px_rgba(0,0,0,0.6)] backdrop-blur-md">
+                        <GraduationCap className="h-11 w-11 text-gold" />
+                      </span>
                     </div>
                   </div>
                 )}
@@ -1438,86 +1466,102 @@ const Home = () => {
 
       {/* ══ 16. ABOUT PREVIEW ══ */}
       <m.section initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }} variants={sectionFadeUp} className="section-y cv-auto relative overflow-hidden bg-background">
-        <div className="absolute inset-0 opacity-40 pointer-events-none overflow-hidden">
-          <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full border border-border/70" />
-          <div className="absolute -bottom-24 -left-24 w-[22rem] h-[22rem] rounded-full border border-border/70" />
+        {/* soft gold glow + rings for depth */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+          <div className="absolute -top-28 -right-28 h-80 w-80 rounded-full bg-gold/10 blur-3xl" />
+          <div className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full border border-border/70 opacity-60" />
+          <div className="absolute -bottom-24 -left-24 w-[22rem] h-[22rem] rounded-full border border-border/70 opacity-60" />
         </div>
         <div className="container mx-auto px-4 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+          <div className="grid lg:grid-cols-2 gap-14 lg:gap-20 items-center">
             <ScrollReveal direction="left">
               <div className="text-foreground">
-                <span className="inline-block bg-card text-foreground border border-azure/30 text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4">About Us</span>
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-heading font-bold mb-6 leading-tight">Building Future Leaders Since {settings?.established_year || 2018}</h2>
-                <p className="text-muted-foreground text-lg leading-relaxed mb-8">
+                <span className="inline-flex items-center gap-2 rounded-full border border-gold/40 bg-card px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-foreground shadow-sm mb-5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true" />
+                  About Us
+                </span>
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-heading font-bold leading-[1.15]">
+                  Building <span className="text-gold">Future Leaders</span> Since {settings?.established_year || 2018}
+                </h2>
+                <div className="mt-4 mb-6 h-[3px] w-16 rounded-full bg-gradient-to-r from-gold to-transparent" aria-hidden="true" />
+                <p className="mb-8 border-l-2 border-gold/60 pl-4 text-base sm:text-lg leading-relaxed text-muted-foreground">
                   {settings?.description || "Government High School Babi Khel has been serving the community of District Mohmand with dedication and excellence. We believe in nurturing every student's potential through quality education and modern teaching methodologies."}
                 </p>
-                <div className="grid sm:grid-cols-2 gap-4 mb-8">
+                <div className="grid sm:grid-cols-2 gap-3 mb-8">
                   {[
-                    { icon: MapPin, text: settings?.address || "Babi Khel, District Mohmand, KPK" },
+                    { icon: MapPin, text: settings?.address || "Babi Khel, District Mohmand, KPK", wide: true },
                     { icon: Phone,  text: settings?.phone   || "+92 XXX XXXXXXX" },
                     { icon: Mail,   text: settings?.email   || "ghsbabikhel@gmail.com" },
                   ].map((item, i) => (
                     <m.div key={i} initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-                      className="flex items-center gap-3 bg-card rounded-xl p-3 border border-border">
-                      <div className="w-10 h-10 rounded-lg bg-azure-soft flex items-center justify-center shrink-0"><item.icon className="w-5 h-5 text-azure-strong dark:text-azure" /></div>
-                      <span className="text-sm text-muted-foreground">{item.text}</span>
+                      className={`group flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm transition-shadow hover:border-gold/50 hover:shadow-card ${item.wide ? "sm:col-span-2" : ""}`}>
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[hsl(150_45%_24%)] shadow-md">
+                        <item.icon className="h-5 w-5 text-gold" />
+                      </div>
+                      <span className="min-w-0 break-words text-sm font-medium text-foreground/80">{item.text}</span>
                     </m.div>
                   ))}
                 </div>
-                <Link to="/about">
-                  <m.button whileTap={{ scale: 0.97 }} className="inline-flex items-center gap-2 h-10 px-6 rounded-full bg-transparent text-primary border border-primary/40 hover:border-gold/60 hover:bg-primary/5 text-sm font-semibold transition-colors">
-                    Learn More About Us <ArrowRight className="w-4 h-4" />
-                  </m.button>
+                <Link to="/about" className="inline-block">
+                  <m.span whileTap={{ scale: 0.97 }} className="group inline-flex items-center gap-2 h-11 px-7 rounded-full bg-gradient-to-r from-primary to-[hsl(150_45%_24%)] text-primary-foreground text-sm font-semibold shadow-[0_10px_24px_-12px_hsl(var(--primary)/0.7)] ring-1 ring-gold/40 transition-shadow hover:shadow-[0_14px_30px_-12px_hsl(var(--primary)/0.85)]">
+                    Learn More About Us <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </m.span>
                 </Link>
               </div>
             </ScrollReveal>
             <ScrollReveal direction="right" delay={0.2}>
-              <div className="relative">
-                <div className="aspect-square rounded-3xl bg-card border border-border p-2 shadow-xl">
-                  <div className="w-full h-full rounded-2xl bg-muted flex items-center justify-center overflow-hidden">
-                    {settings?.principal_photo_url && !principalFailed ? (
-                      <img
-                        src={principalUsingOriginal
-                          ? settings.principal_photo_url
-                          : (optimizedCloudinaryUrl(settings.principal_photo_url, { width: 600 }) || settings.principal_photo_url)}
-                        alt={settings?.principal_name || "Principal"}
-                        width={600}
-                        height={600}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover"
-                        onError={(event) => {
-                          // Keep the principal card visible if the optimized
-                          // delivery URL fails in a desktop browser.
-                          if (!principalUsingOriginal) {
-                            setPrincipalUsingOriginal(true);
-                          } else {
-                            setPrincipalFailed(true);
-                          }
-                        }}
-                      />
-                    ) : null}
-                    <div className={`w-full h-full flex items-center justify-center ${settings?.principal_photo_url && !principalFailed ? "hidden" : ""}`}>
-                      <GraduationCap className="w-40 h-40 text-muted-foreground/30" />
+              <div className="relative mx-auto w-full max-w-md lg:max-w-none px-3 pb-6 pt-4">
+                {/* offset gold outline frame (inset-based, no transforms) */}
+                <div className="absolute left-6 right-0 top-8 bottom-2 rounded-[2rem] border-2 border-gold/40" aria-hidden="true" />
+                <div className="relative rounded-[2rem] bg-gradient-to-br from-gold/70 via-border to-gold/40 p-[2px] shadow-[0_28px_60px_-28px_hsl(var(--primary)/0.55)]">
+                  <div className="aspect-square rounded-[calc(2rem-2px)] bg-card p-2">
+                    <div className="relative w-full h-full rounded-[1.5rem] bg-muted flex items-center justify-center overflow-hidden">
+                      {settings?.principal_photo_url && !principalFailed ? (
+                        <img
+                          src={principalUsingOriginal
+                            ? settings.principal_photo_url
+                            : (optimizedCloudinaryUrl(settings.principal_photo_url, { width: 600 }) || settings.principal_photo_url)}
+                          alt={settings?.principal_name || "Principal"}
+                          width={600}
+                          height={600}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-cover"
+                          onError={(event) => {
+                            // Keep the principal card visible if the optimized
+                            // delivery URL fails in a desktop browser.
+                            if (!principalUsingOriginal) {
+                              setPrincipalUsingOriginal(true);
+                            } else {
+                              setPrincipalFailed(true);
+                            }
+                          }}
+                        />
+                      ) : null}
+                      <div className={`w-full h-full flex items-center justify-center ${settings?.principal_photo_url && !principalFailed ? "hidden" : ""}`}>
+                        <GraduationCap className="w-40 h-40 text-muted-foreground/30" />
+                      </div>
+                      {settings?.principal_name && (
+                        <div className="absolute bottom-3 left-3 right-3 overflow-hidden rounded-2xl border border-white/30 bg-card/90 p-3 text-center shadow-lg backdrop-blur-md">
+                          <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold to-transparent" aria-hidden="true" />
+                          <p className="font-heading font-bold text-foreground text-sm">{settings.principal_name}</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold-strong dark:text-gold">Principal</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
-                {settings?.principal_name && (
-                  <div className="absolute bottom-4 left-4 right-4 bg-card/90 backdrop-blur-sm rounded-xl p-3 text-center">
-                    <p className="font-heading font-bold text-foreground text-sm">{settings.principal_name}</p>
-                    <p className="text-xs text-muted-foreground">Principal</p>
-                  </div>
-                )}
-                <div className="absolute -bottom-6 -left-6 bg-card rounded-2xl shadow-card border border-border p-4">
+                <div className="absolute bottom-0 left-0 rounded-2xl border border-border bg-card p-3.5 shadow-card ring-1 ring-gold/20">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-lg"><Star className="w-6 h-6 text-white" /></div>
-                    <div><p className="text-2xl font-black text-foreground">{settings?.pass_percentage || 95}%</p><p className="text-xs text-muted-foreground font-medium">Pass Rate</p></div>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[hsl(150_45%_24%)] shadow-lg"><Star className="h-5 w-5 text-gold" /></div>
+                    <div><p className="text-2xl font-black leading-none text-foreground">{settings?.pass_percentage || 95}%</p><p className="mt-1 text-xs font-medium text-muted-foreground">Pass Rate</p></div>
                   </div>
                 </div>
-                <div className="absolute -top-4 -right-4 bg-card rounded-2xl shadow-card border border-border p-4">
+                <div className="absolute top-0 right-0 rounded-2xl border border-border bg-card p-3.5 shadow-card ring-1 ring-gold/20">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center shadow-lg"><Award className="w-6 h-6 text-white" /></div>
-                    <div><p className="text-2xl font-black text-foreground">{settings?.board_results || "A+"}</p><p className="text-xs text-muted-foreground font-medium">Results</p></div>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-gold to-[hsl(42_90%_62%)] shadow-lg"><Award className="h-5 w-5 text-[#0B2E19]" /></div>
+                    <div><p className="text-2xl font-black leading-none text-foreground">{settings?.board_results || "A+"}</p><p className="mt-1 text-xs font-medium text-muted-foreground">Results</p></div>
                   </div>
                 </div>
               </div>
