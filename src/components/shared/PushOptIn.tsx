@@ -127,28 +127,35 @@ export const PushOptIn = ({
       : (text && text.length <= 48 ? text : ctx.shortText);
     return (
       <div role="region" aria-label="Notification alerts"
-        className={`relative overflow-hidden rounded-2xl border border-white/15 bg-[#0b2e1f]/75 text-white shadow-[0_12px_32px_-10px_rgba(0,0,0,0.5)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#0b2e1f]/65 ${className}`}>
-        <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-gold/80 to-transparent" aria-hidden="true" />
-        <div className="flex items-center gap-2.5 py-2 pl-2.5 pr-1.5">
-          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-gold">
-            {status === "denied" ? <BellOff className="h-[18px] w-[18px]" /> : <Bell className="h-[18px] w-[18px]" />}
-            {off && <span className="absolute inset-0 animate-pulse rounded-xl ring-1 ring-gold/50" aria-hidden="true" />}
+        className={`relative overflow-hidden rounded-[22px] border border-black/5 bg-white text-[#0b2e1f] shadow-[0_22px_48px_-16px_rgba(11,46,31,0.38),0_2px_8px_rgba(11,46,31,0.08)] ring-1 ring-gold/30 dark:border-border dark:bg-card dark:text-foreground ${className}`}>
+        {/* gold accent rail + hairline */}
+        <span className="pointer-events-none absolute bottom-3 left-0 top-3 w-1 rounded-r-full bg-gradient-to-b from-gold to-gold-strong" aria-hidden="true" />
+        <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" aria-hidden="true" />
+        <div className="flex items-center gap-3 py-3 pl-4 pr-2.5">
+          <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[hsl(150_45%_24%)] text-gold shadow-[0_8px_18px_-8px_hsl(var(--primary)/0.7)]">
+            {status === "denied" ? <BellOff className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+            {off && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3" aria-hidden="true">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold/70" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-gold ring-2 ring-white dark:ring-card" />
+              </span>
+            )}
           </span>
           <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-[13px] font-semibold tracking-tight">{sTitle}</p>
-            <p className="mt-0.5 truncate text-[11px] text-white/65">{sText}</p>
+            <p className="truncate font-heading text-[14.5px] font-bold tracking-tight">{sTitle}</p>
+            <p className="mt-1 truncate text-[12px] font-medium text-[#0b2e1f]/60 dark:text-muted-foreground">{sText}</p>
           </div>
           {off && (
             <button
               onClick={enable} disabled={busy}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-gold to-gold-strong px-3.5 text-xs font-bold text-white shadow-sm transition-transform active:scale-95 disabled:opacity-70"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-[hsl(150_45%_24%)] px-4 text-[12.5px] font-bold text-white shadow-[0_8px_18px_-8px_hsl(var(--primary)/0.75)] ring-1 ring-gold/40 transition-transform active:scale-95 disabled:opacity-70"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Turn on
             </button>
           )}
           {onDismiss && (
-            <button onClick={onDismiss} aria-label="Dismiss" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/55 transition-colors hover:bg-white/10 hover:text-white">
+            <button onClick={onDismiss} aria-label="Dismiss" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0b2e1f]/5 text-[#0b2e1f]/55 transition-colors hover:bg-[#0b2e1f]/10 hover:text-[#0b2e1f] dark:bg-secondary dark:text-muted-foreground dark:hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           )}
@@ -212,10 +219,9 @@ export const PushOptIn = ({
 };
 
 /* ── Route-aware bar for PageLayout ───────────────────────────────────── */
-// Floats (fixed) above the bottom dock AND above the AI-assistant launcher
-// (which sits at the bottom-right) so neither can ever cover its buttons;
-// on desktop it sits bottom-left. Floats as a thin glass strip, so it NEVER
-// takes space in the page or pushes the hero / banner down.
+// Floats (fixed) at the TOP of the screen as a white premium notification
+// card (top-right on desktop). It never takes space in the page, so it NEVER
+// pushes the hero / banner down, and it is dismissible.
 const CTX_DISMISS_KEY = "ghs_push_ctx_dismissed";
 const CTX_DISMISS_MS = 3 * 24 * 60 * 60 * 1000;
 
@@ -241,7 +247,7 @@ export const PushContextBar = () => {
 
   if (!hit || !visible) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-3 bottom-[calc(8.75rem+env(safe-area-inset-bottom,0px))] z-[50] mx-auto max-w-md animate-in fade-in slide-in-from-bottom-3 duration-500 lg:inset-x-auto lg:bottom-6 lg:left-6 lg:right-auto lg:mx-0 lg:w-[26rem]">
+    <div className="pointer-events-none fixed inset-x-3 top-[calc(0.75rem+env(safe-area-inset-top,0px))] z-[60] mx-auto max-w-md animate-in fade-in slide-in-from-top-4 duration-500 lg:inset-x-auto lg:right-6 lg:top-28 lg:left-auto lg:mx-0 lg:w-[26rem]">
       <PushOptIn context={hit[1]} onDismiss={dismiss} className="pointer-events-auto" />
     </div>
   );
@@ -289,7 +295,7 @@ export const PushPrompt = () => {
 
   if (!show) return null;
   return (
-    <div className="fixed inset-x-3 bottom-[calc(8.75rem+env(safe-area-inset-bottom,0px))] z-[50] mx-auto max-w-md animate-in fade-in slide-in-from-bottom-3 duration-500 lg:inset-x-auto lg:left-6 lg:right-auto lg:bottom-6 lg:mx-0 lg:w-[26rem]">
+    <div className="fixed inset-x-3 top-[calc(0.75rem+env(safe-area-inset-top,0px))] z-[60] mx-auto max-w-md animate-in fade-in slide-in-from-top-4 duration-500 lg:inset-x-auto lg:right-6 lg:top-28 lg:left-auto lg:mx-0 lg:w-[26rem]">
       <PushOptIn context="results" title="Get instant school alerts" text="Results, notices, merit lists & more" onDismiss={dismiss} />
     </div>
   );
