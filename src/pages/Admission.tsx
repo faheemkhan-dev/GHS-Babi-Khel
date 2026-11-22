@@ -19,6 +19,7 @@ import toast from "react-hot-toast";
 import { PushOptIn } from "@/components/shared/PushOptIn";
 import { useQuery } from "@tanstack/react-query";
 import AdmissionHome from "@/components/admissions/AdmissionHome";
+import TrackPanel from "@/components/admissions/TrackPanel";
 import AdmissionReviewTable from "@/components/admissions/AdmissionReviewTable";
 import {
   setAdmissionSession, hasAdmissionSession, ADMISSION_SESSION_EVENT,
@@ -700,16 +701,29 @@ const Admission = () => {
               downloading={downloading}
               hasLibFile={(k) => !!libFiles[k]}
               onApply={startApply}
-              onTrack={() => { setView("track"); window.scrollTo({ top: 0 }); }}
+              onTrack={() => {
+                // Track now lives on this page, right below "How to Apply" — scroll to it.
+                document.getElementById("track-application")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              trackSlot={
+                <TrackPanel
+                  query={trackQuery}
+                  onQueryChange={(v) => { setTrackQuery(v); setDoTrack(false); }}
+                  onSubmit={() => setDoTrack(true)}
+                  loading={trackLoading}
+                  searched={doTrack}
+                  results={trackResults as any[] | undefined}
+                />
+              }
               onDownloadItem={generateAndDownload}
               onDownloadBlank={generateEmptyForm}
               onDownloadAll={downloadAll}
               onLocked={() => toast.error(nextOpeningNote || "Admissions are currently closed.")}
               hasSession={hasSession}
             >
-              {/* Classes & Seats + Merit Lists sit above Eligibility / Downloads */}
-              <Suspense fallback={null}><ClassesAndSeats processingFee={settings?.processing_fee ?? null} /></Suspense>
+              {/* Order on the page: How to Apply → Track → Merit Lists → Classes & Seats */}
               <Suspense fallback={null}><AdmissionMeritLists /></Suspense>
+              <Suspense fallback={null}><ClassesAndSeats processingFee={settings?.processing_fee ?? null} /></Suspense>
             </AdmissionHome>
           </div>
         )}
