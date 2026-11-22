@@ -100,35 +100,28 @@ const KpiTile = ({
 }) => (
   <Link
     to={to}
-    className="group relative overflow-hidden rounded-2xl border border-border/80 bg-card p-4 shadow-card transition-[box-shadow,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-elevated active:translate-y-0"
+    className="group relative flex items-center gap-3 overflow-hidden rounded-xl border border-border/70 bg-card py-2.5 pl-4 pr-3 transition-[border-color,background-color] duration-200 hover:border-primary/30 active:bg-secondary/40"
   >
     <span
       aria-hidden="true"
-      className="absolute inset-x-0 top-0 h-[3px]"
-      style={{ background: `linear-gradient(90deg, hsl(${tone.hsl}), hsl(${tone.hsl} / 0.15))` }}
+      className="absolute inset-y-2 left-0 w-[2px] rounded-r-full"
+      style={{ background: `hsl(${tone.hsl})` }}
     />
-    <span
-      aria-hidden="true"
-      className="pointer-events-none absolute -right-10 -bottom-12 h-32 w-32 rounded-full opacity-70 transition-opacity duration-300 group-hover:opacity-100"
-      style={{ background: `radial-gradient(circle, hsl(${tone.hsl} / 0.16), transparent 70%)` }}
-    />
-    <div className="relative flex items-start justify-between">
-      <span className={`grid h-10 w-10 place-items-center rounded-xl ring-1 ring-inset ${tone.chip} ${tone.ring}`}>
-        <Icon className={`h-[18px] w-[18px] ${tone.fg}`} aria-hidden="true" />
-      </span>
-      <ArrowUpRight
-        className="h-4 w-4 text-muted-foreground/40 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
-        aria-hidden="true"
-      />
-    </div>
-    <div className="relative mt-4">
+    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ring-1 ring-inset ${tone.chip} ${tone.ring}`}>
+      <Icon className={`h-4 w-4 ${tone.fg}`} aria-hidden="true" />
+    </span>
+    <div className="min-w-0 flex-1">
       {isLoading ? (
-        <Skeleton className="h-8 w-16 rounded-md" />
+        <Skeleton className="h-5 w-10 rounded-md" />
       ) : (
-        <p className="text-[30px] font-extrabold leading-none tabular-nums tracking-tight text-foreground">{n(value)}</p>
+        <p className="text-xl font-bold leading-none tabular-nums tracking-tight text-foreground">{n(value)}</p>
       )}
-      <p className="mt-2 text-[11px] font-semibold uppercase leading-tight tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate text-[10px] font-semibold uppercase leading-tight tracking-[0.08em] text-muted-foreground">{label}</p>
     </div>
+    <ArrowUpRight
+      className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-primary"
+      aria-hidden="true"
+    />
   </Link>
 );
 
@@ -136,13 +129,13 @@ const KpiTile = ({
 const SectionHeader = ({
   icon: Icon, title, subtitle,
 }: { icon: React.ElementType; title: string; subtitle?: string }) => (
-  <div className="mb-3.5 flex items-center gap-2.5 sm:mb-4">
-    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-      <Icon className="h-4 w-4" aria-hidden="true" />
+  <div className="mb-2.5 flex items-center gap-2">
+    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
     </span>
     <div className="min-w-0">
-      <h3 className="truncate text-[15px] font-bold leading-tight tracking-tight text-foreground">{title}</h3>
-      {subtitle && <p className="truncate text-[11px] leading-tight text-muted-foreground">{subtitle}</p>}
+      <h3 className="truncate text-[13.5px] font-bold leading-tight tracking-tight text-foreground">{title}</h3>
+      {subtitle && <p className="truncate text-[10.5px] leading-tight text-muted-foreground">{subtitle}</p>}
     </div>
     <span aria-hidden="true" className="ml-2 hidden h-px flex-1 bg-gradient-to-r from-border to-transparent sm:block" />
   </div>
@@ -155,7 +148,7 @@ const PassRateRing = ({ value }: { value: number }) => {
   const pct = Math.min(Math.max(value, 0), 100);
   const offset = circumference - (pct / 100) * circumference;
   return (
-    <div className="relative h-[5.25rem] w-[5.25rem] shrink-0 sm:h-[6.25rem] sm:w-[6.25rem]">
+    <div className="relative h-[4.25rem] w-[4.25rem] shrink-0 sm:h-[5.25rem] sm:w-[5.25rem]">
       <svg viewBox="0 0 80 80" className="h-full w-full -rotate-90">
         <defs>
           <linearGradient id="ghsPassRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -163,16 +156,16 @@ const PassRateRing = ({ value }: { value: number }) => {
             <stop offset="100%" stopColor="hsl(43,88%,66%)" />
           </linearGradient>
         </defs>
-        <circle cx="40" cy="40" r={radius} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="6" />
+        <circle cx="40" cy="40" r={radius} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
         <circle
-          cx="40" cy="40" r={radius} fill="none" stroke="url(#ghsPassRingGrad)" strokeWidth="6" strokeLinecap="round"
+          cx="40" cy="40" r={radius} fill="none" stroke="url(#ghsPassRingGrad)" strokeWidth="4" strokeLinecap="round"
           strokeDasharray={circumference} strokeDashoffset={offset}
           className="transition-[stroke-dashoffset] duration-1000 ease-out"
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[19px] font-extrabold tabular-nums leading-none text-white sm:text-[22px]">{pct}%</span>
-        <span className="mt-1 text-[8px] font-bold uppercase tracking-[0.2em] text-[hsl(43,80%,72%)]">Pass rate</span>
+        <span className="text-[15px] font-bold tabular-nums leading-none text-white sm:text-[18px]">{pct}%</span>
+        <span className="mt-0.5 text-[6.5px] font-semibold uppercase tracking-[0.16em] text-[hsl(43,80%,72%)]">Pass rate</span>
       </div>
     </div>
   );
@@ -228,11 +221,11 @@ const AdminOverview = () => {
   ].filter((row) => !!row.value);
 
   return (
-    <div className="space-y-7 pb-4 sm:space-y-9">
+    <div className="space-y-5 pb-2 sm:space-y-7">
 
       {/* ── Hero ─────────────────────────────────────────────── */}
-      <section className="relative rounded-[28px] bg-[linear-gradient(135deg,hsla(43,80%,68%,0.8),hsla(160,40%,30%,0.3)_45%,hsla(43,75%,62%,0.5))] p-px shadow-[0_24px_54px_-26px_rgba(0,0,0,0.55)]">
-        <div className="relative overflow-hidden rounded-[27px] bg-[linear-gradient(150deg,hsl(160_55%_9%)_0%,hsl(160_48%_14%)_52%,hsl(158_42%_21%)_100%)] p-5 text-white sm:p-7">
+      <section className="relative rounded-2xl bg-[linear-gradient(135deg,hsla(43,80%,68%,0.8),hsla(160,40%,30%,0.3)_45%,hsla(43,75%,62%,0.5))] p-px shadow-[0_14px_30px_-20px_rgba(0,0,0,0.5)]">
+        <div className="relative overflow-hidden rounded-[15px] bg-[linear-gradient(150deg,hsl(160_55%_9%)_0%,hsl(160_48%_14%)_52%,hsl(158_42%_21%)_100%)] p-4 text-white sm:p-6">
           {/* decoration: soft glows + concentric arcs + dot grid */}
           <div aria-hidden="true" className="pointer-events-none absolute inset-0">
             <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full" style={{ background: "radial-gradient(circle, hsla(43,80%,62%,0.22), transparent 64%)" }} />
@@ -246,26 +239,26 @@ const AdminOverview = () => {
           <div className="relative z-10">
             <div className="flex items-center gap-4">
               <div className="min-w-0 flex-1">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[hsla(43,80%,68%,0.35)] bg-[hsla(43,80%,62%,0.1)] px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.2em] text-[hsl(43,85%,72%)]">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[hsla(43,80%,68%,0.35)] bg-[hsla(43,80%,62%,0.1)] px-2 py-[3px] text-[8.5px] font-semibold uppercase tracking-[0.18em] text-[hsl(43,85%,72%)]">
                   <Sparkles className="h-3 w-3" aria-hidden="true" /> {greeting}
                 </span>
-                <h2 className="mt-3 truncate font-heading text-[28px] font-bold leading-[1.1] tracking-tight text-white sm:text-[36px]">
+                <h2 className="mt-2 truncate font-heading text-[22px] font-bold leading-[1.1] tracking-tight text-white sm:text-[30px]">
                   {firstName}
                 </h2>
-                <p className="mt-1.5 truncate text-[12.5px] text-white/60">
+                <p className="mt-1 truncate text-[11.5px] text-white/60">
                   {settings?.school_name || "GHS Babi Khel"} · Admin Panel
                 </p>
               </div>
               <PassRateRing value={settings?.pass_percentage ?? 98} />
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center gap-x-2.5 gap-y-2 border-t border-white/10 pt-4">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-white/75">
+            <div className="mt-3.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-white/10 pt-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.07] px-2.5 py-1 text-[10.5px] font-medium text-white/75">
                 <Calendar className="h-3.5 w-3.5 text-[hsl(43,80%,70%)]" aria-hidden="true" />
                 {now.toLocaleDateString("en-PK", { weekday: "long", day: "numeric", month: "short", year: "numeric" })}
               </span>
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${
                   urgentCount > 0 ? "bg-amber-400/15 text-amber-200" : "bg-emerald-400/15 text-emerald-200"
                 }`}
               >
@@ -278,7 +271,7 @@ const AdminOverview = () => {
               <button
                 onClick={() => refetch()}
                 disabled={isFetching}
-                className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-[11.5px] font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-60"
+                className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-white/15 px-2.5 py-1 text-[10.5px] font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-60"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} aria-hidden="true" />
                 {isFetching ? "Syncing…" : dataUpdatedAt ? timeAgo(new Date(dataUpdatedAt).toISOString()) : "Refresh"}
@@ -292,17 +285,17 @@ const AdminOverview = () => {
       {!isLoading && urgentCount > 0 && (
         <section>
           <SectionHeader icon={AlertCircle} title="Needs Attention" subtitle="Waiting on an admin decision" />
-          <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
+          <div className="grid gap-2 sm:grid-cols-2">
             {(stats?.pendingUsers ?? 0) > 0 && (
               <Link
                 to="/admin?tab=users"
-                className="group flex items-center gap-3 rounded-2xl border border-rose-200/80 bg-rose-50/70 p-3.5 transition-[box-shadow,border-color] duration-200 hover:border-rose-300 hover:shadow-elevated dark:border-rose-500/25 dark:bg-rose-500/10"
+                className="group flex items-center gap-3 rounded-xl border border-rose-200/80 bg-rose-50/70 px-3 py-2.5 transition-colors duration-200 hover:border-rose-300 dark:border-rose-500/25 dark:bg-rose-500/10"
               >
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-500/20 dark:bg-rose-500/20 dark:text-rose-300">
-                  <UserCog className="h-5 w-5" aria-hidden="true" />
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-500/20 dark:bg-rose-500/20 dark:text-rose-300">
+                  <UserCog className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold leading-tight text-rose-700 dark:text-rose-300">
+                  <p className="text-[13px] font-bold leading-tight text-rose-700 dark:text-rose-300">
                     {n(stats?.pendingUsers)} User{(stats?.pendingUsers ?? 0) > 1 ? "s" : ""} awaiting approval
                   </p>
                   <p className="mt-0.5 text-xs text-rose-600/75 dark:text-rose-300/70">Open Users → Pending requests</p>
@@ -313,13 +306,13 @@ const AdminOverview = () => {
             {(stats?.pendingAdmissions ?? 0) > 0 && (
               <Link
                 to="/admin?tab=admissions"
-                className="group flex items-center gap-3 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-3.5 transition-[box-shadow,border-color] duration-200 hover:border-amber-300 hover:shadow-elevated dark:border-amber-500/25 dark:bg-amber-500/10"
+                className="group flex items-center gap-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2.5 transition-colors duration-200 hover:border-amber-300 dark:border-amber-500/25 dark:bg-amber-500/10"
               >
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-600 ring-1 ring-inset ring-amber-500/20 dark:bg-amber-500/20 dark:text-amber-300">
-                  <GraduationCap className="h-5 w-5" aria-hidden="true" />
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-600 ring-1 ring-inset ring-amber-500/20 dark:bg-amber-500/20 dark:text-amber-300">
+                  <GraduationCap className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold leading-tight text-amber-700 dark:text-amber-300">
+                  <p className="text-[13px] font-bold leading-tight text-amber-700 dark:text-amber-300">
                     {n(stats?.pendingAdmissions)} Admission{(stats?.pendingAdmissions ?? 0) > 1 ? "s" : ""} pending review
                   </p>
                   <p className="mt-0.5 text-xs text-amber-600/75 dark:text-amber-300/70">Open Admissions to review</p>
@@ -334,7 +327,7 @@ const AdminOverview = () => {
       {/* ── School ───────────────────────────────────────────── */}
       <section>
         <SectionHeader icon={Activity} title="School" subtitle="People, results and applications" />
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {schoolTiles.map((t) => <KpiTile key={t.label} {...t} isLoading={isLoading} />)}
         </div>
       </section>
@@ -342,7 +335,7 @@ const AdminOverview = () => {
       {/* ── Content ──────────────────────────────────────────── */}
       <section>
         <SectionHeader icon={BookOpen} title="Content" subtitle="Everything published on the website" />
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {contentTiles.map((t) => <KpiTile key={t.label} {...t} isLoading={isLoading} />)}
         </div>
       </section>
@@ -350,18 +343,18 @@ const AdminOverview = () => {
       {/* ── Shortcuts ────────────────────────────────────────── */}
       <section>
         <SectionHeader icon={Sparkles} title="Shortcuts" subtitle="Jump straight to a tool" />
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {shortcuts.map((a) => (
             <Link
               key={a.tab}
               to={`/admin?tab=${a.tab}`}
-              className="group flex items-center gap-3 rounded-2xl border border-border/80 bg-card p-3 shadow-card transition-[box-shadow,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-elevated"
+              className="group flex items-center gap-2.5 rounded-xl border border-border/70 bg-card px-2.5 py-2 transition-[border-color,background-color] duration-200 hover:border-primary/30 active:bg-secondary/40"
             >
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                <a.icon className="h-[18px] w-[18px]" aria-hidden="true" />
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                <a.icon className="h-4 w-4" aria-hidden="true" />
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-[13px] font-bold leading-tight text-foreground">{a.label}</span>
+                <span className="block truncate text-[12.5px] font-semibold leading-tight text-foreground">{a.label}</span>
                 <span className="mt-0.5 block truncate text-[10.5px] leading-tight text-muted-foreground">{a.hint}</span>
               </span>
             </Link>
@@ -372,7 +365,7 @@ const AdminOverview = () => {
       {/* ── Recent activity ──────────────────────────────────── */}
       <section>
         <SectionHeader icon={Activity} title="Recent Activity" subtitle="Latest notices, admissions and sign-ups" />
-        <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-card">
+        <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
           {actLoading ? (
             <div className="space-y-3 p-4">
               {[...Array(5)].map((_, i) => (
@@ -396,13 +389,13 @@ const AdminOverview = () => {
               </p>
             </div>
           ) : (
-            <ul className="relative px-4 py-2 sm:px-5">
-              <span aria-hidden="true" className="absolute bottom-6 left-[2.4rem] top-6 w-px bg-border sm:left-[2.65rem]" />
+            <ul className="relative px-3 py-1 sm:px-4">
+              <span aria-hidden="true" className="absolute bottom-6 left-[1.7rem] top-5 w-px bg-border sm:left-[1.95rem]" />
               {activity.map((item, i) => {
                 const { Icon, chip, kicker } = activityMeta(item.type);
                 return (
-                  <li key={item.id + i} className="relative flex items-center gap-3 rounded-xl px-1.5 py-2.5 transition-colors hover:bg-secondary/50">
-                    <span className={`relative z-10 grid h-8 w-8 shrink-0 place-items-center rounded-full ring-4 ring-card ${chip}`}>
+                  <li key={item.id + i} className="relative flex items-center gap-3 rounded-xl px-1 py-2 transition-colors hover:bg-secondary/50">
+                    <span className={`relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full ring-4 ring-card ${chip}`}>
                       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -434,19 +427,19 @@ const AdminOverview = () => {
       </section>
 
       {/* ── School identity ──────────────────────────────────── */}
-      <section className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-card">
-        <div className="flex items-center gap-2.5 border-b border-border/70 bg-secondary/40 px-4 py-3 sm:px-5">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+      <section className="overflow-hidden rounded-xl border border-border/70 bg-card">
+        <div className="flex items-center gap-2.5 border-b border-border/70 bg-secondary/40 px-3 py-2.5 sm:px-4">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
             <Landmark className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <h3 className="truncate text-[15px] font-bold leading-tight tracking-tight text-foreground">
+            <h3 className="truncate text-[13.5px] font-bold leading-tight tracking-tight text-foreground">
               {settings?.school_name || "GHS Babi Khel"}
             </h3>
             <p className="truncate text-[11px] leading-tight text-muted-foreground">Public school record</p>
           </div>
         </div>
-        <dl className="grid gap-x-4 gap-y-3.5 p-4 sm:grid-cols-2 sm:p-5">
+        <dl className="grid gap-x-4 gap-y-3 p-3.5 sm:grid-cols-2 sm:p-4">
           {identity.map((row) => (
             <div key={row.label} className="flex min-w-0 items-start gap-2.5">
               <row.Icon className="mt-[3px] h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden="true" />
