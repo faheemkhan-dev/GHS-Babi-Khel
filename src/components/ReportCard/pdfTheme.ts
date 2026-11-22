@@ -27,22 +27,25 @@ export const SAFE_BOTTOM = A4_H - 44;
 export const SLIM_H = 30;
 
 export const T = {
-  greenDeep: [12, 58, 40] as RGB,
+  // Deep green is an ACCENT only (thin top bar, headings, emblem) — never a big fill.
+  greenDeep: [14, 70, 50] as RGB,
   green: [22, 101, 72] as RGB,
-  greenSoft: [236, 246, 240] as RGB,
-  gold: [184, 134, 11] as RGB,
+  greenSoft: [247, 249, 248] as RGB,
+  gold: [168, 122, 10] as RGB,
   goldLine: [212, 175, 55] as RGB,
-  goldSoft: [251, 243, 214] as RGB,
-  ink: [15, 23, 42] as RGB,
+  goldSoft: [253, 247, 227] as RGB,
+  ink: [17, 24, 39] as RGB,
   text: [30, 41, 59] as RGB,
-  muted: [100, 116, 139] as RGB,
-  border: [214, 224, 218] as RGB,
-  stripe: [246, 250, 247] as RGB,
+  muted: [107, 114, 128] as RGB,
+  border: [229, 233, 231] as RGB,
+  stripe: [250, 251, 250] as RGB,
+  head: [241, 245, 242] as RGB,
+  track: [233, 237, 235] as RGB,
   white: [255, 255, 255] as RGB,
   pass: [21, 128, 61] as RGB,
-  passSoft: [220, 252, 231] as RGB,
+  passSoft: [232, 247, 237] as RGB,
   fail: [185, 28, 28] as RGB,
-  failSoft: [254, 226, 226] as RGB,
+  failSoft: [253, 237, 237] as RGB,
 };
 
 export const fill = (d: jsPDF, c: RGB) => d.setFillColor(c[0], c[1], c[2]);
@@ -80,68 +83,114 @@ export function fitCenteredText(
   return yy;
 }
 
-/** Full-width premium header band. Returns the y where content may start. */
+/** Left-aligned text that shrinks (down to minSize) to fit maxW; wraps if it
+ *  still does not fit. Returns the y of the line after the last one drawn. */
+export function fitLeftText(
+  d: jsPDF, text: string, x: number, y: number, maxW: number,
+  startSize: number, minSize: number, lineGap = 1.15
+): number {
+  let size = startSize;
+  d.setFontSize(size);
+  while (size > minSize && d.getTextWidth(text) > maxW) {
+    size -= 0.5;
+    d.setFontSize(size);
+  }
+  const lines: string[] = d.getTextWidth(text) > maxW ? d.splitTextToSize(text, maxW) : [text];
+  let yy = y;
+  for (const ln of lines) {
+    d.text(ln, x, yy);
+    yy += size * lineGap;
+  }
+  return yy;
+}
+
+const todayLabel = () =>
+  new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+/** Compact, light header: hairline accent bar, small emblem, left-aligned
+ *  title block and the generation date on the right. Returns the y where
+ *  content may start. (Deliberately NOT a big solid-green block.) */
 export function drawBand(
   d: jsPDF,
   o: { eyebrow: string; title: string; subtitle: string }
 ): number {
-  const H = 108;
+  const H = 76;
+  // thin top accent: deep green + gold hairline
   fill(d, T.greenDeep);
-  d.rect(0, 0, A4_W, H, "F");
-  // soft decorative gold arcs (pure vectors, print-friendly)
-  // Both circles stay fully INSIDE the band (a circle spilling below it would
-  // show through behind the tiles / labels that follow).
-  fill(d, [18, 78, 54]);
-  d.circle(A4_W - 14, 0, 62, "F");
-  d.circle(10, 0, 44, "F");
-  // gold rule
+  d.rect(0, 0, A4_W, 4, "F");
   fill(d, T.goldLine);
-  d.rect(0, H, A4_W, 3, "F");
+  d.rect(0, 4, A4_W, 1.2, "F");
 
-  const cx = A4_W / 2;
+  // emblem
+  const ex = MARGIN, ey = 20, es = 34;
+  fill(d, T.greenDeep);
+  d.roundedRect(ex, ey, es, es, 8, 8, "F");
+  stroke(d, T.goldLine, 0.9);
+  d.circle(ex + es / 2, ey + es / 2, 11, "S");
   d.setFont("helvetica", "bold");
-  d.setFontSize(7.5);
-  ink(d, T.goldLine);
-  d.setCharSpace(1.6);
-  d.text(o.eyebrow.toUpperCase(), cx, 26, { align: "center" });
+  d.setFontSize(6.6);
+  ink(d, T.white);
+  d.text("GHS", ex + es / 2, ey + es / 2 + 2.3, { align: "center" });
+
+  const tx = MARGIN + es + 12;
+  d.setFont("helvetica", "bold");
+  d.setFontSize(7);
+  ink(d, T.gold);
+  d.setCharSpace(1.5);
+  d.text(o.eyebrow.toUpperCase(), tx, 27);
   d.setCharSpace(0);
 
   d.setFont("helvetica", "bold");
-  ink(d, T.white);
-  const after = fitCenteredText(d, o.title, cx, 54, CONTENT_W - 30, 19, 12);
+  ink(d, T.ink);
+  const after = fitLeftText(d, o.title, tx, 44, CONTENT_W - es - 12 - 100, 15.5, 11);
 
   d.setFont("helvetica", "normal");
-  d.setFontSize(10);
-  ink(d, [226, 236, 229]);
-  d.text(o.subtitle, cx, Math.min(after + 6, H - 14), { align: "center" });
-  return H + 3 + 16;
+  d.setFontSize(9);
+  ink(d, T.muted);
+  d.text(o.subtitle, tx, Math.min(after + 3, H - 8));
+
+  // generated date (right)
+  d.setFont("helvetica", "normal");
+  d.setFontSize(7);
+  ink(d, T.muted);
+  d.text(`Generated ${todayLabel()}`, A4_W - MARGIN, 27, { align: "right" });
+
+  // base hairline + short gold segment
+  stroke(d, T.border, 0.7);
+  d.line(MARGIN, H, A4_W - MARGIN, H);
+  fill(d, T.goldLine);
+  d.roundedRect(MARGIN, H - 1.1, 64, 2.2, 1.1, 1.1, "F");
+  return H + 20;
 }
 
-/** Slim continuation band for pages 2+. */
+/** Slim continuation band for pages 2+ (light). */
 export function drawSlimBand(d: jsPDF, label: string): void {
   fill(d, T.greenDeep);
-  d.rect(0, 0, A4_W, SLIM_H, "F");
+  d.rect(0, 0, A4_W, 3, "F");
   fill(d, T.goldLine);
-  d.rect(0, SLIM_H, A4_W, 1.6, "F");
+  d.rect(0, 3, A4_W, 1, "F");
   d.setFont("helvetica", "bold");
-  d.setFontSize(8.5);
-  ink(d, T.white);
-  d.text(label, A4_W / 2, 19, { align: "center", maxWidth: CONTENT_W });
+  d.setFontSize(8);
+  ink(d, T.muted);
+  d.text(label, MARGIN, 19, { maxWidth: CONTENT_W });
+  stroke(d, T.border, 0.6);
+  d.line(MARGIN, SLIM_H - 3, A4_W - MARGIN, SLIM_H - 3);
 }
 
-/** Centred section title flanked by thin gold rules. Returns next y. */
+/** Section title: gold marker + bold heading, hairline running to the right
+ *  margin. Returns next y. */
 export function sectionTitle(d: jsPDF, text: string, y: number): number {
-  const cx = A4_W / 2;
+  fill(d, T.goldLine);
+  d.roundedRect(MARGIN, y - 9, 3, 11.5, 1.5, 1.5, "F");
   d.setFont("helvetica", "bold");
-  d.setFontSize(10.5);
-  const w = d.getTextWidth(text);
+  d.setFontSize(9.5);
   ink(d, T.greenDeep);
-  d.text(text, cx, y, { align: "center" });
-  stroke(d, T.goldLine, 0.9);
-  const gap = 10;
-  const half = w / 2 + gap;
-  d.line(MARGIN, y - 3.5, cx - half, y - 3.5);
-  d.line(cx + half, y - 3.5, A4_W - MARGIN, y - 3.5);
+  d.setCharSpace(0.5);
+  d.text(text, MARGIN + 10, y);
+  d.setCharSpace(0);
+  const w = d.getTextWidth(text) + text.length * 0.5;
+  stroke(d, T.border, 0.7);
+  d.line(MARGIN + 10 + w + 8, y - 3.2, A4_W - MARGIN, y - 3.2);
   return y + 10;
 }
 
@@ -157,29 +206,34 @@ export function kpiTiles(d: jsPDF, y: number, tiles: Tile[], h = 50): number {
   const w = (CONTENT_W - gap * (tiles.length - 1)) / tiles.length;
   tiles.forEach((t, i) => {
     const x = MARGIN + i * (w + gap);
-    fill(d, T.greenSoft);
-    stroke(d, T.border, 0.6);
-    d.roundedRect(x, y, w, h, 5, 5, "FD");
-    fill(d, T.goldLine);
-    d.roundedRect(x + w / 2 - 11, y, 22, 2.6, 1.3, 1.3, "F");
+    fill(d, T.white);
+    stroke(d, T.border, 0.8);
+    d.roundedRect(x, y, w, h, 6, 6, "FD");
     d.setFont("helvetica", "bold");
-    d.setFontSize(6.8);
+    d.setFontSize(6.4);
     ink(d, T.muted);
-    d.text(t.label.toUpperCase(), x + w / 2, y + 19, { align: "center", maxWidth: w - 6 });
+    d.setCharSpace(0.6);
+    d.text(t.label.toUpperCase(), x + w / 2, y + 16, { align: "center", maxWidth: w - 6 });
+    d.setCharSpace(0);
     d.setFont("helvetica", "bold");
     ink(d, t.color ?? T.ink);
-    fitCenteredText(d, t.value, x + w / 2, y + 38, w - 8, 15, 9);
+    fitCenteredText(d, t.value, x + w / 2, y + 34, w - 8, 15.5, 9);
+    // tiny accent underline
+    fill(d, t.color ?? T.goldLine);
+    d.roundedRect(x + w / 2 - 8, y + h - 8, 16, 1.8, 0.9, 0.9, "F");
   });
   return y + h + 14;
 }
 
-/** Footer on every page: gold rule, school/title left, page x of y right. */
+/** Footer on every page: hairline, school/title left, page x of y right. */
 export function drawFooters(d: jsPDF, leftText: string): void {
   const n = d.getNumberOfPages();
   for (let i = 1; i <= n; i++) {
     d.setPage(i);
-    stroke(d, T.goldLine, 0.8);
+    stroke(d, T.border, 0.7);
     d.line(MARGIN, FOOTER_Y - 10, A4_W - MARGIN, FOOTER_Y - 10);
+    fill(d, T.goldLine);
+    d.roundedRect(MARGIN, FOOTER_Y - 11.1, 40, 2.2, 1.1, 1.1, "F");
     d.setFont("helvetica", "normal");
     d.setFontSize(7.5);
     ink(d, T.muted);
@@ -188,34 +242,36 @@ export function drawFooters(d: jsPDF, leftText: string): void {
   }
 }
 
-/** Shared autoTable options: everything centred (horizontally + vertically),
- *  explicit full-width table, identical left/right margins, wrapped text. */
+/** Shared autoTable options: airy horizontal-rules-only tables, a LIGHT header
+ *  with a gold underline, everything centred, explicit full width, identical
+ *  left/right margins, wrapped text. */
 export function tableBase(d: jsPDF, opts: { slimLabel?: string; marginTop?: number } = {}) {
   const top = opts.marginTop ?? SLIM_H + 14;
   return {
-    theme: "grid" as const,
+    theme: "plain" as const,
     tableWidth: CONTENT_W,
     margin: { left: MARGIN, right: MARGIN, top, bottom: 40 },
     showHead: "everyPage" as const,
     styles: {
       font: "helvetica",
       fontSize: 8.5,
-      cellPadding: { top: 4.6, bottom: 4.6, left: 3, right: 3 },
+      cellPadding: { top: 5.2, bottom: 5.2, left: 3, right: 3 },
       halign: "center" as const,
       valign: "middle" as const,
       lineColor: T.border,
-      lineWidth: 0.4,
+      lineWidth: { top: 0, right: 0, bottom: 0.6, left: 0 },
       textColor: T.ink,
       overflow: "linebreak" as const,
     },
     headStyles: {
-      fillColor: T.greenDeep,
-      textColor: T.white,
+      fillColor: T.head,
+      textColor: T.greenDeep,
       fontStyle: "bold" as const,
-      fontSize: 8,
+      fontSize: 7.6,
       halign: "center" as const,
       valign: "middle" as const,
-      lineColor: T.greenDeep,
+      lineColor: T.goldLine,
+      lineWidth: { top: 0, right: 0, bottom: 1.4, left: 0 },
     },
     alternateRowStyles: { fillColor: T.stripe },
     // Called by autoTable after it finishes each page. The slim band lives in
