@@ -10,7 +10,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Trophy, Loader2, Search, X, ListChecks, CalendarDays, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAdmissionMeritLists, useAdmissionMeritList } from "@/hooks/useAdmission";
@@ -182,61 +181,59 @@ export default function AdmissionMeritLists() {
   const [selected, setSelected] = useState<PublicMeritListRow | null>(null);
 
   return (
-    <Card id="merit-lists" className="rounded-2xl border-border/60 shadow-sm scroll-mt-24">
-      <CardContent className="p-4 sm:p-5">
-        <div className="flex items-start gap-3 mb-4">
-          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Trophy className="w-4 h-4" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-base font-heading font-bold tracking-tight text-foreground">Merit Lists</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground leading-snug">
-              Published automatically from the class seats — ranked on previous class marks.
-            </p>
-          </div>
-        </div>
+    <section id="merit-lists" className="scroll-mt-24">
+      {/* centred title — no subtitle sentence */}
+      <div className="mb-5 text-center">
+        <h2 className="text-[1.7rem] font-bold leading-tight text-foreground sm:text-3xl" style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}>
+          Admission Merit Lists
+        </h2>
+        <div aria-hidden className="mx-auto mt-2 h-[3px] w-12 rounded-full bg-gradient-to-r from-transparent via-gold to-transparent" />
+      </div>
 
-        {isLoading ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {[...Array(2)].map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
-          </div>
-        ) : !rows || rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            No merit list has been published yet. Lists appear here as soon as the school publishes them after the admission deadline.
+      {isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[...Array(2)].map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
+        </div>
+      ) : !rows || rows.length === 0 ? (
+        <div className="rounded-[28px] border border-gold/30 bg-card px-5 py-9 text-center shadow-card">
+          <Trophy className="mx-auto mb-4 h-14 w-14 text-muted-foreground/40" strokeWidth={1.4} />
+          <p className="text-[15px] font-bold leading-snug text-foreground">No merit list has been published yet.</p>
+          <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-muted-foreground">
+            Merit lists appear here as soon as the school publishes them after the admission deadline.
           </p>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {rows.map((r) => (
-              <div key={r.id} className="rounded-2xl border border-border/60 bg-card p-3.5 flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-bold">{r.class_label}</p>
-                  <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-bold text-muted-foreground">List #{r.list_no}</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="rounded-full border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900 px-2 py-0.5 text-[10px] font-bold text-green-700 dark:text-green-300">
-                    {r.listed_count} Merit Listed
-                  </span>
-                  {r.not_listed_count > 0 && (
-                    <span className="rounded-full border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-2 py-0.5 text-[10px] font-bold text-red-600 dark:text-red-300">
-                      {r.not_listed_count} Not Listed
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                  <CalendarDays className="w-3 h-3 shrink-0" />
-                  Published {fmtDate(r.published_at)}{r.admission_last_date ? ` · Join by ${fmtDate(r.admission_last_date)}` : ""}
-                </p>
-                <Button size="sm" onClick={() => setSelected(r)}
-                  className="h-8 w-full gap-1.5 rounded-full px-3 text-xs font-bold">
-                  <ListChecks className="w-3.5 h-3.5" /> View Merit List
-                </Button>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {rows.map((r) => (
+            <div key={r.id} className="flex flex-col gap-2.5 rounded-2xl border border-gold/30 bg-card p-4 shadow-card">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[15px] font-bold" style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}>{r.class_label}</p>
+                <span className="rounded-full border border-gold/40 bg-gold/10 px-2.5 py-0.5 text-[10px] font-bold text-gold-strong">List #{r.list_no}</span>
               </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="rounded-full border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900 px-2 py-0.5 text-[10px] font-bold text-green-700 dark:text-green-300">
+                  {r.listed_count} Merit Listed
+                </span>
+                {r.not_listed_count > 0 && (
+                  <span className="rounded-full border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-2 py-0.5 text-[10px] font-bold text-red-600 dark:text-red-300">
+                    {r.not_listed_count} Not Listed
+                  </span>
+                )}
+              </div>
+              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <CalendarDays className="h-3 w-3 shrink-0" />
+                Published {fmtDate(r.published_at)}{r.admission_last_date ? ` · Join by ${fmtDate(r.admission_last_date)}` : ""}
+              </p>
+              <Button size="sm" onClick={() => setSelected(r)}
+                className="h-8 w-full gap-1.5 rounded-full px-3 text-xs font-bold">
+                <ListChecks className="h-3.5 w-3.5" /> View Merit List
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <MeritListDialog row={selected} onClose={() => setSelected(null)} />
-    </Card>
+    </section>
   );
 }
