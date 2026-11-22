@@ -859,17 +859,12 @@ const Admission = () => {
                               <FieldTooltip text="Fresh = new student, Migration = transfer from another school" />
                             </Label>
                             <Select value={form.admission_type} onValueChange={v => { setForm(f => ({ ...f, admission_type: v as AdmissionType })); if (fieldErrors.admission_type) setFieldErrors(errs => { const n = { ...errs }; delete n.admission_type; return n; }); }}>
-                              <SelectTrigger className={`h-9 rounded-lg border-border/80 px-3 text-[13px] ${fieldErrors.admission_type ? "border-red-500" : ""}`}><SelectValue /></SelectTrigger>
+                              <SelectTrigger className={`h-9 rounded-lg border-border/80 px-2.5 text-[12.5px] ${fieldErrors.admission_type ? "border-red-500" : ""}`}><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="fresh">Fresh Admission</SelectItem>
                                 {["9", "10"].includes(form.applying_class) && <SelectItem value="migration">Migration / Transfer</SelectItem>}
                               </SelectContent>
                             </Select>
-                            {!['9', '10'].includes(form.applying_class) && form.applying_class && form.admission_type === "fresh" && (
-                              <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                                <Info className="w-2.5 h-2.5 shrink-0" /> Note: For Class {form.applying_class}, only Fresh Admission is available.
-                              </p>
-                            )}
                           </div>
                           </div>
                           {form.applying_class === "9" && (
