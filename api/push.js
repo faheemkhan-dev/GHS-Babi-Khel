@@ -4,6 +4,7 @@
 //   POST ?action=topics     {endpoint, topics}
 //   POST ?action=unsubscribe{endpoint}
 //   POST ?action=test       {endpoint}       → sends a test notification
+//   POST ?action=contact {name,email,subject,message} → emails the contact form to the school inbox (needs RESEND_API_KEY)
 //   GET|POST ?action=dispatch[&src=visitor]  → pushes anything newly published
 //        (Supabase pg_cron + DB triggers call this with `Authorization: Bearer $CRON_SECRET` — see migration 09)
 import { TOPICS, pushConfigured, sb, dispatchChanges, sendToEndpoint, seedAdmissionRef } from "./_lib/push-core.js";
@@ -14,12 +15,55 @@ const bad = (res, code, msg) => res.status(code).json({ ok: false, error: msg })
 const cleanTopics = (t) => (Array.isArray(t) ? [...new Set(t.filter((x) => TOPICS.includes(x)))] : null);
 const REF_RE = /^[A-Za-z0-9][A-Za-z0-9\-_/]{2,39}$/;
 
+// ── Contact form → email (lives here so no extra Vercel function is used) ──
+// Sends to school_settings.email (Admin → Settings) via Resend, Reply-To = visitor.
+// Env (server-side): RESEND_API_KEY (required) · CONTACT_FROM / CONTACT_TO (optional).
+// Without RESEND_API_KEY it answers 503 and the website falls back to the mail app.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const escHtml = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const cleanTxt = (t, max) => String(t ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").trim().slice(0, max);
+
+async function schoolInbox() {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  try {
+    const r = await fetch(`${url}/rest/v1/school_settings?select=email&order=id.asc&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+    if (!r.ok) return null;
+    const e = (await r.json())?.[0]?.email;
+    return e && EMAIL_RE.test(String(e).trim()) ? String(e).trim() : null;
+  } catch { return null; }
+}
+
+async function handleContact(req, res) {
+  if (req.method !== "POST") return bad(res, 405, "POST required");
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return bad(res, 503, "Email service not configured");
+  let b = req.body;
+  if (typeof b === "string") { try { b = JSON.parse(b); } catch { b = {}; } }
+  b = b || {};
+  const name = cleanTxt(b.name, 100), email = cleanTxt(b.email, 254);
+  const subject = cleanTxt(b.subject, 200) || "Contact from website", message = cleanTxt(b.message, 2000);
+  if (name.length < 2 || !EMAIL_RE.test(email) || message.length < 10) return bad(res, 400, "Invalid input");
+  const to = process.env.CONTACT_TO || (await schoolInbox()) || "ghsbabikhel@gmail.com";
+  const from = process.env.CONTACT_FROM || "GHS Babi Khel <onboarding@resend.dev>";
+  const html = `<div style="font-family:Arial,sans-serif;max-width:560px"><h2 style="margin:0 0 12px;color:#14532d">New website message</h2><p style="margin:4px 0"><b>Name:</b> ${escHtml(name)}</p><p style="margin:4px 0"><b>Email:</b> ${escHtml(email)}</p><p style="margin:4px 0"><b>Subject:</b> ${escHtml(subject)}</p><hr style="border:none;border-top:1px solid #ddd;margin:14px 0"><p style="white-space:pre-wrap;line-height:1.6">${escHtml(message)}</p></div>`;
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to: [to], reply_to: email, subject: `[Website] ${subject}`.slice(0, 200), html, text: `Name: ${name}\nEmail: ${email}\nSubject: ${subject}\n\n${message}` }),
+  });
+  if (!r.ok) { console.error("[contact] Resend", r.status, (await r.text().catch(() => "")).slice(0, 300)); return bad(res, 502, "Email provider error"); }
+  return res.status(200).json({ ok: true });
+}
+
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   const action = String((req.query && req.query.action) || "");
   const configured = pushConfigured();
 
   try {
+    if (action === "contact") return await handleContact(req, res);
     if (action === "config") {
       return res.status(200).json({ configured, publicKey: configured ? (process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY) : null, topics: TOPICS });
     }
