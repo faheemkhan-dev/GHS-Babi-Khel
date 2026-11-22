@@ -72,6 +72,7 @@ const Contact = () => {
   const [form, setForm]       = useState<FormState>(INIT);
   const [sending, setSending] = useState(false);
   const [sent, setSent]       = useState(false);
+  const [sentViaMail, setSentViaMail] = useState(false);
   const [error, setError]     = useState("");
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [submitCount, setSubmitCount] = useState(0);
@@ -211,23 +212,39 @@ const Contact = () => {
         // Don't block user for notification failure
       }
 
-      // Build mailto link so the message arrives at the school's inbox
-      const body = `Name: ${sanitizedForm.name}\nEmail: ${sanitizedForm.email}\n\n${sanitizedForm.message}`;
-      const mailto = `mailto:${displayEmail}?subject=${encodeURIComponent(
-        sanitizedForm.subject || "Contact from website"
-      )}&body=${encodeURIComponent(body)}`;
+      // 1) Real delivery: the server emails the message to the school inbox
+      //    saved in Admin → Settings (visitor's address is set as Reply-To).
+      let delivered = false;
+      try {
+        const ctrl = new AbortController();
+        const t = window.setTimeout(() => ctrl.abort(), 15000);
+        const r = await fetch("/api/contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sanitizedForm),
+          signal: ctrl.signal,
+        });
+        window.clearTimeout(t);
+        delivered = r.ok;
+      } catch {
+        delivered = false;
+      }
 
-      // Small delay for UX feel, then open mail client
-      setTimeout(() => {
+      // 2) Fallback (email service not set up / offline): open the visitor's mail app.
+      if (!delivered) {
+        const body = `Name: ${sanitizedForm.name}\nEmail: ${sanitizedForm.email}\n\n${sanitizedForm.message}`;
+        const mailto = `mailto:${displayEmail}?subject=${encodeURIComponent(
+          sanitizedForm.subject || "Contact from website"
+        )}&body=${encodeURIComponent(body)}`;
         window.open(mailto, "_blank");
-        setSending(false);
-        setSent(true);
-        setForm(INIT);
-        setValidationErrors({});
+      }
 
-        // SECURITY FIX: Record successful attempt
-        recordSubmissionAttempt();
-      }, 800);
+      setSentViaMail(!delivered);
+      setSending(false);
+      setSent(true);
+      setForm(INIT);
+      setValidationErrors({});
+      recordSubmissionAttempt();
 
     } catch (err) {
       console.error("[Contact] Error:", err);
@@ -402,21 +419,7 @@ const Contact = () => {
                   <Shield className="w-5 h-5 text-green-600" />
                 </span>
               </div>
-              <p className="text-sm text-muted-foreground mb-6">
-                Fill out the form below and we'll get back to you as soon as
-                possible. All fields are validated for your security.
-              </p>
-
-              {/* Security notice — restyled, same trust message */}
-              <div className="mb-6 p-3 rounded-xl bg-green-500/10 border border-green-500/25">
-                <div className="flex items-start gap-2">
-                  <Shield className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
-                  <p className="text-xs text-green-800 dark:text-green-400 leading-relaxed">
-                    Protected with input validation, XSS protection and rate
-                    limiting — your message travels safely.
-                  </p>
-                </div>
-              </div>
+              <div className="mb-5" />
 
               {sent ? (
                 <motion.div
@@ -429,14 +432,21 @@ const Contact = () => {
                     <div className="absolute -inset-2 rounded-full bg-green-500/15" />
                     <CheckCircle2 className="relative w-14 h-14 text-green-500" />
                   </div>
-                  <p className="font-heading font-bold text-lg text-foreground">Message ready to send!</p>
+                  <p className="font-heading font-bold text-lg text-foreground">
+                    {sentViaMail ? "Message ready to send!" : "Message sent!"}
+                  </p>
                   <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
-                    Your mail client opened with the message pre-filled. If
-                    nothing opened,{" "}
-                    <a href={`mailto:${displayEmail}`} className="text-primary font-medium hover:underline">
-                      email us directly
-                    </a>
-                    .
+                    {sentViaMail ? (
+                      <>
+                        Your mail app opened with the message pre-filled. If nothing opened,{" "}
+                        <a href={`mailto:${displayEmail}`} className="text-primary font-medium hover:underline">
+                          email us directly
+                        </a>
+                        .
+                      </>
+                    ) : (
+                      "Thank you — we received your message and will reply by email soon."
+                    )}
                   </p>
                   <Button
                     variant="outline"
@@ -574,7 +584,7 @@ const Contact = () => {
                     type="button"
                   >
                     {sending ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Preparing…</>
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending…</>
                     ) : (
                       <><Send className="w-4 h-4 mr-2" /> Send Message</>
                     )}
