@@ -391,39 +391,23 @@ function MegaRow({ link, active, onNavigate }: {
   active: boolean;
   onNavigate: () => void;
 }) {
-  const Icon = link.icon;
   return (
     <Link
       to={link.to}
       onClick={onNavigate}
-      className={`mega-row group relative flex items-center gap-3 rounded-xl px-3 py-2.5 no-underline transition-colors duration-150 ${
+      className={`mega-row group relative block rounded-lg px-3.5 py-2.5 no-underline transition-colors duration-150 ${
         active ? "bg-gold-soft/60 dark:bg-gold/10" : "hover:bg-secondary"
       }`}
     >
       {active && (
-        <span
-          className="absolute left-0 top-1/2 h-6 w-[3px] rounded-full bg-gold"
-          aria-hidden="true"
-        />
+        <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-gold" aria-hidden="true" />
       )}
-      <span
-        className={`w-10 h-10 shrink-0 rounded-xl ${link.tint} flex items-center justify-center`}
-        aria-hidden="true"
-      >
-        <Icon className="w-[18px] h-[18px]" />
+      <span className={`block text-[14px] font-semibold leading-tight ${active ? "text-primary dark:text-gold" : "text-foreground"}`}>
+        {link.label}
       </span>
-      <span className="flex-1 min-w-0">
-        <span className={`block text-[14px] font-semibold leading-tight ${active ? "text-primary dark:text-gold" : "text-foreground"}`}>
-          {link.label}
-        </span>
-        <span className="block text-[12px] text-muted-foreground leading-snug mt-0.5 truncate">
-          {link.desc}
-        </span>
+      <span className="mt-0.5 block text-[12px] leading-snug text-muted-foreground">
+        {link.desc}
       </span>
-      <ArrowRight
-        className="mega-row-arrow w-4 h-4 shrink-0 text-gold"
-        aria-hidden="true"
-      />
     </Link>
   );
 }
@@ -1243,23 +1227,18 @@ const Navbar = () => {
                             {/* gold top accent */}
                             <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-gold/0 via-gold to-gold/0" aria-hidden="true" />
 
-                            {/* header: icon chip + section title + tagline */}
-                            <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-border/70 bg-secondary/40">
-                              <span className={`w-9 h-9 shrink-0 rounded-xl ${section.tint} flex items-center justify-center`} aria-hidden="true">
-                                <SectionIcon className="w-[18px] h-[18px]" />
-                              </span>
-                              <div className="min-w-0">
-                                <p className="font-display text-[15px] font-semibold leading-tight text-foreground truncate">
-                                  {section.label}
-                                </p>
-                                <p className="text-[11.5px] leading-snug text-muted-foreground mt-0.5 truncate">
-                                  {section.tagline}
-                                </p>
-                              </div>
+                            {/* header: section title + tagline (no icon) */}
+                            <div className="border-b border-border/70 bg-secondary/40 px-4 pb-3 pt-4">
+                              <p className="font-display text-[15px] font-semibold leading-tight text-foreground">
+                                {section.label}
+                              </p>
+                              <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
+                                {section.tagline}
+                              </p>
                             </div>
 
                             {/* link rows */}
-                            <div className="p-2 space-y-0.5">
+                            <div className="space-y-0.5 p-2">
                               {section.links.map((link) => (
                                 <MegaRow
                                   key={link.to}
@@ -1277,17 +1256,13 @@ const Navbar = () => {
                                 <Link
                                   to={rollSlipItem.to}
                                   onClick={() => setOpenSection(null)}
-                                  className="group relative flex items-center gap-3 overflow-hidden rounded-xl bg-gold-soft/50 hover:bg-gold-soft dark:bg-gold/10 dark:hover:bg-gold/15 text-foreground px-3 py-2.5 no-underline border border-gold/30 transition-colors duration-150"
+                                  className="group relative flex items-center gap-3 rounded-lg border border-gold/30 bg-gold-soft/40 px-3.5 py-2.5 text-foreground no-underline transition-colors duration-150 hover:bg-gold-soft/70 dark:bg-gold/10 dark:hover:bg-gold/15"
                                 >
-                                  <span className={`relative w-10 h-10 rounded-xl ${rollSlipItem.tint} flex items-center justify-center shrink-0`} aria-hidden="true">
-                                    <Hash className="w-[18px] h-[18px]" />
-                                  </span>
-                                  <span className="relative flex-1 min-w-0">
+                                  <span className="min-w-0 flex-1">
                                     <span className="block text-[14px] font-semibold leading-tight text-foreground">{rollSlipItem.label}</span>
-                                    <span className="block text-[12px] text-muted-foreground leading-snug mt-0.5 truncate">{rollSlipItem.desc}</span>
+                                    <span className="mt-0.5 block text-[12px] leading-snug text-muted-foreground">{rollSlipItem.desc}</span>
                                   </span>
                                   <RollSlipCountdown variant="menu-badge" />
-                                  <ArrowRight className="mega-row-arrow w-4 h-4 shrink-0 text-gold" aria-hidden="true" />
                                 </Link>
                               </div>
                             )}
