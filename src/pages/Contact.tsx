@@ -218,7 +218,7 @@ const Contact = () => {
       try {
         const ctrl = new AbortController();
         const t = window.setTimeout(() => ctrl.abort(), 15000);
-        const r = await fetch("/api/contact", {
+        const r = await fetch("/api/push?action=contact", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(sanitizedForm),
