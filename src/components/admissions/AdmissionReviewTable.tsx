@@ -22,17 +22,20 @@ export default function AdmissionReviewTable({
   rows,
   onEdit,
   editLabel = "Edit",
+  compact = false,
 }: {
   title: string;
   rows: ReviewRow[];
   onEdit?: () => void;
   editLabel?: string;
+  /** Thinner header and rows (admin views). */
+  compact?: boolean;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/70 shadow-sm">
+    <div className={`overflow-hidden border border-border/70 ${compact ? "rounded-xl" : "rounded-2xl shadow-sm"}`}>
       {/* header */}
-      <div className="relative flex items-center justify-between gap-2 bg-gradient-to-r from-primary to-primary/90 px-4 py-2.5">
-        <h3 className="text-[12px] font-bold uppercase tracking-widest text-primary-foreground">
+      <div className={`relative flex items-center justify-between gap-2 bg-gradient-to-r from-primary to-primary/90 px-4 ${compact ? "py-1.5" : "py-2.5"}`}>
+        <h3 className={`font-bold uppercase text-primary-foreground ${compact ? "text-[10.5px] tracking-[0.16em]" : "text-[12px] tracking-widest"}`}>
           {title}
         </h3>
         {onEdit && (
@@ -58,16 +61,16 @@ export default function AdmissionReviewTable({
               key={`${r.label}-${i}`}
               className={`grid grid-cols-[2fr_3fr] border-b border-border/50 sm:[&:not(:last-child)]:border-b ${r.wide ? "sm:col-span-2" : ""}`}
             >
-              <div className="bg-primary/[0.05] px-3 py-2.5">
-                <p className="text-[10px] font-bold uppercase tracking-wider leading-snug text-muted-foreground">
+              <div className={`bg-primary/[0.05] px-3 ${compact ? "py-1.5" : "py-2.5"}`}>
+                <p className={`font-semibold uppercase leading-snug text-muted-foreground ${compact ? "text-[9.5px] tracking-[0.08em]" : "text-[10px] tracking-wider"}`}>
                   {r.label}
                 </p>
               </div>
-              <div className="flex items-center justify-center px-3 py-2.5 text-center">
+              <div className={`flex items-center justify-center px-3 text-center ${compact ? "py-1.5" : "py-2.5"}`}>
                 {empty ? (
-                  <span className="text-[13px] font-semibold text-muted-foreground/70">N/A</span>
+                  <span className={`font-semibold text-muted-foreground/70 ${compact ? "text-[12px]" : "text-[13px]"}`}>N/A</span>
                 ) : (
-                  <span className="break-words text-[13px] font-bold leading-snug text-foreground">
+                  <span className={`break-words font-semibold leading-snug text-foreground ${compact ? "text-[12px]" : "text-[13px] font-bold"}`}>
                     {r.value as ReactNode}
                   </span>
                 )}
