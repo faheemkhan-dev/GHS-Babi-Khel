@@ -275,7 +275,7 @@ function AdmissionHome({
 
         {/* ── HOW TO APPLY ───────────────────────────────────────────────── */}
         <section className="mt-10" style={lazySection}>
-          <SectionTitle kicker="Process" hint="Simple steps from home to classroom">How to Apply</SectionTitle>
+          <SectionTitle kicker="Process">How to Apply</SectionTitle>
           <div className="relative mx-auto max-w-2xl overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card">
             <div aria-hidden className="h-1 bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
             <ol className="relative ml-8 space-y-3 border-l-2 border-gold/30 py-5 pl-6 pr-4 sm:ml-10">
