@@ -108,7 +108,7 @@ const NAV_SECTIONS: NavSection[] = [
     tagline: "Exam outcomes, toppers & slips",
     tint: "bg-gold-soft text-[hsl(43_89%_29%)] dark:bg-gold/15 dark:text-gold",
     links: [
-      { to: "/results",   label: "Exam Results", icon: Trophy, desc: "Exam results & DMCs",           tint: "bg-gold-soft text-[hsl(43_89%_29%)] dark:bg-gold/15 dark:text-gold" },
+      { to: "/results",   label: "Exam Results", icon: Trophy, desc: "Exam results",           tint: "bg-gold-soft text-[hsl(43_89%_29%)] dark:bg-gold/15 dark:text-gold" },
       { to: "/merit-list", label: "Merit List", icon: Medal, desc: "Toppers & position holders",   tint: "bg-gold-soft text-[hsl(43_89%_29%)] dark:bg-gold/15 dark:text-gold" },
     ],
   },
