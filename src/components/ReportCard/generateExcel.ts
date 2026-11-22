@@ -4,7 +4,7 @@
 //   Sheet 1 "Summary" — header · KPI strip · top scorer · subject-wise pass rate
 //   Sheet 2 "Results" — header · ranked table: Pos · Roll No · Name · Father ·
 //                       every subject's marks (practical only where it exists) ·
-//                       Total (of class max) · % · Status   (filter + frozen panes)
+//                       Total (of class max) · % · Status   (frozen panes)
 //
 // Design: white sheet, no gridlines, airy horizontal hairlines only, a LIGHT
 // table header with a gold underline. Deep green + gold are thin accents —
@@ -75,7 +75,6 @@ export async function generateResultExcel(
   const school = sel.schoolName || "GHS Babi Khel, District Mohmand";
   const examLine = `${classDisplayName(sel.className)}  ·  ${sel.examType}  ·  ${sel.year}`;
   const classMax = CLASS_MAX_MARKS[sel.className];
-  const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   wb.creator = school;
   wb.created = new Date();
 
@@ -95,7 +94,7 @@ export async function generateResultExcel(
     const rows: Array<[string, number, string, boolean, number]> = [
       [tag.toUpperCase(), 9, GOLD_DARK, true, 24],
       [school, 18, INK, true, 32],
-      [`${examLine}     ·     Generated ${today}`, 10.5, MUTED, false, 20],
+      [examLine, 10.5, MUTED, false, 20],
     ];
     rows.forEach(([text, size, color, bold, heightIn], i) => {
       const r = i + 3;
@@ -274,7 +273,6 @@ export async function generateResultExcel(
   const hr = ws2.addRow(header);
   hr.height = 36;
   hr.eachCell((c) => th(c));
-  ws2.autoFilter = { from: { row: HEADER_ROW, column: 1 }, to: { row: HEADER_ROW, column: ncols } };
 
   const colTotal = ncols - 2, colPct = ncols - 1, colStatus = ncols;
   const ranked = rankResults(results);
