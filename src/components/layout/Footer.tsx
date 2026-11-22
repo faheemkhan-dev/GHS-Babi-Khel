@@ -44,89 +44,128 @@ const Footer = () => {
     ? settings.phone
     : null;
 
-  const allLinks = [...footerLinks.quickLinks, ...footerLinks.resources];
   const school = settings?.school_name || "GHS Babi Khel";
+  const gold = "text-[hsl(43_74%_66%)]";
+
+  const Heading = ({ children }: { children: string }) => (
+    <h3 className={`mb-2.5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] ${gold}`}>
+      {children}
+      <span aria-hidden className="h-px w-6 bg-gradient-to-r from-[hsl(43_74%_66%/0.6)] to-transparent" />
+    </h3>
+  );
+
+  const linkCls = "block py-[3px] text-[12.5px] text-white/70 transition-colors hover:text-[hsl(43_74%_66%)]";
+
+  const contactRow = "flex items-center gap-2.5 text-[12px] text-white/75";
+  const chip = "grid h-6 w-6 shrink-0 place-items-center rounded-md bg-white/[0.07] text-[hsl(43_74%_66%)]";
 
   return (
     <footer className="border-t border-white/10 bg-[hsl(144_62%_14%)] text-[#E8F5EC] dark:bg-[hsl(146_41%_7%)]">
       {/* Signature brand hairline — forest green flowing into heritage gold */}
       <div className="h-px bg-gradient-to-r from-primary via-gold to-primary" aria-hidden="true" />
-      <div className="container mx-auto px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] pt-5 lg:pb-4">
 
-        {/* Brand row: small logo + name/tagline, socials on the right */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            {settings?.logo_url && !logoFailed ? (
-              <img
-                src={optimizedCloudinaryUrl(settings.logo_url, { width: 64 }) || safeMediaUrl(settings.logo_url)!}
-                alt={`${school} logo`}
-                className="h-8 w-8 shrink-0 rounded-lg object-cover ring-1 ring-[hsl(43_74%_66%/0.45)]"
-                loading="lazy"
-                decoding="async"
-                onError={() => setLogoFailed(true)}
-              />
-            ) : (
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15">
-                <GraduationCap className="h-4 w-4" />
+      <div className="container mx-auto px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] pt-7 lg:pb-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-6 md:grid-cols-12 md:gap-x-8">
+
+          {/* ── Brand ── */}
+          <div className="col-span-2 md:col-span-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                {settings?.logo_url && !logoFailed ? (
+                  <img
+                    src={optimizedCloudinaryUrl(settings.logo_url, { width: 240, quality: "auto:best" }) || safeMediaUrl(settings.logo_url)!}
+                    alt={`${school} logo`}
+                    width={44}
+                    height={44}
+                    className="h-11 w-11 shrink-0 rounded-xl object-cover ring-1 ring-[hsl(43_74%_66%/0.5)] ring-offset-2 ring-offset-[hsl(144_62%_14%)] dark:ring-offset-[hsl(146_41%_7%)]"
+                    loading="lazy"
+                    decoding="async"
+                    onError={() => setLogoFailed(true)}
+                  />
+                ) : (
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
+                    <GraduationCap className="h-5 w-5" />
+                  </div>
+                )}
+                <div className="min-w-0 leading-tight">
+                  <span className="block truncate font-heading text-[15px] font-bold">{school}</span>
+                  <span className={`mt-0.5 block truncate text-[10px] font-medium uppercase tracking-[0.14em] ${gold}`}>
+                    {settings?.tagline || "Excellence in Education"}
+                  </span>
+                </div>
               </div>
-            )}
-            <div className="min-w-0 leading-tight">
-              <span className="block truncate font-heading text-[14px] font-bold">{school}</span>
-              <span className="block truncate text-[10.5px] text-white/60">{settings?.tagline || "Excellence in Education"}</span>
+
+              <div className="flex shrink-0 items-center gap-1.5 md:hidden">
+                <a href="https://www.facebook.com/share/1EERTSk1W7/" target="_blank" rel="noopener noreferrer" aria-label="Follow GHS Babi Khel on Facebook"
+                  className="grid h-8 w-8 place-items-center rounded-full border border-white/15 bg-white/[0.04] text-white/85 transition-colors hover:border-[#1877F2] hover:bg-[#1877F2]">
+                  <Facebook className="h-3.5 w-3.5" />
+                </a>
+                <a href="https://wa.me/923469898295" target="_blank" rel="noopener noreferrer" aria-label="Contact GHS Babi Khel on WhatsApp"
+                  className="grid h-8 w-8 place-items-center rounded-full border border-white/15 bg-white/[0.04] text-white/85 transition-colors hover:border-[#25D366] hover:bg-[#25D366]">
+                  <MessageCircle className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            </div>
+
+            <p className="mt-3 hidden max-w-xs text-[12px] leading-relaxed text-white/60 md:block">
+              {settings?.description || "Committed to quality education and nurturing the future leaders of Pakistan."}
+            </p>
+            <div className="mt-3 hidden items-center gap-1.5 md:flex">
+              <a href="https://www.facebook.com/share/1EERTSk1W7/" target="_blank" rel="noopener noreferrer" aria-label="Follow GHS Babi Khel on Facebook"
+                className="grid h-8 w-8 place-items-center rounded-full border border-white/15 bg-white/[0.04] text-white/85 transition-colors hover:border-[#1877F2] hover:bg-[#1877F2]">
+                <Facebook className="h-3.5 w-3.5" />
+              </a>
+              <a href="https://wa.me/923469898295" target="_blank" rel="noopener noreferrer" aria-label="Contact GHS Babi Khel on WhatsApp"
+                className="grid h-8 w-8 place-items-center rounded-full border border-white/15 bg-white/[0.04] text-white/85 transition-colors hover:border-[#25D366] hover:bg-[#25D366]">
+                <MessageCircle className="h-3.5 w-3.5" />
+              </a>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
-            <a
-              href="https://www.facebook.com/share/1EERTSk1W7/"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Follow GHS Babi Khel on Facebook"
-              className="grid h-7 w-7 place-items-center rounded-full border border-white/15 text-white/80 transition-colors hover:border-[#1877F2] hover:bg-[#1877F2] hover:text-white"
-            >
-              <Facebook className="h-3.5 w-3.5" />
-            </a>
-            <a
-              href="https://wa.me/923469898295"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Contact GHS Babi Khel on WhatsApp"
-              className="grid h-7 w-7 place-items-center rounded-full border border-white/15 text-white/80 transition-colors hover:border-[#25D366] hover:bg-[#25D366] hover:text-white"
-            >
-              <MessageCircle className="h-3.5 w-3.5" />
-            </a>
+          {/* ── Explore ── */}
+          <nav aria-label="Quick links" className="md:col-span-2 md:col-start-6">
+            <Heading>Explore</Heading>
+            <ul>
+              {footerLinks.quickLinks.map((l) => (
+                <li key={l.to}><Link to={l.to} className={linkCls}>{l.label}</Link></li>
+              ))}
+            </ul>
+          </nav>
+
+          {/* ── Resources ── */}
+          <nav aria-label="Resources" className="md:col-span-2">
+            <Heading>Resources</Heading>
+            <ul>
+              {footerLinks.resources.map((l) => (
+                <li key={l.to}><Link to={l.to} className={linkCls}>{l.label}</Link></li>
+              ))}
+            </ul>
+          </nav>
+
+          {/* ── Contact ── */}
+          <div className="col-span-2 md:col-span-3">
+            <Heading>Contact</Heading>
+            <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <div className={contactRow}>
+                <span className={chip}><MapPin className="h-3 w-3" /></span>
+                <span className="min-w-0">{settings?.address || "Babi Khel, District Mohmand, KPK"}</span>
+              </div>
+              {displayPhone && (
+                <a href={`tel:${displayPhone.replace(/\s/g, "")}`} className={`${contactRow} transition-colors hover:text-white`}>
+                  <span className={chip}><Phone className="h-3 w-3" /></span>
+                  {displayPhone}
+                </a>
+              )}
+              <a href={`mailto:${displayEmail}`} className={`${contactRow} transition-colors hover:text-white`}>
+                <span className={chip}><Mail className="h-3 w-3" /></span>
+                <span className="min-w-0 break-all">{displayEmail}</span>
+              </a>
+            </div>
           </div>
         </div>
 
-        {/* Links — one compact wrapping row (every public route stays crawlable) */}
-        <nav aria-label="Footer" className="mt-4 flex flex-wrap justify-center gap-x-3.5 gap-y-1.5 border-t border-white/10 pt-3.5 text-[11.5px]">
-          {allLinks.map((link) => (
-            <Link key={link.to} to={link.to} className="text-white/70 transition-colors hover:text-[hsl(43_74%_66%)]">
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-
-        {/* Contact — tiny single-line items */}
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-white/65">
-          <span className="inline-flex items-center gap-1.5">
-            <MapPin className="h-3 w-3 shrink-0 text-[hsl(43_74%_66%)]" />
-            {settings?.address || "Babi Khel, District Mohmand, KPK"}
-          </span>
-          {displayPhone && (
-            <a href={`tel:${displayPhone.replace(/\s/g, "")}`} className="inline-flex items-center gap-1.5 transition-colors hover:text-white">
-              <Phone className="h-3 w-3 shrink-0 text-[hsl(43_74%_66%)]" />
-              {displayPhone}
-            </a>
-          )}
-          <a href={`mailto:${displayEmail}`} className="inline-flex items-center gap-1.5 transition-colors hover:text-white">
-            <Mail className="h-3 w-3 shrink-0 text-[hsl(43_74%_66%)]" />
-            {displayEmail}
-          </a>
-        </div>
-
-        {/* Bottom line */}
-        <div className="mt-3.5 flex flex-col items-center justify-between gap-0.5 border-t border-white/10 pt-3 text-[10.5px] text-white/50 sm:flex-row">
+        {/* ── Bottom line ── */}
+        <div className="mt-6 flex flex-col items-center justify-between gap-0.5 border-t border-white/10 pt-3 text-[10.5px] text-white/50 sm:flex-row">
           <p>&copy; {new Date().getFullYear()} {school}. All rights reserved.</p>
           <p>EMIS: {settings?.emis_code || "60673"}</p>
         </div>
