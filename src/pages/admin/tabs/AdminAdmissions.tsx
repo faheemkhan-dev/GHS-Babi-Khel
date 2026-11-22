@@ -793,53 +793,6 @@ const AdminAdmissions = () => {
         </div>
       </div>
 
-      {/* Filters — status chips + class + type */}
-      <div className="space-y-2">
-        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:justify-center sm:overflow-visible">
-          {FILTER_CHIPS.map((c) => {
-            const count = all.filter((a) => c.match(a.status)).length;
-            return (
-              <button
-                key={c.key}
-                type="button"
-                onClick={() => { setChip(c.key); setPage(0); }}
-                className={`inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 text-[11px] font-semibold transition-colors ${
-                  chip === c.key
-                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                    : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-primary"
-                }`}
-              >
-                {c.label}
-                <span className={`rounded-full px-1.5 text-[9.5px] tabular-nums ${chip === c.key ? "bg-white/25" : "bg-muted"}`}>{count}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Select value={classFilter} onValueChange={(v) => { setClassFilter(v); setPage(0); }}>
-            <SelectTrigger className="h-8 w-[118px] rounded-full text-[11.5px]"><SelectValue placeholder="Class" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All classes</SelectItem>
-              {["6", "7", "8", "9", "10"].map((c) => <SelectItem key={c} value={c}>Class {c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(0); }}>
-            <SelectTrigger className="h-8 w-[118px] rounded-full text-[11.5px]"><SelectValue placeholder="Type" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="fresh">Fresh</SelectItem>
-              <SelectItem value="migration">Migration</SelectItem>
-            </SelectContent>
-          </Select>
-          {filtersActive && (
-            <Button size="sm" variant="ghost" onClick={clearFilters}
-              className="h-8 gap-1 rounded-full px-3 text-[11px] font-semibold text-muted-foreground">
-              <X className="h-3.5 w-3.5" /> Clear
-            </Button>
-          )}
-        </div>
-      </div>
-
       {/* List */}
       <Card className="overflow-hidden rounded-2xl border-border/80 p-0 shadow-sm">
         {isLoading ? (
