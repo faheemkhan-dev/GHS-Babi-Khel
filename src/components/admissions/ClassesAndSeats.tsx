@@ -91,9 +91,6 @@ function ClassesAndSeatsBase({ processingFee }: { processingFee?: number | null 
       <ul className="mx-auto mt-4 max-w-lg space-y-1.5 text-center text-[11px] leading-snug text-muted-foreground">
         <li>Every applicant competes for the class seats on merit</li>
         <li>One application per student per session</li>
-        {!!processingFee && processingFee > 0 && (
-          <li>Processing fee Rs {Number(processingFee).toLocaleString("en-PK")} per application</li>
-        )}
       </ul>
     </section>
   );
