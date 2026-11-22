@@ -20,7 +20,7 @@ import { createPortal } from "react-dom";
 import {
   X, Lock, Search, FileText, FileSpreadsheet, Trash2, Plus,
   Loader2, AlertCircle, CheckCircle2, XCircle, Download, ArrowLeft,
-  Layers, RefreshCw, Trophy, GraduationCap,
+  Layers, RefreshCw, Trophy, GraduationCap, Check, Landmark, Hash,
 } from "lucide-react";
 // NOTE: `X` is still imported above because it is used for the per-roll
 // remove buttons inside the saved-rolls list. The top-right CLOSE X in
@@ -28,7 +28,7 @@ import {
 // only way to leave the modal is the small back button on the left.
 import type { ClassName, ExamSelection, NormalizedResult, RollEntry } from "./types";
 import { bulkFetchResults, isMissingResult, retryMissingResults } from "./bulkFetch";
-import { classDisplayName, combinedPairFor } from "./classMaxMarks";
+import { classDisplayName, combinedPairFor, CLASS_MAX_MARKS } from "./classMaxMarks";
 import { computeStats } from "./normalize";
 import { generateResultPDF } from "./generatePDF";
 import { generateResultExcel } from "./generateExcel";
@@ -423,22 +423,26 @@ export default function ReportCardModal({ open, onClose }: Props) {
   const busy = stage === "fetching";
   const stepIndex = stage === "password" ? 0 : stage === "results" ? 2 : 1;
 
-  // Shared class strings — thin, premium, mobile-first controls.
+  // ── Shared class strings — thin, premium, mobile-first controls ──
   const inputCls =
-    "w-full h-10 px-3 rounded-xl border border-border bg-background text-foreground text-[13px] " +
-    "placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40 " +
+    "w-full h-9 px-3 rounded-xl border border-border bg-background text-foreground text-[13px] " +
+    "placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 " +
     "focus:border-primary/60 transition disabled:opacity-50";
-  const labelCls = "block text-[11px] font-semibold tracking-wide text-muted-foreground mb-1.5";
-  const segCls = (active: boolean) =>
-    `min-h-9 px-2 py-1.5 rounded-xl text-[13px] font-semibold border text-center leading-tight transition-all active:scale-[0.97] ${
-      active
-        ? "bg-primary-dark text-white border-primary-dark shadow-sm ring-1 ring-gold/40"
-        : "bg-background text-foreground border-border hover:border-primary/40"
-    } ${busy ? "opacity-50 cursor-not-allowed" : ""}`;
+  const labelCls = "block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-1";
   const primaryBtn =
-    "w-full h-9 px-4 rounded-lg text-[13px] font-semibold text-white flex items-center justify-center gap-2 " +
-    "bg-gradient-to-r from-primary-dark to-primary shadow-md shadow-primary/20 transition " +
+    "w-full h-9 px-4 rounded-full text-[13px] font-semibold text-white flex items-center justify-center gap-2 " +
+    "bg-gradient-to-r from-primary-dark to-primary ring-1 ring-gold/40 shadow-[0_8px_18px_-10px_hsl(var(--primary)/0.8)] transition " +
     "hover:brightness-110 active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:shadow-none";
+
+  // Progress % for the fetching card (single or combined)
+  const fetchPct = (() => {
+    const done = fetchMode === "combined" ? combinedProgress.aDone + combinedProgress.bDone : progress.done;
+    const total = fetchMode === "combined" ? combinedProgress.aTotal + combinedProgress.bTotal : progress.total;
+    return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  })();
+  const passPct = stats ? Math.max(0, Math.min(100, Number(stats.passPercentage) || 0)) : 0;
+  const classMax = CLASS_MAX_MARKS[selection.className];
+  const STEPS = ["Unlock", "Details & Rolls", "Results"];
 
   // Render into document.body via a portal so the modal escapes any
   // ancestor CSS `transform` (framer-motion <motion.div> parents set
@@ -451,62 +455,82 @@ export default function ReportCardModal({ open, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-background w-full max-w-3xl h-full sm:h-auto sm:max-h-[92vh] sm:rounded-3xl shadow-2xl border border-border/70 flex flex-col overflow-hidden"
+        className="bg-background w-full max-w-2xl h-full sm:h-auto sm:max-h-[92vh] sm:rounded-3xl shadow-2xl border border-border/70 flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Header ── */}
+        {/* ══ Header — compact, dark green, gold hairline ══ */}
         <div
-          className="relative shrink-0 text-white pt-[max(env(safe-area-inset-top),10px)] sm:pt-0"
+          className="relative shrink-0 overflow-hidden text-white pt-[max(env(safe-area-inset-top),8px)] sm:pt-0"
           style={{ background: "var(--gradient-hero)" }}
         >
-          <div className="flex items-center gap-3 px-3 sm:px-5 py-3">
+          <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-gold/20 blur-2xl" aria-hidden />
+          <div className="relative flex items-center gap-2.5 px-3 pb-2 pt-2 sm:px-5 sm:pt-3">
             <button
               onClick={onClose}
-              className="shrink-0 inline-flex items-center gap-1.5 h-8 pl-2 pr-3 rounded-full bg-white/12 hover:bg-white/20 active:scale-95 border border-white/20 text-xs font-semibold transition"
+              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-white/20 bg-white/10 pl-1.5 pr-2.5 text-[11px] font-semibold transition hover:bg-white/20 active:scale-95"
               aria-label="Back to results"
               title="Back to results"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="h-3.5 w-3.5" />
               Back
             </button>
-            <div className="min-w-0 flex-1">
-              <h2 className="font-bold text-[15px] sm:text-lg leading-tight flex items-center gap-1.5">
-                <GraduationCap className="w-4 h-4 text-gold shrink-0" />
-                Report Card
-              </h2>
-              <p className="text-[11px] leading-snug text-white/75 break-words">
-                {(selection.schoolName || DEFAULT_SCHOOL)} · BISE Peshawar
-              </p>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/50">
+                <GraduationCap className="h-4 w-4 text-gold" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-heading text-[15px] font-bold leading-tight">Report Card</h2>
+                <p className="truncate text-[10.5px] leading-tight text-white/70">
+                  {(selection.schoolName || DEFAULT_SCHOOL)} · BISE Peshawar
+                </p>
+              </div>
             </div>
           </div>
-          {/* Step indicator */}
-          <div className="flex items-center gap-1.5 px-4 sm:px-5 pb-3" aria-hidden>
-            {["Unlock", "Details & Rolls", "Results"].map((label, i) => (
-              <div key={label} className="flex-1 min-w-0">
-                <div className={`h-1 rounded-full transition-colors ${i <= stepIndex ? "bg-gold" : "bg-white/20"}`} />
-                <p className={`mt-1 text-[10px] leading-tight ${i <= stepIndex ? "text-white" : "text-white/50"}`}>{label}</p>
-              </div>
+
+          {/* Step indicator — numbered nodes joined by a line */}
+          <ol className="relative flex items-center px-4 pb-2.5 pt-0.5 sm:px-6" aria-label="Progress">
+            {STEPS.map((label, i) => (
+              <li key={label} className={`flex items-center ${i < STEPS.length - 1 ? "flex-1" : ""}`}>
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold transition-colors ${
+                      i < stepIndex
+                        ? "bg-gold text-[#0B2E19]"
+                        : i === stepIndex
+                          ? "bg-white text-primary-dark ring-2 ring-gold/70"
+                          : "bg-white/15 text-white/60"
+                    }`}
+                  >
+                    {i < stepIndex ? <Check className="h-3 w-3" strokeWidth={3} /> : i + 1}
+                  </span>
+                  <span className={`whitespace-nowrap text-[10.5px] font-semibold ${i <= stepIndex ? "text-white" : "text-white/50"}`}>{label}</span>
+                </span>
+                {i < STEPS.length - 1 && (
+                  <span className={`mx-2 h-px flex-1 ${i < stepIndex ? "bg-gold/80" : "bg-white/20"}`} aria-hidden />
+                )}
+              </li>
             ))}
-          </div>
+          </ol>
           <div className="h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />
         </div>
 
-        {/* ── Body ── */}
-        <div className="flex-1 overflow-y-auto overscroll-contain p-3.5 sm:p-6 bg-muted/20">
+        {/* ══ Body ══ */}
+        <div className="flex-1 overflow-y-auto overscroll-contain bg-gradient-to-b from-secondary/50 to-background px-3 py-3 sm:p-5">
           {/* ── Stage 1: Password ── */}
           {stage === "password" && (
             <div className="mx-auto w-full max-w-sm py-6 sm:py-10">
-              <div className="relative rounded-3xl border border-border bg-card p-6 shadow-xl overflow-hidden">
-                <div className="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-gold/15 blur-2xl" />
+              <div className="relative overflow-hidden rounded-3xl border border-border bg-card p-5 shadow-xl">
+                <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-gold/15 blur-2xl" />
                 <div className="pointer-events-none absolute -bottom-20 -left-16 h-44 w-44 rounded-full bg-primary/15 blur-2xl" />
+                <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />
                 <div className="relative flex flex-col items-center text-center">
-                  <div className="p-[2px] rounded-full bg-gradient-to-br from-gold to-primary mb-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-card">
-                      <Lock className="h-6 w-6 text-primary" />
+                  <div className="mb-3 rounded-full bg-gradient-to-br from-gold to-primary p-[2px]">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-card">
+                      <Lock className="h-5 w-5 text-primary" />
                     </div>
                   </div>
-                  <h3 className="text-lg font-bold text-foreground">Restricted Access</h3>
-                  <p className="mt-1 mb-5 text-[13px] leading-relaxed text-muted-foreground">
+                  <h3 className="font-heading text-[17px] font-bold text-foreground">Restricted Access</h3>
+                  <p className="mb-4 mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
                     Enter the staff password to generate bulk result reports.
                   </p>
                   <div className="w-full space-y-2.5 text-left">
@@ -533,10 +557,11 @@ export default function ReportCardModal({ open, onClose }: Props) {
                       </p>
                     )}
                     <button onClick={submitPassword} className={primaryBtn}>
+                      <Lock className="h-3.5 w-3.5" />
                       Unlock
                     </button>
                   </div>
-                  <p className="mt-4 text-[11px] text-muted-foreground/80">Authorised school staff only</p>
+                  <p className="mt-3.5 text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">Authorised school staff only</p>
                 </div>
               </div>
             </div>
@@ -544,61 +569,53 @@ export default function ReportCardModal({ open, onClose }: Props) {
 
           {/* ── Stage 2 & 3: Form + Fetching ── */}
           {(stage === "form" || stage === "fetching") && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* 1 · Exam details */}
-              <SectionCard step={1} title="Exam Details">
+              <SectionCard step={1} title="Exam Details" hint="Choose the class and exam">
                 <div className="space-y-3">
                   <div>
                     <label className={labelCls}>School / College Name</label>
-                    <input
-                      type="text"
-                      value={selection.schoolName}
-                      disabled={busy}
-                      onChange={(e) => setSelection((s) => ({ ...s, schoolName: e.target.value }))}
-                      placeholder="Shown on PDF, Excel & Combined report"
-                      className={inputCls}
-                    />
+                    <div className="relative">
+                      <span className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-muted-foreground"><Landmark className="h-3.5 w-3.5" /></span>
+                      <input
+                        type="text"
+                        value={selection.schoolName}
+                        disabled={busy}
+                        onChange={(e) => setSelection((s) => ({ ...s, schoolName: e.target.value }))}
+                        placeholder="Shown on PDF, Excel & Combined report"
+                        className={`${inputCls} pl-8`}
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className={labelCls}>Class</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {CLASS_OPTIONS.map((c) => (
-                        <button
-                          key={c}
-                          disabled={busy}
-                          onClick={() => setSelection((s) => ({ ...s, className: c }))}
-                          className={segCls(selection.className === c)}
-                        >
-                          {c}
-                        </button>
-                      ))}
-                    </div>
+                    <Segmented
+                      options={CLASS_OPTIONS}
+                      value={selection.className}
+                      disabled={busy}
+                      onChange={(c) => setSelection((s) => ({ ...s, className: c }))}
+                    />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-[minmax(0,1fr)_5.25rem] gap-2.5">
                     <div>
                       <label className={labelCls}>Exam Type</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(["Annual-I", "Annual-II"] as const).map((t) => (
-                          <button
-                            key={t}
-                            disabled={busy}
-                            onClick={() => setSelection((s) => ({ ...s, examType: t }))}
-                            className={segCls(selection.examType === t)}
-                          >
-                            {t}
-                          </button>
-                        ))}
-                      </div>
+                      <Segmented
+                        options={["Annual-I", "Annual-II"] as const}
+                        value={selection.examType}
+                        disabled={busy}
+                        onChange={(t) => setSelection((s) => ({ ...s, examType: t }))}
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>Year</label>
                       <input
                         type="number"
+                        inputMode="numeric"
                         value={selection.year}
                         disabled={busy}
                         onChange={(e) => setSelection((s) => ({ ...s, year: e.target.value }))}
                         placeholder="2026"
-                        className={inputCls}
+                        className={`${inputCls} h-9 px-2.5 text-center font-semibold tabular-nums`}
                       />
                     </div>
                   </div>
@@ -609,16 +626,16 @@ export default function ReportCardModal({ open, onClose }: Props) {
               <SectionCard
                 step={2}
                 title="Roll Numbers"
-                badge={rollEntries.length > 0 ? `${rollEntries.length} saved · ${classDisplayName(selection.className)}` : undefined}
+                hint={rollEntries.length > 0 ? `${rollEntries.length} saved · ${classDisplayName(selection.className)}` : "Paste or type, then add"}
                 right={
                   rollEntries.length > 0 ? (
                     <button
                       onClick={clearAllRolls}
                       disabled={busy}
-                      className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-destructive/30 text-[11px] font-semibold text-destructive hover:bg-destructive/10 active:scale-95 transition disabled:opacity-50"
+                      className="inline-flex h-7 items-center gap-1 rounded-full border border-destructive/30 px-2.5 text-[11px] font-semibold text-destructive transition hover:bg-destructive/10 active:scale-95 disabled:opacity-50"
                     >
                       <Trash2 className="h-3 w-3" />
-                      Delete all
+                      Clear
                     </button>
                   ) : undefined
                 }
@@ -629,14 +646,17 @@ export default function ReportCardModal({ open, onClose }: Props) {
                   onChange={(e) => setRollInput(e.target.value)}
                   placeholder={"Paste roll numbers — separated by spaces, commas or new lines.\ne.g. 703900, 703902 704001"}
                   rows={3}
-                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-foreground text-[13px] font-mono placeholder:font-sans placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60 resize-y transition disabled:opacity-50"
+                  className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 font-mono text-[13px] text-foreground transition placeholder:font-sans placeholder:text-[12px] placeholder:text-muted-foreground/60 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
                 />
                 <div className="mt-2 flex items-center justify-between gap-3">
-                  <p className="text-[11px] leading-snug text-muted-foreground min-w-0">Only 4–10 digit numbers are accepted.</p>
+                  <p className="flex min-w-0 items-center gap-1 text-[11px] leading-snug text-muted-foreground">
+                    <Hash className="h-3 w-3 shrink-0" />
+                    <span className="truncate">Only 4–10 digit numbers</span>
+                  </p>
                   <button
                     onClick={addRolls}
                     disabled={busy || !rollInput.trim()}
-                    className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-primary-dark text-white text-xs font-semibold shadow-sm hover:brightness-110 active:scale-95 transition disabled:opacity-45"
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-primary-dark to-primary px-4 text-xs font-semibold text-white shadow-sm ring-1 ring-gold/40 transition hover:brightness-110 active:scale-95 disabled:opacity-45"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add
@@ -644,23 +664,24 @@ export default function ReportCardModal({ open, onClose }: Props) {
                 </div>
 
                 {rollEntries.length === 0 ? (
-                  <div className="mt-3 rounded-xl border border-dashed border-border bg-muted/30 px-4 py-6 text-center">
-                    <p className="text-[13px] leading-relaxed text-muted-foreground">
-                      No roll numbers saved yet. Paste some above to get started.
-                    </p>
+                  <div className="mt-3 flex flex-col items-center rounded-xl border border-dashed border-border bg-secondary/40 px-4 py-4 text-center">
+                    <span className="mb-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-card text-muted-foreground shadow-sm ring-1 ring-border">
+                      <Hash className="h-4 w-4" />
+                    </span>
+                    <p className="text-[12px] leading-relaxed text-muted-foreground">No roll numbers saved yet.</p>
                   </div>
                 ) : (
-                  <div className="mt-3 flex max-h-44 flex-wrap gap-1.5 overflow-y-auto rounded-xl border border-border bg-muted/30 p-2">
+                  <div className="mt-3 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-xl border border-border bg-secondary/40 p-2">
                     {rollEntries.map((entry) => (
                       <span
                         key={entry.roll}
-                        className="inline-flex items-center gap-1 rounded-full border border-border bg-background pl-2.5 pr-1 py-0.5 text-xs font-mono shadow-sm"
+                        className="inline-flex items-center gap-0.5 rounded-full border border-border bg-card py-0.5 pl-2.5 pr-0.5 font-mono text-[11.5px] shadow-sm"
                       >
                         {entry.roll}
                         <button
                           onClick={() => removeRoll(entry.roll)}
                           disabled={busy}
-                          className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition disabled:opacity-50"
+                          className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                           aria-label={`Remove ${entry.roll}`}
                         >
                           <X className="h-3 w-3" />
@@ -673,40 +694,44 @@ export default function ReportCardModal({ open, onClose }: Props) {
 
               {/* Fetching progress */}
               {busy && (
-                <div className="rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">
-                  <div className="flex items-start gap-3 mb-3">
-                    <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-primary" />
+                <div className="relative overflow-hidden rounded-2xl border border-gold/40 bg-card p-3.5 shadow-sm">
+                  <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />
+                  <div className="mb-2.5 flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Loader2 className="h-[18px] w-[18px] animate-spin" />
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-semibold leading-snug text-foreground">
                         {fetchMode === "combined"
-                          ? `Fetching combined results from BISE Peshawar (${pairA} + ${pairB})…`
-                          : "Fetching results from BISE Peshawar…"}
+                          ? `Fetching ${pairA} + ${pairB} from BISE Peshawar…`
+                          : "Fetching from BISE Peshawar…"}
                       </p>
                       {fetchMode === "combined" ? (
-                        <p className="mt-0.5 text-xs leading-snug text-muted-foreground break-words">
-                          {classDisplayName(pairA)}: {combinedProgress.aDone} / {combinedProgress.aTotal}
+                        <p className="mt-0.5 break-words text-[11px] leading-snug text-muted-foreground">
+                          {classDisplayName(pairA)}: {combinedProgress.aDone}/{combinedProgress.aTotal}
                           {"  ·  "}
-                          {classDisplayName(pairB)}: {combinedProgress.bDone} / {combinedProgress.bTotal}
+                          {classDisplayName(pairB)}: {combinedProgress.bDone}/{combinedProgress.bTotal}
                         </p>
                       ) : (
-                        <p className="mt-0.5 text-xs leading-snug text-muted-foreground break-words">
-                          {progress.done} / {progress.total}
+                        <p className="mt-0.5 break-words text-[11px] leading-snug text-muted-foreground">
+                          {progress.done}/{progress.total}
                           {progress.current && `  ·  current: ${progress.current}`}
                         </p>
                       )}
                     </div>
+                    <span className="font-heading text-lg font-bold tabular-nums text-primary">{fetchPct}%</span>
                   </div>
                   {fetchMode === "combined" ? (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {[
-                        { name: classDisplayName(pairA), done: combinedProgress.aDone, total: combinedProgress.aTotal, bar: "bg-sky-500" },
-                        { name: classDisplayName(pairB), done: combinedProgress.bDone, total: combinedProgress.bTotal, bar: "bg-violet-500" },
+                        { name: classDisplayName(pairA), done: combinedProgress.aDone, total: combinedProgress.aTotal },
+                        { name: classDisplayName(pairB), done: combinedProgress.bDone, total: combinedProgress.bTotal },
                       ].map((b) => (
-                        <div key={b.name}>
-                          <p className="mb-1 text-[10px] font-medium text-muted-foreground">{b.name}</p>
-                          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div key={b.name} className="flex items-center gap-2">
+                          <p className="w-14 shrink-0 text-[10px] font-semibold text-muted-foreground">{b.name}</p>
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
                             <div
-                              className={`h-full rounded-full ${b.bar} transition-all duration-200 ease-out`}
+                              className="h-full rounded-full bg-gradient-to-r from-primary-dark to-gold transition-all duration-200 ease-out"
                               style={{ width: `${b.total > 0 ? (b.done / b.total) * 100 : 0}%` }}
                             />
                           </div>
@@ -714,9 +739,9 @@ export default function ReportCardModal({ open, onClose }: Props) {
                       ))}
                     </div>
                   ) : (
-                    <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-primary-dark to-gold transition-all duration-200 ease-out"
+                        className="h-full rounded-full bg-gradient-to-r from-primary-dark via-primary to-gold transition-all duration-200 ease-out"
                         style={{ width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%` }}
                       />
                     </div>
@@ -724,42 +749,34 @@ export default function ReportCardModal({ open, onClose }: Props) {
                 </div>
               )}
 
-              {/* Search — single class */}
+              {/* Combined report — both classes of the pair */}
               {stage === "form" && (
-                <button onClick={startSearch} disabled={rollEntries.length === 0} className={primaryBtn}>
-                  <Search className="h-3.5 w-3.5" />
-                  Search {rollEntries.length} Roll Number{rollEntries.length === 1 ? "" : "s"}
-                </button>
-              )}
-
-              {/* Combined report — both classes of the pair, at the very bottom */}
-              {stage === "form" && (
-                <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-sm">
-                  <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-violet-500/10 blur-2xl" />
+                <div className="relative overflow-hidden rounded-2xl border border-gold/40 bg-card p-3.5 shadow-sm">
+                  <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gold/15 blur-2xl" />
                   <div className="relative">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-violet-600 text-white shadow">
-                        <Layers className="h-[18px] w-[18px]" />
-                      </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-gold to-gold-strong text-white shadow-sm">
+                        <Layers className="h-4 w-4" />
+                      </span>
                       <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-bold leading-tight text-foreground">Combined Report Card</h4>
-                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                          Fetch {classDisplayName(pairA)} and {classDisplayName(pairB)} together and download one combined PDF.
+                        <h4 className="font-heading text-[13.5px] font-bold leading-tight text-foreground">Combined Report Card</h4>
+                        <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground">
+                          {classDisplayName(pairA)} + {classDisplayName(pairB)} in one combined PDF.
                         </p>
                       </div>
                     </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="mt-2.5 grid grid-cols-2 gap-2">
                       {[
                         { name: classDisplayName(pairA), n: countA },
                         { name: classDisplayName(pairB), n: countB },
                       ].map((c) => (
                         <div
                           key={c.name}
-                          className={`rounded-xl border px-3 py-2 ${c.n > 0 ? "border-emerald-300/60 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800/40" : "border-border bg-muted/40"}`}
+                          className={`flex items-center justify-between rounded-xl border px-3 py-1.5 ${c.n > 0 ? "border-emerald-300/60 bg-emerald-50 dark:border-emerald-800/40 dark:bg-emerald-950/20" : "border-border bg-secondary/40"}`}
                         >
-                          <p className="text-[11px] font-semibold leading-tight text-muted-foreground">{c.name}</p>
-                          <p className={`text-sm font-bold leading-tight ${c.n > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                            {c.n} roll{c.n === 1 ? "" : "s"}
+                          <p className="text-[11px] font-semibold text-muted-foreground">{c.name}</p>
+                          <p className={`text-[13px] font-bold tabular-nums ${c.n > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                            {c.n}<span className="ml-0.5 text-[10px] font-semibold opacity-70">roll{c.n === 1 ? "" : "s"}</span>
                           </p>
                         </div>
                       ))}
@@ -767,15 +784,14 @@ export default function ReportCardModal({ open, onClose }: Props) {
                     <button
                       onClick={startCombinedSearch}
                       disabled={!canCombine}
-                      className="mt-3 w-full h-9 px-4 rounded-lg text-[13px] font-semibold text-white flex items-center justify-center gap-2 shadow-sm transition hover:brightness-110 active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:shadow-none"
-                      style={{ background: "linear-gradient(90deg, #0284c7 0%, #7c3aed 100%)" }}
+                      className="mt-2.5 flex h-9 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-gold-strong to-[hsl(41_90%_24%)] px-4 text-[13px] font-semibold text-white shadow-[0_8px_18px_-10px_hsl(var(--gold)/0.9)] ring-1 ring-white/20 transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none dark:from-gold dark:to-gold-strong dark:text-gold-ink"
                     >
                       <Layers className="h-3.5 w-3.5" />
                       Download Combined ({countA + countB} rolls)
                     </button>
                     {!canCombine && (
                       <p className="mt-2 text-center text-[11px] leading-snug text-muted-foreground">
-                        Save roll numbers for both {classDisplayName(pairA)} and {classDisplayName(pairB)} (same exam type &amp; year) to enable this.
+                        Save rolls for both {classDisplayName(pairA)} and {classDisplayName(pairB)} (same exam &amp; year) to enable this.
                       </p>
                     )}
                   </div>
@@ -793,63 +809,88 @@ export default function ReportCardModal({ open, onClose }: Props) {
 
           {/* ── Stage 4: Results ── */}
           {stage === "results" && results && stats && (
-            <div className="space-y-4">
+            <div className="space-y-3">
+              {/* title row */}
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-bold text-foreground">Results Summary</h3>
+                <div className="min-w-0">
+                  <h3 className="font-heading text-[15px] font-bold leading-tight text-foreground">Results Summary</h3>
+                  <p className="mt-0.5 truncate text-[11px] font-semibold text-primary">
+                    {classDisplayName(selection.className)} · {selection.examType} {selection.year}
+                  </p>
+                </div>
                 <button
                   onClick={() => setStage("form")}
-                  className="inline-flex items-center gap-1 h-7 px-3 rounded-full border border-border bg-card text-[11px] font-semibold text-primary hover:bg-muted active:scale-95 transition"
+                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-border bg-card px-3 text-[11px] font-semibold text-primary shadow-sm transition hover:bg-secondary active:scale-95"
                 >
                   <ArrowLeft className="h-3 w-3" />
-                  Back to form
+                  Edit
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <StatTile label="Total" value={stats.totalStudents} />
-                <StatTile label="Found" value={stats.foundCount} />
-                <StatTile label="Not Found" value={stats.notFoundCount} />
-                <StatTile label="Errors" value={stats.errorCount} />
-                <StatTile label="Passed" value={stats.passCount} color="text-emerald-600 dark:text-emerald-400" />
-                <StatTile label="Failed" value={stats.failCount} color="text-red-600 dark:text-red-400" />
-                <StatTile label="Pass %" value={`${stats.passPercentage}%`} />
-                <StatTile label="Average" value={stats.averageMarks} />
+              {/* hero — pass-rate ring + headline numbers */}
+              <div
+                className="relative overflow-hidden rounded-2xl p-3.5 text-white shadow-[0_14px_28px_-16px_hsl(var(--primary)/0.8)]"
+                style={{ background: "var(--gradient-hero)" }}
+              >
+                <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-gold/20 blur-2xl" aria-hidden />
+                <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-gold/80 to-transparent" />
+                <div className="relative flex items-center gap-3.5">
+                  <div
+                    className="h-[74px] w-[74px] shrink-0 rounded-full p-[5px]"
+                    style={{ background: `conic-gradient(#E3B341 ${passPct * 3.6}deg, rgba(255,255,255,0.18) 0deg)` }}
+                    role="img"
+                    aria-label={`Pass rate ${stats.passPercentage}%`}
+                  >
+                    <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-primary-dark">
+                      <span className="font-heading text-[17px] font-bold leading-none tabular-nums">{stats.passPercentage}%</span>
+                      <span className="mt-0.5 text-[8px] font-bold uppercase tracking-[0.16em] text-white/60">Pass</span>
+                    </div>
+                  </div>
+                  <div className="grid min-w-0 flex-1 grid-cols-3 gap-1.5 text-center">
+                    {[
+                      { l: "Total", v: stats.totalStudents, c: "text-white" },
+                      { l: "Passed", v: stats.passCount, c: "text-emerald-300" },
+                      { l: "Failed", v: stats.failCount, c: "text-red-300" },
+                    ].map((t) => (
+                      <div key={t.l} className="rounded-xl bg-white/10 px-1 py-2 ring-1 ring-white/10">
+                        <p className={`font-heading text-xl font-bold leading-none tabular-nums ${t.c}`}>{t.v}</p>
+                        <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-white/65">{t.l}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="relative mt-3 grid grid-cols-4 gap-1.5 border-t border-white/15 pt-3 text-center">
+                  {[
+                    { l: "Found", v: stats.foundCount },
+                    { l: "Not found", v: stats.notFoundCount },
+                    { l: "Errors", v: stats.errorCount },
+                    { l: "Average", v: stats.averageMarks },
+                  ].map((t) => (
+                    <div key={t.l}>
+                      <p className="text-[13px] font-bold leading-none tabular-nums">{t.v}</p>
+                      <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-white/60">{t.l}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
 
+              {/* top scorer */}
               {stats.topScorerName && (
-                <div className="flex items-start gap-3 rounded-2xl border border-gold/40 bg-gradient-to-r from-gold-soft/70 to-card p-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold text-gold-ink">
-                    <Trophy className="h-[18px] w-[18px]" />
+                <div className="relative flex items-center gap-3 overflow-hidden rounded-2xl border border-gold/50 bg-gradient-to-r from-gold-soft/80 to-card p-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-gold to-gold-strong text-white shadow-md ring-2 ring-white/50">
+                    <Trophy className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-gold-strong">Top scorer</p>
+                    <p className="break-words font-heading text-[14px] font-bold leading-snug text-foreground">{stats.topScorerName}</p>
+                    <p className="text-[11px] leading-snug text-muted-foreground">Roll {stats.topScorerRoll}</p>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gold-strong">Top scorer</p>
-                    <p className="text-sm font-bold leading-snug text-foreground break-words">{stats.topScorerName}</p>
-                    <p className="text-xs leading-snug text-muted-foreground">Roll {stats.topScorerRoll} · {stats.highestMarks} marks</p>
+                  <div className="shrink-0 text-right">
+                    <p className="font-heading text-xl font-bold leading-none tabular-nums text-foreground">{stats.highestMarks}</p>
+                    <p className="mt-0.5 text-[10px] font-semibold text-muted-foreground">/ {classMax}</p>
                   </div>
                 </div>
               )}
-
-              {/* Downloads */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={downloadPDF}
-                  className="h-8 px-3 rounded-lg text-xs font-semibold text-white flex items-center justify-center gap-1.5 bg-gradient-to-r from-primary-dark to-primary shadow-sm hover:brightness-110 active:scale-[0.98] transition"
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  PDF
-                </button>
-                <button
-                  onClick={downloadExcel}
-                  className="h-8 px-3 rounded-lg text-xs font-semibold text-white flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-700 to-emerald-500 shadow-sm hover:brightness-110 active:scale-[0.98] transition"
-                >
-                  <FileSpreadsheet className="h-3.5 w-3.5" />
-                  Excel
-                </button>
-              </div>
-              <p className="-mt-1 flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
-                <Download className="mt-px h-3.5 w-3.5 shrink-0" />
-                PDF has totals and a summary. Excel has every paper's marks.
-              </p>
 
               {(missingCount > 0 || retryNote) && (
                 <div className="rounded-2xl border border-amber-300/60 bg-amber-50 p-3 dark:border-amber-800/40 dark:bg-amber-950/20">
@@ -863,7 +904,7 @@ export default function ReportCardModal({ open, onClose }: Props) {
                       <button
                         onClick={retryMissing}
                         disabled={retrying}
-                        className="shrink-0 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-amber-600 px-4 text-xs font-semibold text-white hover:bg-amber-700 active:scale-95 transition disabled:opacity-60"
+                        className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-amber-600 px-4 text-xs font-semibold text-white transition hover:bg-amber-700 active:scale-95 disabled:opacity-60"
                       >
                         {retrying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                         {retrying ? `Retrying ${retryProgress.done}/${retryProgress.total}…` : `Retry ${missingCount} missing`}
@@ -876,24 +917,35 @@ export default function ReportCardModal({ open, onClose }: Props) {
                 </div>
               )}
 
-              {/* Student list — wraps names instead of cutting them off */}
-              <SectionCard step={null} title={`Student Results (${results.length})`}>
-                <div className="max-h-96 overflow-y-auto rounded-xl border border-border divide-y divide-border bg-background">
-                  {results.map((r) => (
-                    <div key={r.roll} className="flex items-start gap-3 px-3 py-2.5">
+              {/* student list */}
+              <SectionCard step={null} title={`Student Results (${results.length})`} hint={`Marks out of ${classMax}`}>
+                <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-background">
+                  {results.map((r, i) => (
+                    <li
+                      key={r.roll}
+                      className={`flex items-center gap-2.5 border-l-[3px] px-2.5 py-2 ${
+                        !r.found ? "border-l-transparent opacity-80" : r.isFail ? "border-l-red-400" : "border-l-emerald-500"
+                      }`}
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-bold tabular-nums text-muted-foreground">
+                        {i + 1}
+                      </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-semibold leading-snug text-foreground break-words">
+                        <p className="break-words text-[13px] font-semibold leading-snug text-foreground">
                           {r.found ? (r.name || "—") : (
-                            <span className="italic font-normal text-muted-foreground">{r.error || "Not found"}</span>
+                            <span className="font-normal italic text-muted-foreground">{r.error || "Not found"}</span>
                           )}
                         </p>
-                        <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">Roll {r.roll}</p>
+                        <p className="mt-px font-mono text-[10.5px] text-muted-foreground">Roll {r.roll}</p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-[13px] font-bold leading-snug text-foreground">
+                        <p className="text-[13px] font-bold leading-snug tabular-nums text-foreground">
                           {r.found && r.totalMarks > 0 ? r.totalMarks : "—"}
+                          {r.found && r.totalMarks > 0 ? (
+                            <span className="text-[10px] font-semibold text-muted-foreground">/{classMax}</span>
+                          ) : null}
                           {r.found && (r.grade || r.isFail) ? (
-                            <span className="ml-1.5 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                            <span className="ml-1.5 rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
                               {r.grade || "F"}
                             </span>
                           ) : null}
@@ -902,28 +954,104 @@ export default function ReportCardModal({ open, onClose }: Props) {
                           {!r.found ? (
                             <span className="text-[11px] text-muted-foreground">—</span>
                           ) : r.isFail ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600 dark:bg-red-950/30 dark:text-red-400">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-px text-[9.5px] font-bold text-red-600 dark:bg-red-950/30 dark:text-red-400">
                               <XCircle className="h-3 w-3" />
                               FAIL
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-px text-[9.5px] font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
                               <CheckCircle2 className="h-3 w-3" />
                               PASS
                             </span>
                           )}
                         </div>
                       </div>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </SectionCard>
             </div>
           )}
         </div>
+
+        {/* ══ Sticky footer actions (thin pill buttons) ══ */}
+        {(stage === "form" || stage === "fetching") && (
+          <div className="shrink-0 border-t border-border bg-card/95 px-3 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5 backdrop-blur sm:px-5">
+            <button onClick={startSearch} disabled={busy || rollEntries.length === 0} className={primaryBtn}>
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+              {busy ? "Fetching results…" : `Search ${rollEntries.length} Roll Number${rollEntries.length === 1 ? "" : "s"}`}
+            </button>
+          </div>
+        )}
+        {stage === "results" && results && stats && (
+          <div className="shrink-0 border-t border-border bg-card/95 px-3 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5 backdrop-blur sm:px-5">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={downloadPDF}
+                className="flex h-9 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-primary-dark to-primary px-3 text-[13px] font-semibold text-white shadow-sm ring-1 ring-gold/40 transition hover:brightness-110 active:scale-[0.98]"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                PDF
+              </button>
+              <button
+                onClick={downloadExcel}
+                className="flex h-9 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-700 to-emerald-500 px-3 text-[13px] font-semibold text-white shadow-sm ring-1 ring-white/20 transition hover:brightness-110 active:scale-[0.98]"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Excel
+              </button>
+            </div>
+            <p className="mt-1.5 flex items-center justify-center gap-1 text-[10.5px] leading-snug text-muted-foreground">
+              <Download className="h-3 w-3 shrink-0" />
+              PDF: totals &amp; summary · Excel: every paper's marks
+            </p>
+          </div>
+        )}
       </div>
     </div>,
     document.body
+  );
+}
+
+// ── Segmented control — one slim track, active option is a raised green pill ──
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: readonly T[];
+  value: T;
+  onChange: (v: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      className="grid gap-1 rounded-xl border border-border/70 bg-secondary/70 p-1"
+      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+    >
+      {options.map((o) => {
+        const active = value === o;
+        return (
+          <button
+            key={o}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onChange(o)}
+            className={`h-7 whitespace-nowrap rounded-lg px-1 text-[12px] font-semibold leading-none transition-all active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 ${
+              active
+                ? "bg-primary-dark text-white shadow-sm ring-1 ring-gold/50"
+                : "text-foreground/70 hover:text-foreground"
+            }`}
+          >
+            {o}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -931,55 +1059,34 @@ export default function ReportCardModal({ open, onClose }: Props) {
 function SectionCard({
   step,
   title,
-  badge,
+  hint,
   right,
   children,
 }: {
   step: number | null;
   title: string;
-  badge?: string;
+  hint?: string;
   right?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-card p-3.5 sm:p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2.5">
-        {step !== null && (
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-dark text-[11px] font-bold text-white ring-2 ring-gold/40">
-            {step}
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold leading-tight text-foreground">{title}</h3>
-          {badge && (
-            <p className="mt-0.5 text-[11px] font-semibold leading-tight text-primary">{badge}</p>
+    <section className="relative overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_22px_-16px_hsl(var(--primary)/0.35)]">
+      <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent" />
+      <div className="p-3.5 sm:p-4">
+        <div className="mb-3 flex items-center gap-2.5">
+          {step !== null && (
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-dark to-primary text-[11px] font-bold text-white ring-2 ring-gold/50">
+              {step}
+            </span>
           )}
+          <div className="min-w-0 flex-1">
+            <h3 className="font-heading text-[14px] font-bold leading-tight text-foreground">{title}</h3>
+            {hint && <p className="mt-0.5 truncate text-[11px] font-medium leading-tight text-muted-foreground">{hint}</p>}
+          </div>
+          {right}
         </div>
-        {right}
+        {children}
       </div>
-      {children}
     </section>
-  );
-}
-
-// ── Small stat tile ──
-function StatTile({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string | number;
-  color?: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card px-3 py-2.5 shadow-sm">
-      <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className={`mt-0.5 text-xl font-bold leading-tight ${color || "text-foreground"}`}>
-        {value}
-      </p>
-    </div>
   );
 }
