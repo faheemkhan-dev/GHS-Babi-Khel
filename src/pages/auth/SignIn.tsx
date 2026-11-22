@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Mail, Lock, GraduationCap, ArrowRight, Loader2, Clock, XCircle } from "lucide-react";
+import { Mail, Lock, GraduationCap, ArrowRight, Loader2, Clock, XCircle, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { supabase, signOutSafely } from "@/lib/supabase";
 import toast from "react-hot-toast";
 import { useSchoolSettings, safeMediaUrl } from "@/hooks/useSchoolSettings";
@@ -21,6 +21,7 @@ const SignIn = () => {
   const [password, setPassword]       = useState("");
   const [loading, setLoading]         = useState(false);
   const [logoFailed, setLogoFailed]   = useState(false);
+  const [showPw, setShowPw]           = useState(false);
   const [pendingStatus, setPendingStatus] = useState<"pending" | "rejected" | null>(null);
   const navigate = useNavigate();
 
@@ -147,105 +148,139 @@ const SignIn = () => {
     }
   };
 
+  const inputCls =
+    "w-full h-11 rounded-xl border border-border/80 bg-background/60 pl-10 pr-3 text-[14px] text-foreground placeholder:text-muted-foreground/60 outline-none transition-[border-color,box-shadow] focus:border-[hsl(var(--gold))] focus:ring-2 focus:ring-[hsl(var(--gold)/0.2)]";
+
   return (
-    <div className="min-h-screen gradient-hero flex items-center justify-center p-4">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-20 -right-20 w-96 h-96 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute bottom-20 -left-20 w-80 h-80 rounded-full bg-white/5 blur-3xl" />
+    <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[linear-gradient(160deg,hsl(160_55%_8%)_0%,hsl(158_45%_14%)_55%,hsl(156_40%_20%)_100%)] px-4 py-8">
+      {/* decoration */}
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <div className="absolute -right-24 -top-32 h-80 w-80 rounded-full" style={{ background: "radial-gradient(circle, hsla(43,80%,62%,0.20), transparent 65%)" }} />
+        <div className="absolute -bottom-32 -left-24 h-80 w-80 rounded-full" style={{ background: "radial-gradient(circle, hsla(160,70%,42%,0.25), transparent 65%)" }} />
+        <svg className="absolute -right-16 top-10 h-72 w-72 opacity-[0.10]" viewBox="0 0 200 200" fill="none" stroke="hsl(43,80%,70%)" strokeWidth="0.8">
+          <circle cx="100" cy="100" r="30" /><circle cx="100" cy="100" r="55" /><circle cx="100" cy="100" r="80" /><circle cx="100" cy="100" r="105" />
+        </svg>
+        <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: "radial-gradient(#fff 0.6px, transparent 0.6px)", backgroundSize: "18px 18px" }} />
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 30 }}
+        initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md relative z-10"
+        transition={{ duration: 0.45, ease: "easeOut" }}
+        className="relative z-10 w-full max-w-[380px]"
       >
-        <div className="bg-card rounded-2xl shadow-elevated p-8">
-          <div className="text-center mb-8">
-            <div className="w-14 h-14 rounded-2xl gradient-hero mx-auto mb-4 flex items-center justify-center overflow-hidden">
-              {settings?.logo_url && !logoFailed ? (
-                <img
-                  src={safeMediaUrl(settings.logo_url)!}
-                  alt={`${settings?.school_name || "GHS Babi Khel"} logo`}
-                  className="w-full h-full object-cover"
-                  onError={() => setLogoFailed(true)}
-                />
-              ) : (
-                <GraduationCap className="w-8 h-8 text-on-hero" />
-              )}
+        {/* gold hairline frame */}
+        <div className="rounded-[22px] bg-[linear-gradient(135deg,hsla(43,80%,68%,0.75),hsla(160,40%,30%,0.25)_45%,hsla(43,75%,62%,0.45))] p-px shadow-[0_28px_60px_-28px_rgba(0,0,0,0.7)]">
+          <div className="rounded-[21px] bg-card px-6 pb-6 pt-7">
+            <div className="mb-6 text-center">
+              <div className="mx-auto mb-3.5 h-14 w-14 overflow-hidden rounded-2xl bg-primary ring-1 ring-[hsl(var(--gold)/0.5)] ring-offset-2 ring-offset-card">
+                {settings?.logo_url && !logoFailed ? (
+                  <img
+                    src={safeMediaUrl(settings.logo_url)!}
+                    alt={`${settings?.school_name || "GHS Babi Khel"} logo`}
+                    className="h-full w-full object-cover"
+                    onError={() => setLogoFailed(true)}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <GraduationCap className="h-7 w-7 text-primary-foreground" />
+                  </div>
+                )}
+              </div>
+              <p className="text-[9.5px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold))]">Admin Portal</p>
+              <h1 className="mt-1 font-heading text-[26px] font-bold leading-tight tracking-tight text-foreground">Welcome Back</h1>
+              <p className="mt-1 text-[12.5px] text-muted-foreground">
+                Sign in to your {settings?.school_name || "GHS Babi Khel"} account
+              </p>
             </div>
-            <h1 className="text-2xl font-heading font-bold text-foreground">Welcome Back</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Sign in to your {settings?.school_name || "GHS Babi Khel"} account
-            </p>
+
+            {pendingStatus === "pending" && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+                <div>
+                  <p className="text-[12.5px] font-semibold text-blue-800 dark:text-blue-400">Waiting for Admin Approval</p>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-blue-700 dark:text-blue-400/80">
+                    Your account is under review. You'll be able to login once an administrator approves your account.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {pendingStatus === "rejected" && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-500/20 dark:bg-red-500/10">
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <div>
+                  <p className="text-[12.5px] font-semibold text-red-700 dark:text-red-400">Account Rejected</p>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-red-600 dark:text-red-400/80">
+                    Your account request was rejected by the administrator. Please contact the school for more information.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="signin-email" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Email</label>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    id="signin-email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className={inputCls}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label htmlFor="signin-password" className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Password</label>
+                  <Link to="/auth/forgot-password" className="text-[11.5px] font-medium text-primary hover:underline">
+                    Forgot password?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    id="signin-password"
+                    type={showPw ? "text" : "password"}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className={`${inputCls} pr-11`}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw((v) => !v)}
+                    aria-label={showPw ? "Hide password" : "Show password"}
+                    className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,hsl(43_89%_38%),hsl(40_90%_46%))] text-[14px] font-semibold text-white shadow-[0_8px_18px_-10px_hsl(43_89%_38%/0.8)] transition-[filter,transform] hover:brightness-110 active:scale-[0.99] disabled:opacity-60"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                {loading ? "Signing in..." : "Sign In"}
+              </button>
+            </form>
+
+            <div className="mt-5 flex items-center justify-center gap-1.5 border-t border-border/60 pt-4 text-[10.5px] text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary/70" />
+              Secure, encrypted sign-in
+            </div>
           </div>
-
-          {pendingStatus === "pending" && (
-            <div className="mb-6 p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-center">
-              <Clock className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-blue-800 dark:text-blue-400">Waiting for Admin Approval</p>
-              <p className="text-xs text-blue-700 dark:text-blue-400/80 mt-1">
-                Your account is under review. You'll be able to login once an administrator approves your account.
-              </p>
-            </div>
-          )}
-
-          {pendingStatus === "rejected" && (
-            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-center">
-              <XCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
-              <p className="text-sm font-semibold text-red-700 dark:text-red-400">Account Rejected</p>
-              <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">
-                Your account request was rejected by the administrator. Please contact the school for more information.
-              </p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full rounded-xl border border-input bg-background pl-9 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-ring outline-none"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium text-foreground">Password</label>
-                <Link to="/auth/forgot-password" className="text-xs text-primary hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full rounded-xl border border-input bg-background pl-9 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-ring outline-none"
-                  required
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full gradient-accent text-primary-foreground font-semibold py-3 rounded-xl shadow-card hover:shadow-elevated transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-              {loading ? "Signing in..." : "Sign In"}
-            </button>
-          </form>
-
         </div>
       </motion.div>
     </div>
@@ -253,4 +288,3 @@ const SignIn = () => {
 };
 
 export default SignIn;
-
