@@ -39,38 +39,38 @@ function ClassesAndSeatsBase({ processingFee }: { processingFee?: number | null 
         <div className="mx-auto max-w-lg overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card">
           <div aria-hidden className="h-1 bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
 
-          {/* column headers */}
-          <div className="grid grid-cols-[1fr_auto_5.5rem] items-center gap-3 border-b border-border/70 bg-muted/40 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+          {/* column headers — centred */}
+          <div className="grid grid-cols-3 items-center gap-2 border-b border-border/70 bg-muted/40 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
             <span>Class</span>
-            <span className="text-right">Seats</span>
-            <span className="text-center">Status</span>
+            <span>Seats</span>
+            <span>Status</span>
           </div>
 
           <ul className="divide-y divide-border/60">
             {rows.map((r) => (
               <li
                 key={r.class}
-                className={`grid grid-cols-[1fr_auto_5.5rem] items-center gap-3 border-l-[3px] px-4 py-3 ${
+                className={`grid grid-cols-3 items-center gap-2 border-l-[3px] px-3 py-2.5 text-center ${
                   r.is_open ? "border-l-primary" : "border-l-transparent"
                 }`}
               >
                 <span
-                  className={`min-w-0 truncate text-[15px] font-bold leading-tight ${r.is_open ? "text-foreground" : "text-muted-foreground"}`}
+                  className={`min-w-0 truncate text-[14px] font-semibold leading-tight ${r.is_open ? "text-foreground" : "text-muted-foreground"}`}
                   style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}
                 >
                   {r.class_label}
                 </span>
-                <span className="whitespace-nowrap text-right">
-                  <span className={`text-lg font-bold tabular-nums ${r.is_open ? "text-primary" : "text-muted-foreground"}`}>{r.seats}</span>
-                  <span className="ml-1 text-[11px] text-muted-foreground">seats</span>
+                {/* "60 seats" — one normal, light line */}
+                <span className="whitespace-nowrap text-[13px] font-normal tabular-nums text-foreground/80">
+                  {r.seats} seats
                 </span>
                 <span className="flex justify-center">
                   {r.is_open ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-0.5 text-[10.5px] font-bold text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-0.5 text-[10.5px] font-semibold text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
                       <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Open
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[10.5px] font-bold text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
                       <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" /> Closed
                     </span>
                   )}
@@ -80,9 +80,9 @@ function ClassesAndSeatsBase({ processingFee }: { processingFee?: number | null 
           </ul>
 
           {openSeats > 0 && (
-            <div className="flex items-center justify-between border-t border-gold/30 bg-gold/10 px-4 py-2.5">
+            <div className="border-t border-gold/30 bg-gold/10 px-3 py-2 text-center text-[11.5px] text-foreground/80">
               <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-gold-strong">Total open seats</span>
-              <span className="text-base font-bold tabular-nums text-foreground">{openSeats}</span>
+              <span className="ml-2 font-normal tabular-nums">{openSeats} seats</span>
             </div>
           )}
         </div>
