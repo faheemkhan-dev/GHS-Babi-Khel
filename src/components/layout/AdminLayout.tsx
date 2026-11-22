@@ -72,7 +72,12 @@ const navSections: NavSection[] = [
 const allNavItems: NavItem[] = navSections.flatMap(s => s.items);
 
 // First few items for the mobile bottom bar quick-access row
-const bottomBarItems: NavItem[] = allNavItems.slice(0, 4);
+const bottomBarItems: { id: string; label: string }[] = [
+  { id: "overview",   label: "Home" },
+  { id: "settings",   label: "Settings" },
+  { id: "admissions", label: "Admissions" },
+  { id: "results",    label: "Results" },
+];
 
 // ── PERFORMANCE: NavBtn + SectionedNav are defined OUTSIDE the parent ────────
 // Previously these were defined INSIDE <AdminLayout>, which meant every
@@ -343,36 +348,48 @@ const AdminLayout = ({ activeTab, onTabChange, children }: AdminLayoutProps) => 
           </div>
         </header>
 
-        <main className="flex-1 p-3 sm:p-4 md:p-6 pb-24 lg:pb-6 max-w-[1600px] w-full mx-auto">{children}</main>
+        <main className="flex-1 p-3 sm:p-4 md:p-6 pb-20 lg:pb-6 max-w-[1600px] w-full mx-auto">{children}</main>
       </div>
 
-      {/* Mobile bottom bar */}
-      <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 border-t border-border/70 shadow-[0_-8px_24px_-16px_hsl(var(--primary)/0.28)] transition-transform duration-300 ease-out ${bottomHidden ? "translate-y-full" : "translate-y-0"}`} style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        <div className="flex items-center justify-around py-1.5">
+      {/* Mobile bottom bar — thin, text-only tabs with a gold top indicator */}
+      <nav
+        aria-label="Quick navigation"
+        className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border/80 bg-card transition-transform duration-300 ease-out ${bottomHidden ? "translate-y-full" : "translate-y-0"}`}
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        <div className="grid grid-cols-5">
           {bottomBarItems.map(item => {
             const isActive = activeTab === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                aria-label={item.label}
-                className={`admin-dock-item relative flex flex-col items-center gap-0.5 p-2 min-w-[3.25rem] rounded-xl transition-all duration-200 ${isActive ? "text-primary" : "text-muted-foreground"}`}
                 aria-current={isActive ? "page" : undefined}
-              >
-                {isActive && <span aria-hidden className="absolute -top-1.5 h-1 w-7 rounded-full bg-[hsl(43_89%_58%)] shadow-[0_0_10px_hsl(43_89%_58%/0.8)]" />}
-                {item.lucideIcon ? (
-                  <item.lucideIcon className={`w-6 h-6 ${isActive ? "text-primary" : item.lucideColor ?? "text-muted-foreground"}`} />
-                ) : (
-                  <span className="text-xl leading-none">{item.emoji}</span>
+                className={cn(
+                  "relative flex h-12 items-center justify-center px-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] transition-colors duration-200 active:bg-secondary/60",
+                  isActive ? "text-[hsl(var(--gold))]" : "text-muted-foreground hover:text-foreground",
                 )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute inset-x-0 top-[-1px] h-[2px] bg-[hsl(var(--gold))] transition-opacity duration-200",
+                    isActive ? "opacity-100" : "opacity-0",
+                  )}
+                />
+                <span className="truncate">{item.label}</span>
               </button>
             );
           })}
-          <button onClick={() => setSidebarOpen(true)} aria-label="Open menu" className="admin-dock-item flex flex-col items-center gap-0.5 p-2 min-w-[3.25rem] text-muted-foreground">
-            <Menu className="w-6 h-6" />
+          <button
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open menu"
+            className="relative flex h-12 items-center justify-center px-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:text-foreground active:bg-secondary/60"
+          >
+            Menu
           </button>
         </div>
-      </div>
+      </nav>
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
