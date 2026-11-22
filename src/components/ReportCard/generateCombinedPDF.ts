@@ -198,7 +198,7 @@ export async function generateCombinedReportPDF(opts: CombinedPDFOpts): Promise<
       head: [["#", "Name", "Marks"]],
       body: top.length ? top.map((r, i) => [String(i + 1), r.name || "—", `${r.totalMarks} (${r.percentage}%)`]) : [["—", "No results", "—"]],
       styles: { ...tableBase(doc).styles, fontSize: 8, cellPadding: { top: 4, bottom: 4, left: 2, right: 2 } },
-      headStyles: { ...tableBase(doc).headStyles, fillColor: col, lineColor: col, fontSize: 7.5 },
+      headStyles: { ...tableBase(doc).headStyles, fillColor: col, textColor: T.white, lineColor: col, fontSize: 7.5 },
       columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: cardW - 16 - 20 - 78, fontStyle: "bold" }, 2: { cellWidth: 78 } },
     });
     cardBottom = Math.max(cardBottom, lastY());
