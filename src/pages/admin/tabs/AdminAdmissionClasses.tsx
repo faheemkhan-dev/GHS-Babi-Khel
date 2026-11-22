@@ -5,10 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react";
-import { GraduationCap, Loader2, Save, Armchair, Lock, Unlock } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Loader2, Check } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import toast from "react-hot-toast";
@@ -57,85 +54,87 @@ export default function AdminAdmissionClasses() {
     }
   };
 
+  const totalSeats = rows?.reduce((sum, r) => sum + (r.seats || 0), 0) ?? 0;
+  const openCount = rows?.filter((r) => r.is_open).length ?? 0;
+
   return (
-    <div className="space-y-4 pb-16">
-      <Card className="rounded-2xl border-border/60 shadow-sm">
-        <CardContent className="p-3 sm:p-5">
-          <div className="mb-4 flex flex-col items-center text-center">
-            <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Armchair className="h-5 w-5" />
-            </span>
-            <h2 className="font-heading text-base font-bold tracking-tight text-foreground sm:text-lg">Classes &amp; Seats</h2>
+    <div className="pb-16">
+      {isLoading ? (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
+        </div>
+      ) : !rows || rows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          No classes configured yet — run Supabase migration 20.
+        </p>
+      ) : (
+        <div className="mx-auto max-w-md overflow-hidden rounded-xl border border-border/70 bg-card">
+          {/* column labels */}
+          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-border/70 bg-secondary/50 px-3.5 py-2 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <span>Class</span>
+            <span className="w-[104px] text-center">Seats</span>
+            <span className="w-[38px] text-center">Open</span>
           </div>
 
-          {isLoading ? (
-            <div className="space-y-2">
-              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
-            </div>
-          ) : !rows || rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No classes configured yet — run Supabase migration 20.
-            </p>
-          ) : (
-            <div className="mx-auto max-w-md overflow-hidden rounded-2xl border border-primary/20 shadow-sm">
-              <table className="w-full table-fixed text-center">
-                <thead>
-                  <tr className="bg-primary/10">
-                    {["Class", "Seats", "Status"].map((h) => (
-                      <th key={h} className="px-2 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-primary">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {rows.map((r, i) => (
-                    <tr key={r.class} className={i % 2 ? "bg-muted/30" : "bg-card"}>
-                      <td className="px-2 py-3 align-middle">
-                        <span className="inline-flex flex-col items-center gap-0.5 sm:flex-row sm:gap-1.5">
-                          <GraduationCap className="h-4 w-4 shrink-0 text-primary" />
-                          <span className="whitespace-nowrap text-[13px] font-bold">Class {r.class}</span>
-                        </span>
-                      </td>
-                      <td className="px-2 py-3 align-middle">
-                        <div className="flex flex-col items-center gap-1.5">
-                          <Input
-                            type="number"
-                            inputMode="numeric"
-                            min={0}
-                            max={10000}
-                            value={drafts[r.class] ?? r.seats}
-                            onChange={(e) => setDrafts((d) => ({ ...d, [r.class]: Number(e.target.value) }))}
-                            className="h-8 w-16 rounded-lg px-1 text-center text-sm font-bold tabular-nums"
-                          />
-                          {dirty(r.class) && (
-                            <Button size="sm" onClick={() => saveSeats(r.class)} disabled={setSeatsMut.isPending}
-                              className="h-7 gap-1 whitespace-nowrap rounded-full px-3 text-[11px] font-bold shadow-none">
-                              {setSeatsMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-2 py-3 align-middle">
-                        <div className="flex flex-col items-center gap-1.5">
-                          <Switch checked={r.is_open} onCheckedChange={(v) => toggleOpen(r.class, v)} />
-                          {r.is_open ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-300">
-                              <Unlock className="h-3 w-3" /> Open
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-muted-foreground">
-                              <Lock className="h-3 w-3" /> Closed
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <ul className="divide-y divide-border/60">
+            {rows.map((r) => {
+              const isDirty = dirty(r.class);
+              return (
+                <li key={r.class} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3.5 py-2.5">
+                  <div className="min-w-0">
+                    <p className="whitespace-nowrap text-[13px] font-semibold leading-tight text-foreground">Class {r.class}</p>
+                    <p className={`mt-0.5 flex items-center gap-1 text-[10px] font-medium leading-none ${r.is_open ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                      <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${r.is_open ? "bg-emerald-500" : "bg-muted-foreground/50"}`} />
+                      {r.is_open ? "Open" : "Closed"}
+                    </p>
+                  </div>
+
+                  {/* seats: thin input + inline save tick */}
+                  <div className="flex w-[104px] items-center justify-center gap-1.5">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={10000}
+                      value={drafts[r.class] ?? r.seats}
+                      onChange={(e) => setDrafts((d) => ({ ...d, [r.class]: Number(e.target.value) }))}
+                      aria-label={`Seats for class ${r.class}`}
+                      className={`h-8 w-16 rounded-lg border bg-background text-center text-[13px] font-semibold tabular-nums outline-none transition-[border-color,box-shadow] focus:border-[hsl(var(--gold))] focus:ring-2 focus:ring-[hsl(var(--gold)/0.2)] ${isDirty ? "border-[hsl(var(--gold))]" : "border-border/80"}`}
+                    />
+                    {isDirty ? (
+                      <button
+                        type="button"
+                        onClick={() => saveSeats(r.class)}
+                        disabled={setSeatsMut.isPending}
+                        aria-label={`Save class ${r.class} seats`}
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-opacity active:opacity-80 disabled:opacity-60"
+                      >
+                        {setSeatsMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-4 w-4" />}
+                      </button>
+                    ) : (
+                      <span className="w-8 shrink-0" aria-hidden />
+                    )}
+                  </div>
+
+                  <div className="flex w-[38px] justify-center">
+                    <Switch
+                      checked={r.is_open}
+                      onCheckedChange={(v) => toggleOpen(r.class, v)}
+                      className="origin-center scale-[0.8]"
+                      aria-label={`Toggle admission for class ${r.class}`}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="flex items-center justify-between border-t border-border/70 bg-secondary/40 px-3.5 py-2 text-[10.5px] font-medium text-muted-foreground">
+            <span>{openCount} of {rows.length} classes open</span>
+            <span>Total seats <b className="ml-1 text-[12px] font-bold tabular-nums text-foreground">{totalSeats}</b></span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
