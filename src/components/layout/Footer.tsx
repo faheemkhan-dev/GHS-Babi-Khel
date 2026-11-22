@@ -44,148 +44,90 @@ const Footer = () => {
     ? settings.phone
     : null;
 
+  const allLinks = [...footerLinks.quickLinks, ...footerLinks.resources];
+  const school = settings?.school_name || "GHS Babi Khel";
+
   return (
-    // FIXED: footer was oversized (py-16, 5 columns, duplicated social icons
-    // in two places). Tightened padding, dropped the redundant Classes column
-    // and the second social row in the bottom bar, kept everything essential.
-    <footer className="bg-[hsl(144_62%_14%)] dark:bg-[hsl(146_41%_7%)] text-[#E8F5EC] border-t border-white/10">
+    <footer className="border-t border-white/10 bg-[hsl(144_62%_14%)] text-[#E8F5EC] dark:bg-[hsl(146_41%_7%)]">
       {/* Signature brand hairline — forest green flowing into heritage gold */}
-      <div className="h-0.5 bg-gradient-to-r from-primary via-gold to-primary" aria-hidden="true" />
-      <div className="container mx-auto px-4 pt-8 md:pt-10 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] lg:pb-10">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-6 md:gap-8">
+      <div className="h-px bg-gradient-to-r from-primary via-gold to-primary" aria-hidden="true" />
+      <div className="container mx-auto px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] pt-5 lg:pb-4">
 
-          {/* ── Brand column ── */}
-          <div className="col-span-2 md:col-span-2">
-            <div className="flex items-center gap-2.5 mb-3">
-              {settings?.logo_url && !logoFailed ? (
-                <img
-                  src={optimizedCloudinaryUrl(settings.logo_url, { width: 96 }) || safeMediaUrl(settings.logo_url)!}
-                  alt={`${settings?.school_name || "GHS Babi Khel"} logo`}
-                  className="w-9 h-9 rounded-lg object-cover"
-                  loading="lazy"
-                  decoding="async"
-                  onError={() => setLogoFailed(true)}
-                />
-              ) : (
-                <div className="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center">
-                  <GraduationCap className="w-5 h-5" />
-                </div>
-              )}
-              <div>
-                <span className="font-heading font-bold text-base block">
-                  {settings?.school_name || "GHS Babi Khel"}
-                </span>
-                <span className="text-xs text-white/70">
-                  {settings?.tagline || "Excellence in Education"}
-                </span>
+        {/* Brand row: small logo + name/tagline, socials on the right */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {settings?.logo_url && !logoFailed ? (
+              <img
+                src={optimizedCloudinaryUrl(settings.logo_url, { width: 64 }) || safeMediaUrl(settings.logo_url)!}
+                alt={`${school} logo`}
+                className="h-8 w-8 shrink-0 rounded-lg object-cover ring-1 ring-[hsl(43_74%_66%/0.45)]"
+                loading="lazy"
+                decoding="async"
+                onError={() => setLogoFailed(true)}
+              />
+            ) : (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15">
+                <GraduationCap className="h-4 w-4" />
               </div>
-            </div>
-
-            <p className="text-sm text-white/70 leading-relaxed max-w-xs mb-4">
-              {settings?.description ||
-                "Government High School Babi Khel is committed to providing quality education and nurturing the future leaders of Pakistan."}
-            </p>
-
-            {/* Contact info */}
-            <div className="space-y-2 text-sm">
-              <div className="flex items-start gap-2.5">
-                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[hsl(43_74%_66%)]" />
-                <span className="text-white/75">
-                  {settings?.address || "Babi Khel, District Mohmand, KPK"}
-                </span>
-              </div>
-
-              {displayPhone && (
-                <div className="flex items-center gap-2.5">
-                  <Phone className="w-4 h-4 shrink-0 text-[hsl(43_74%_66%)]" />
-                  <a
-                    href={`tel:${displayPhone.replace(/\s/g, "")}`}
-                    className="text-white/75 hover:text-white transition-colors"
-                  >
-                    {displayPhone}
-                  </a>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2.5">
-                <Mail className="w-4 h-4 shrink-0 text-[hsl(43_74%_66%)]" />
-                <a
-                  href={`mailto:${displayEmail}`}
-                  className="text-white/75 hover:text-white transition-colors"
-                >
-                  {displayEmail}
-                </a>
-              </div>
-            </div>
-
-            {/* Social media */}
-            <div className="flex items-center gap-3 mt-4">
-              <a
-                href="https://www.facebook.com/share/1EERTSk1W7/"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Follow GHS Babi Khel on Facebook"
-                className="w-8 h-8 rounded-lg bg-[#1877F2] flex items-center justify-center hover:opacity-90 hover:scale-105 transition-all duration-200 shadow-sm"
-              >
-                <Facebook className="w-4 h-4 text-white" />
-              </a>
-              <a
-                href="https://wa.me/923469898295"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Contact GHS Babi Khel on WhatsApp"
-                className="w-8 h-8 rounded-lg bg-[#25D366] flex items-center justify-center hover:opacity-90 hover:scale-105 transition-all duration-200 shadow-sm"
-              >
-                <MessageCircle className="w-4 h-4 text-white fill-white" />
-              </a>
+            )}
+            <div className="min-w-0 leading-tight">
+              <span className="block truncate font-heading text-[14px] font-bold">{school}</span>
+              <span className="block truncate text-[10.5px] text-white/60">{settings?.tagline || "Excellence in Education"}</span>
             </div>
           </div>
 
-          {/* ── Quick Links ── */}
-          <div>
-            <h3 className="font-heading font-semibold text-sm uppercase tracking-wider mb-3 text-[hsl(43_74%_66%)]">
-              Quick Links
-            </h3>
-            <ul className="space-y-2">
-              {footerLinks.quickLinks.map((link) => (
-                <li key={link.to + link.label}>
-                  <Link
-                    to={link.to}
-                    className="text-sm text-white/70 hover:text-white transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* ── Resources ── */}
-          <div>
-            <h3 className="font-heading font-semibold text-sm uppercase tracking-wider mb-3 text-[hsl(43_74%_66%)]">
-              Resources
-            </h3>
-            <ul className="space-y-2">
-              {footerLinks.resources.map((link, i) => (
-                <li key={i}>
-                  <Link
-                    to={link.to}
-                    className="text-sm text-white/70 hover:text-white transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <a
+              href="https://www.facebook.com/share/1EERTSk1W7/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Follow GHS Babi Khel on Facebook"
+              className="grid h-7 w-7 place-items-center rounded-full border border-white/15 text-white/80 transition-colors hover:border-[#1877F2] hover:bg-[#1877F2] hover:text-white"
+            >
+              <Facebook className="h-3.5 w-3.5" />
+            </a>
+            <a
+              href="https://wa.me/923469898295"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Contact GHS Babi Khel on WhatsApp"
+              className="grid h-7 w-7 place-items-center rounded-full border border-white/15 text-white/80 transition-colors hover:border-[#25D366] hover:bg-[#25D366] hover:text-white"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+            </a>
           </div>
         </div>
 
-        {/* ── Bottom bar ── */}
-        <div className="border-t border-white/10 mt-6 pt-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-white/70">
-          <p>
-            &copy; {new Date().getFullYear()}{" "}
-            {settings?.school_name || "GHS Babi Khel"}. All rights reserved.
-          </p>
+        {/* Links — one compact wrapping row (every public route stays crawlable) */}
+        <nav aria-label="Footer" className="mt-4 flex flex-wrap justify-center gap-x-3.5 gap-y-1.5 border-t border-white/10 pt-3.5 text-[11.5px]">
+          {allLinks.map((link) => (
+            <Link key={link.to} to={link.to} className="text-white/70 transition-colors hover:text-[hsl(43_74%_66%)]">
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Contact — tiny single-line items */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-white/65">
+          <span className="inline-flex items-center gap-1.5">
+            <MapPin className="h-3 w-3 shrink-0 text-[hsl(43_74%_66%)]" />
+            {settings?.address || "Babi Khel, District Mohmand, KPK"}
+          </span>
+          {displayPhone && (
+            <a href={`tel:${displayPhone.replace(/\s/g, "")}`} className="inline-flex items-center gap-1.5 transition-colors hover:text-white">
+              <Phone className="h-3 w-3 shrink-0 text-[hsl(43_74%_66%)]" />
+              {displayPhone}
+            </a>
+          )}
+          <a href={`mailto:${displayEmail}`} className="inline-flex items-center gap-1.5 transition-colors hover:text-white">
+            <Mail className="h-3 w-3 shrink-0 text-[hsl(43_74%_66%)]" />
+            {displayEmail}
+          </a>
+        </div>
+
+        {/* Bottom line */}
+        <div className="mt-3.5 flex flex-col items-center justify-between gap-0.5 border-t border-white/10 pt-3 text-[10.5px] text-white/50 sm:flex-row">
+          <p>&copy; {new Date().getFullYear()} {school}. All rights reserved.</p>
           <p>EMIS: {settings?.emis_code || "60673"}</p>
         </div>
       </div>
@@ -194,4 +136,3 @@ const Footer = () => {
 };
 
 export default Footer;
-    
