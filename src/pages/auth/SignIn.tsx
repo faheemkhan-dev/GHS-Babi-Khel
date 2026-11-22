@@ -149,7 +149,7 @@ const SignIn = () => {
   };
 
   const inputCls =
-    "w-full h-11 rounded-xl border border-border/80 bg-background/60 pl-10 pr-3 text-[14px] text-foreground placeholder:text-muted-foreground/60 outline-none transition-[border-color,box-shadow] focus:border-[hsl(var(--gold))] focus:ring-2 focus:ring-[hsl(var(--gold)/0.2)]";
+    "block w-full h-11 rounded-xl border border-border/80 bg-background/60 pl-10 pr-3 py-0 leading-none text-[14px] text-foreground placeholder:text-muted-foreground/60 outline-none transition-[border-color,box-shadow] focus:border-[hsl(var(--gold))] focus:ring-2 focus:ring-[hsl(var(--gold)/0.2)]";
 
   return (
     <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[linear-gradient(160deg,hsl(160_55%_8%)_0%,hsl(158_45%_14%)_55%,hsl(156_40%_20%)_100%)] px-4 py-8">
@@ -222,7 +222,7 @@ const SignIn = () => {
               <div>
                 <label htmlFor="signin-email" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Email</label>
                 <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <span aria-hidden className="pointer-events-none absolute left-0 top-0 grid h-11 w-10 place-items-center text-muted-foreground"><Mail className="h-4 w-4" /></span>
                   <input
                     id="signin-email"
                     type="email"
@@ -244,7 +244,7 @@ const SignIn = () => {
                   </Link>
                 </div>
                 <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <span aria-hidden className="pointer-events-none absolute left-0 top-0 grid h-11 w-10 place-items-center text-muted-foreground"><Lock className="h-4 w-4" /></span>
                   <input
                     id="signin-password"
                     type={showPw ? "text" : "password"}
@@ -259,7 +259,7 @@ const SignIn = () => {
                     type="button"
                     onClick={() => setShowPw((v) => !v)}
                     aria-label={showPw ? "Hide password" : "Show password"}
-                    className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    className="absolute right-0 top-0 grid h-11 w-11 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   >
                     {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
