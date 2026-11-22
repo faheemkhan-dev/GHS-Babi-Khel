@@ -1,16 +1,17 @@
 // src/components/admissions/AdmissionHome.tsx — the public Admission home
-// (GHSS Ghallanai layout, GHS Babi Khel High School flow: Class 6–10,
+// (GHSS Ghallanai layout, GHS Babi Khel High School flow:
 // fresh + migration, seats per class, no quotas / programs).
 //
 //   hero             light premium hero · Session / Days Left / Last Date tiles ·
 //                    Apply Online (or My Application) + Track Application
 //   closed notice    only Apply / eligibility / downloads lock — Track stays open
 //   how to apply     7-step gold-rail card
-//   (children)       Classes & Seats + Merit Lists, injected by the page
-//   eligibility      on-demand checker (unchanged)
-//   downloads        printable forms & guides (unchanged)
+//   track            inline Track Application card (trackSlot, injected by the page)
+//   (children)       Merit Lists, then Classes & Seats — injected by the page
+//   eligibility      premium on-demand banner + checker
 //   instructions     7 numbered cards, the last one red
-//   helpline         Call / Email tiles
+//   downloads        printable forms & guides
+//   helpline         slim Call / Email pills
 //
 // Performance notes (this screen is the first thing parents open, often on
 // slow mobile data) are unchanged: pure CSS (no framer-motion, no blur
@@ -24,8 +25,8 @@ import { lazy, Suspense, memo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   BookOpen, Banknote, Mail, ScrollText, FileDown, Download, Loader2, Lock,
-  ChevronDown, GraduationCap, Search, LayoutDashboard, AlertCircle, Sparkles,
-  CalendarDays, CalendarCheck2, Hourglass, Phone, ListChecks,
+  ChevronDown, GraduationCap, Search, LayoutDashboard, AlertCircle, BadgeCheck,
+  CalendarDays, CalendarCheck2, Hourglass, Phone, ListChecks, ArrowRight,
 } from "lucide-react";
 import type { AdmissionType } from "@/hooks/useAdmission";
 import type { ReactNode } from "react";
@@ -83,23 +84,35 @@ function SectionTitle({ kicker, children, hint }: { kicker?: string; children: R
   );
 }
 
-/** One hero stat tile (Session / Days Left / Last Date). */
-function StatTile({ icon: Icon, label, value, highlight }: {
-  icon: typeof CalendarDays; label: string; value: string; highlight?: boolean;
+/** One hero stat tile (Session / Days Left / Last Date) — all three are white cards. */
+function StatTile({ icon: Icon, label, value }: {
+  icon: typeof CalendarDays; label: string; value: string;
 }) {
   return (
-    <div
-      className={`relative overflow-hidden rounded-2xl border px-2 py-3 text-center shadow-card ${
-        highlight
-          ? "border-primary/40 bg-gradient-to-b from-primary to-primary/90 text-primary-foreground"
-          : "border-gold/30 bg-card"
-      }`}
-    >
-      <span aria-hidden className={`absolute inset-x-0 top-0 h-[3px] ${highlight ? "bg-gold" : "bg-gradient-to-r from-primary via-emerald-500 to-amber-400"}`} />
-      <Icon className={`mx-auto h-4 w-4 ${highlight ? "text-gold" : "text-primary"}`} />
-      <p className={`mt-1 text-[9.5px] font-bold uppercase tracking-[0.14em] ${highlight ? "text-white/75" : "text-muted-foreground"}`}>{label}</p>
-      <p className="mt-0.5 break-words text-[15px] font-bold leading-tight sm:text-lg" style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}>{value}</p>
+    <div className="relative overflow-hidden rounded-2xl border border-gold/30 bg-card px-2 py-3 text-center shadow-card">
+      <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
+      <Icon className="mx-auto h-4 w-4 text-primary" />
+      <p className="mt-1 text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className="mt-0.5 break-words text-[15px] font-bold leading-tight text-foreground sm:text-lg" style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}>{value}</p>
     </div>
+  );
+}
+
+const helpRowCls =
+  "group flex h-12 touch-manipulation items-center gap-3 rounded-full border border-gold/40 bg-card pl-1.5 pr-4 shadow-sm transition-colors hover:bg-gold/5 active:bg-gold/10";
+
+function HelpRowInner({ icon: Icon, label, value }: { icon: typeof Phone; label: string; value: string }) {
+  return (
+    <>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/85 text-gold">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1 leading-tight">
+        <span className="block text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{label}</span>
+        <span className="block truncate text-[13px] font-bold text-foreground">{value}</span>
+      </span>
+      <ArrowRight className="h-4 w-4 shrink-0 text-gold-strong" />
+    </>
   );
 }
 
@@ -120,13 +133,15 @@ export interface AdmissionHomeProps {
   /** With a saved applicant session the primary CTA becomes
    *  "My Application" → /admission/portal (the Applicant Dashboard). */
   hasSession?: boolean;
-  /** Rendered between "How to apply" and Eligibility/Downloads (Classes & Seats, Merit Lists). */
+  /** Inline "Track Application" card — rendered right below "How to apply". */
+  trackSlot?: ReactNode;
+  /** Rendered below the track card: Merit Lists, then Classes & Seats. */
   children?: ReactNode;
 }
 
 function AdmissionHome({
   isOpen, sessionLabel, lastDate, bannerMessage, closedNote, downloading, hasLibFile,
-  onApply, onTrack, onDownloadItem, onDownloadBlank, onDownloadAll, onLocked, hasSession, children,
+  onApply, onTrack, onDownloadItem, onDownloadBlank, onDownloadAll, onLocked, hasSession, trackSlot, children,
 }: AdmissionHomeProps) {
   const [showElig, setShowElig] = useState(false);
   const navigate = useNavigate();
@@ -190,13 +205,13 @@ function AdmissionHome({
             <span className="h-px flex-1 bg-gradient-to-l from-transparent to-gold/70" />
           </div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary dark:text-gold">
-            GHS Babi Khel, District Mohmand · Class 6 – 10
+            GHS Babi Khel, District Mohmand
           </p>
 
           {/* stat tiles */}
           <div className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-2.5">
             <StatTile icon={CalendarDays} label="Session" value={isOpen ? sessionLabel : "—"} />
-            <StatTile icon={Hourglass} label={daysLabel} value={daysValue} highlight />
+            <StatTile icon={Hourglass} label={daysLabel} value={daysValue} />
             <StatTile icon={CalendarCheck2} label="Last Date" value={isOpen ? (lastLabel ?? "To be announced") : "—"} />
           </div>
 
@@ -206,7 +221,7 @@ function AdmissionHome({
               <button
                 type="button"
                 onClick={() => navigate("/admission/portal")}
-                className="inline-flex h-10 touch-manipulation items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-sm transition-opacity active:opacity-80"
+                className="inline-flex h-10 touch-manipulation items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-primary px-3 text-[12px] font-semibold text-primary-foreground shadow-sm transition-opacity active:opacity-80"
               >
                 <LayoutDashboard className="h-4 w-4 shrink-0" />
                 <span>My Application</span>
@@ -216,7 +231,7 @@ function AdmissionHome({
                 type="button"
                 onClick={guard(() => onApply())}
                 aria-disabled={!isOpen}
-                className={`inline-flex h-10 touch-manipulation items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-semibold transition-opacity active:opacity-80 ${
+                className={`inline-flex h-10 touch-manipulation items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold transition-opacity active:opacity-80 ${
                   isOpen
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "cursor-not-allowed bg-muted text-muted-foreground"
@@ -230,9 +245,9 @@ function AdmissionHome({
             <button
               type="button"
               onClick={onTrack}
-              className="inline-flex h-10 touch-manipulation items-center justify-center gap-1.5 rounded-full border border-gold/60 bg-card px-4 text-[13px] font-semibold text-primary transition-colors hover:bg-gold/10 active:bg-gold/15"
+              className="inline-flex h-10 touch-manipulation items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-gold/60 bg-card px-3 text-[12px] font-semibold text-primary transition-colors hover:bg-gold/10 active:bg-gold/15"
             >
-              <Search className="h-4 w-4 shrink-0" />
+              <Search className="h-3.5 w-3.5 shrink-0" />
               <span>Track Application</span>
             </button>
           </div>
@@ -289,39 +304,91 @@ function AdmissionHome({
           </div>
         </section>
 
-        {/* ── Classes & Seats + Merit Lists (injected by the page) ── */}
-        {children && <div className="mt-10 space-y-4">{children}</div>}
+        {/* ── Inline Track Application (right below How to Apply) ── */}
+        {trackSlot && <div className="mt-10">{trackSlot}</div>}
 
-        {/* ── ELIGIBILITY (loaded on demand) ───────────────────────────── */}
-        <section className="mt-8" style={lazySection}>
-          <button
-            type="button"
-            onClick={() => (isOpen ? setShowElig((v) => !v) : onLocked())}
-            aria-expanded={showElig}
-            aria-disabled={!isOpen}
-            className={`flex h-11 w-full touch-manipulation items-center gap-2.5 rounded-xl border border-gold/30 bg-card px-3 text-left ${
-              isOpen ? "active:bg-muted/60" : "cursor-not-allowed opacity-60"
-            }`}
-          >
-            <Sparkles className="h-4 w-4 shrink-0 text-gold-strong" />
-            <span className="min-w-0 flex-1 text-[13px] font-semibold leading-tight text-foreground">Check your eligibility</span>
-            {isOpen ? (
-              <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 ${showElig ? "rotate-180" : ""}`} />
-            ) : (
-              <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        {/* ── Merit Lists, then Classes & Seats (injected by the page) ── */}
+        {children && <div className="mt-12 space-y-12">{children}</div>}
+
+        {/* ── ELIGIBILITY — slim premium banner (checker loaded on demand) ── */}
+        <section className="mt-12" style={lazySection}>
+          <div className={`relative overflow-hidden rounded-2xl border border-gold/40 bg-card shadow-card ${isOpen ? "" : "opacity-60"}`}>
+            <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-gold via-gold-strong to-gold" />
+            <button
+              type="button"
+              onClick={() => (isOpen ? setShowElig((v) => !v) : onLocked())}
+              aria-expanded={showElig}
+              aria-disabled={!isOpen}
+              className={`flex w-full touch-manipulation items-center gap-3 py-3 pl-5 pr-3 text-left ${isOpen ? "active:bg-muted/40" : "cursor-not-allowed"}`}
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/85 text-gold ring-2 ring-gold/30">
+                <BadgeCheck className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14.5px] font-bold leading-tight text-foreground" style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}>
+                  Check Your Eligibility
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">Quick class &amp; age check · under a minute</span>
+              </span>
+              <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-gold/50 bg-gold/10 pl-3 pr-2 text-[11px] font-bold text-primary">
+                {isOpen ? (showElig ? "Close" : "Start") : "Locked"}
+                {isOpen
+                  ? <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-150 ${showElig ? "rotate-180" : ""}`} />
+                  : <Lock className="h-3 w-3" />}
+              </span>
+            </button>
+            {isOpen && showElig && (
+              <div className="border-t border-border/60 bg-muted/20 p-3">
+                <Suspense fallback={<div className="h-56 rounded-xl bg-muted" aria-label="Loading eligibility checker" />}>
+                  <EligibilityChecker onApply={(cls, type) => onApply(cls, type)} />
+                </Suspense>
+              </div>
             )}
-          </button>
-          {isOpen && showElig && (
-            <div className="mt-2.5">
-              <Suspense fallback={<div className="h-56 rounded-xl bg-muted" aria-label="Loading eligibility checker" />}>
-                <EligibilityChecker onApply={(cls, type) => onApply(cls, type)} />
-              </Suspense>
+          </div>
+        </section>
+
+        {/* ── IMPORTANT INSTRUCTIONS ─────────────────────────────────────── */}
+        <section className="mt-12" style={lazySection}>
+          <div className="overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card">
+            <div aria-hidden className="h-1 bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
+            <div className="p-4 sm:p-5">
+              <div className="mb-4 text-center">
+                <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-gold/15 text-gold-strong ring-2 ring-gold/25">
+                  <ListChecks className="h-5 w-5" />
+                </span>
+                <h2 className="text-lg font-bold text-foreground sm:text-xl" style={{ fontFamily: "var(--font-display)" }}>Important Instructions</h2>
+                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Please read before applying</p>
+              </div>
+              <ol className="space-y-2">
+                {INSTRUCTIONS.map((text, i) => {
+                  const danger = i === INSTRUCTIONS.length - 1;
+                  return (
+                    <li
+                      key={text}
+                      className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 ${
+                        danger
+                          ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20"
+                          : "border-border/60 bg-muted/20"
+                      }`}
+                    >
+                      <span
+                        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                          danger ? "bg-red-500 text-white" : "bg-primary/10 text-primary"
+                        }`}
+                      >
+                        {i + 1}
+                      </span>
+                      <p className={`text-xs leading-relaxed ${danger ? "font-semibold text-red-700 dark:text-red-400" : "text-foreground/85"}`}>{text}</p>
+                    </li>
+                  );
+                })}
+              </ol>
             </div>
-          )}
+          </div>
         </section>
 
         {/* ── DOWNLOADS ──────────────────────────────────────────────────── */}
-        <section className="mt-10" style={lazySection}>
+        <section className="mt-12" style={lazySection}>
           <SectionTitle kicker="Resources" hint={isOpen ? "Printable forms and guides" : "Unlock when admissions reopen"}>Downloads</SectionTitle>
 
           <div className={`overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card divide-y divide-border ${isOpen ? "" : "opacity-60"}`}>
@@ -379,70 +446,21 @@ function AdmissionHome({
           )}
         </section>
 
-        {/* ── IMPORTANT INSTRUCTIONS ─────────────────────────────────────── */}
-        <section className="mt-10" style={lazySection}>
-          <div className="overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card">
-            <div aria-hidden className="h-1 bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
-            <div className="p-4 sm:p-5">
-              <div className="mb-4 text-center">
-                <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-gold/15 text-gold-strong ring-2 ring-gold/25">
-                  <ListChecks className="h-5 w-5" />
-                </span>
-                <h2 className="text-lg font-bold text-foreground sm:text-xl" style={{ fontFamily: "var(--font-display)" }}>Important Instructions</h2>
-                <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Please read before applying</p>
-              </div>
-              <ol className="space-y-2">
-                {INSTRUCTIONS.map((text, i) => {
-                  const danger = i === INSTRUCTIONS.length - 1;
-                  return (
-                    <li
-                      key={text}
-                      className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 ${
-                        danger
-                          ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20"
-                          : "border-border/60 bg-muted/20"
-                      }`}
-                    >
-                      <span
-                        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                          danger ? "bg-red-500 text-white" : "bg-primary/10 text-primary"
-                        }`}
-                      >
-                        {i + 1}
-                      </span>
-                      <p className={`text-xs leading-relaxed ${danger ? "font-semibold text-red-700 dark:text-red-400" : "text-foreground/85"}`}>{text}</p>
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
-          </div>
-        </section>
-
-        {/* ── HELPLINE ───────────────────────────────────────────────────── */}
-        <section className="mt-10" style={lazySection}>
+        {/* ── HELPLINE — slim Call / Email pills ───────────────────────── */}
+        <section className="mt-12" style={lazySection}>
           <SectionTitle kicker="Support">School Helpline</SectionTitle>
-          <div className="mx-auto grid max-w-lg grid-cols-2 gap-3">
+          <div className="mx-auto grid max-w-lg gap-2 sm:grid-cols-2">
             {phone ? (
-              <a href={`tel:${phone.replace(/[^0-9+]/g, "")}`}
-                className="flex flex-col items-center gap-1 rounded-2xl border border-gold/30 bg-card p-4 text-center shadow-card transition-colors hover:bg-gold/5">
-                <Phone className="h-5 w-5 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Call</span>
-                <span className="break-all text-[13px] font-bold">{phone}</span>
+              <a href={`tel:${phone.replace(/[^0-9+]/g, "")}`} className={helpRowCls}>
+                <HelpRowInner icon={Phone} label="Call" value={phone} />
               </a>
             ) : (
-              <Link to="/contact"
-                className="flex flex-col items-center gap-1 rounded-2xl border border-gold/30 bg-card p-4 text-center shadow-card transition-colors hover:bg-gold/5">
-                <Phone className="h-5 w-5 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Call</span>
-                <span className="text-[13px] font-bold">See Contact page</span>
+              <Link to="/contact" className={helpRowCls}>
+                <HelpRowInner icon={Phone} label="Call" value="See Contact page" />
               </Link>
             )}
-            <a href={`mailto:${email}`}
-              className="flex flex-col items-center gap-1 rounded-2xl border border-gold/30 bg-card p-4 text-center shadow-card transition-colors hover:bg-gold/5">
-              <Mail className="h-5 w-5 text-primary" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Email</span>
-              <span className="break-all text-[13px] font-bold">{email}</span>
+            <a href={`mailto:${email}`} className={helpRowCls}>
+              <HelpRowInner icon={Mail} label="Email" value={email} />
             </a>
           </div>
           <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
