@@ -20,7 +20,7 @@ import { createPortal } from "react-dom";
 import {
   X, Lock, Search, FileText, FileSpreadsheet, Trash2, Plus,
   Loader2, AlertCircle, CheckCircle2, XCircle, Download, ArrowLeft,
-  Layers, RefreshCw, Trophy, GraduationCap, Check, Landmark, Hash,
+  Layers, RefreshCw, Trophy, Check, Landmark, Hash,
 } from "lucide-react";
 // NOTE: `X` is still imported above because it is used for the per-roll
 // remove buttons inside the saved-rolls list. The top-right CLOSE X in
@@ -442,7 +442,7 @@ export default function ReportCardModal({ open, onClose }: Props) {
   })();
   const passPct = stats ? Math.max(0, Math.min(100, Number(stats.passPercentage) || 0)) : 0;
   const classMax = CLASS_MAX_MARKS[selection.className];
-  const STEPS = ["Unlock", "Details & Rolls", "Results"];
+  const STEPS = ["Unlock", "Details", "Results"];
 
   // Render into document.body via a portal so the modal escapes any
   // ancestor CSS `transform` (framer-motion <motion.div> parents set
@@ -464,7 +464,7 @@ export default function ReportCardModal({ open, onClose }: Props) {
           style={{ background: "var(--gradient-hero)" }}
         >
           <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-gold/20 blur-2xl" aria-hidden />
-          <div className="relative flex items-center gap-2.5 px-3 pb-2 pt-2 sm:px-5 sm:pt-3">
+          <div className="relative flex items-center gap-3 px-3 py-2.5 sm:px-5 sm:py-3">
             <button
               onClick={onClose}
               className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-white/20 bg-white/10 pl-1.5 pr-2.5 text-[11px] font-semibold transition hover:bg-white/20 active:scale-95"
@@ -474,43 +474,32 @@ export default function ReportCardModal({ open, onClose }: Props) {
               <ArrowLeft className="h-3.5 w-3.5" />
               Back
             </button>
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/50">
-                <GraduationCap className="h-4 w-4 text-gold" />
-              </span>
-              <div className="min-w-0">
-                <h2 className="font-heading text-[15px] font-bold leading-tight">Report Card</h2>
-                <p className="truncate text-[10.5px] leading-tight text-white/70">
-                  {(selection.schoolName || DEFAULT_SCHOOL)} · BISE Peshawar
-                </p>
-              </div>
-            </div>
-          </div>
 
-          {/* Step indicator — numbered nodes joined by a line */}
-          <ol className="relative flex items-center px-4 pb-2.5 pt-0.5 sm:px-6" aria-label="Progress">
-            {STEPS.map((label, i) => (
-              <li key={label} className={`flex items-center ${i < STEPS.length - 1 ? "flex-1" : ""}`}>
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold transition-colors ${
-                      i < stepIndex
-                        ? "bg-gold text-[#0B2E19]"
-                        : i === stepIndex
-                          ? "bg-white text-primary-dark ring-2 ring-gold/70"
-                          : "bg-white/15 text-white/60"
-                    }`}
-                  >
-                    {i < stepIndex ? <Check className="h-3 w-3" strokeWidth={3} /> : i + 1}
+            {/* Step indicator — numbered nodes joined by a line */}
+            <ol className="flex min-w-0 flex-1 items-center" aria-label="Progress">
+              {STEPS.map((label, i) => (
+                <li key={label} className={`flex items-center ${i < STEPS.length - 1 ? "flex-1" : ""}`}>
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold transition-colors ${
+                        i < stepIndex
+                          ? "bg-gold text-[#0B2E19]"
+                          : i === stepIndex
+                            ? "bg-white text-primary-dark ring-2 ring-gold/70"
+                            : "bg-white/15 text-white/60"
+                      }`}
+                    >
+                      {i < stepIndex ? <Check className="h-3 w-3" strokeWidth={3} /> : i + 1}
+                    </span>
+                    <span className={`whitespace-nowrap text-[10.5px] font-semibold ${i <= stepIndex ? "text-white" : "text-white/50"}`}>{label}</span>
                   </span>
-                  <span className={`whitespace-nowrap text-[10.5px] font-semibold ${i <= stepIndex ? "text-white" : "text-white/50"}`}>{label}</span>
-                </span>
-                {i < STEPS.length - 1 && (
-                  <span className={`mx-2 h-px flex-1 ${i < stepIndex ? "bg-gold/80" : "bg-white/20"}`} aria-hidden />
-                )}
-              </li>
-            ))}
-          </ol>
+                  {i < STEPS.length - 1 && (
+                    <span className={`mx-2 h-px flex-1 ${i < stepIndex ? "bg-gold/80" : "bg-white/20"}`} aria-hidden />
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
           <div className="h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />
         </div>
 
@@ -988,17 +977,23 @@ export default function ReportCardModal({ open, onClose }: Props) {
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={downloadPDF}
-                className="flex h-9 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-primary-dark to-primary px-3 text-[13px] font-semibold text-white shadow-sm ring-1 ring-gold/40 transition hover:brightness-110 active:scale-[0.98]"
+                className="group flex h-8 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-dark to-primary pl-1.5 pr-3.5 text-[12.5px] font-semibold text-white shadow-[0_6px_14px_-8px_hsl(var(--primary)/0.9)] ring-1 ring-gold/50 transition hover:brightness-110 active:scale-[0.98]"
               >
-                <FileText className="h-3.5 w-3.5" />
-                PDF
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/25">
+                  <FileText className="h-3 w-3 text-gold" />
+                </span>
+                <span className="tracking-wide">PDF</span>
+                <Download className="h-3 w-3 text-white/70" />
               </button>
               <button
                 onClick={downloadExcel}
-                className="flex h-9 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-700 to-emerald-500 px-3 text-[13px] font-semibold text-white shadow-sm ring-1 ring-white/20 transition hover:brightness-110 active:scale-[0.98]"
+                className="group flex h-8 items-center justify-center gap-2 rounded-full border border-emerald-600/40 bg-card pl-1.5 pr-3.5 text-[12.5px] font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50 active:scale-[0.98] dark:text-emerald-400 dark:hover:bg-emerald-950/30"
               >
-                <FileSpreadsheet className="h-3.5 w-3.5" />
-                Excel
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600/10 ring-1 ring-emerald-600/25">
+                  <FileSpreadsheet className="h-3 w-3" />
+                </span>
+                <span className="tracking-wide">Excel</span>
+                <Download className="h-3 w-3 opacity-60" />
               </button>
             </div>
             <p className="mt-1.5 flex items-center justify-center gap-1 text-[10.5px] leading-snug text-muted-foreground">
