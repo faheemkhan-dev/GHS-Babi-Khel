@@ -34,47 +34,52 @@ type View = "home" | "apply" | "track" | "success" | "eligibility";
 
 
 
-// ── Visual Progress Stepper ───────────────────────────────────────────────────
+// ── Visual Progress Stepper — slim numbered row ───────────────────────────────
 function StepStepper({ step, totalSteps }: { step: number; totalSteps: number }) {
-  const stepLabels = ["Student Info", "Academic Info", "Review & Submit"];
-  const stepIcons = [User, BookOpen, Eye];
-  const pct = totalSteps > 1 ? ((step - 1) / (totalSteps - 1)) * 100 : 0;
+  const stepLabels = ["Student", "Academic", "Review"].slice(0, totalSteps);
   return (
-    <div className="mb-6 rounded-2xl border border-border bg-card px-4 pt-5 pb-4 shadow-sm">
-      <div className="relative mx-auto flex max-w-sm items-start justify-between">
-        {/* track */}
-        <div className="absolute left-[16.66%] right-[16.66%] top-5 h-1 -translate-y-1/2 rounded-full bg-muted" aria-hidden />
-        <div
-          className="absolute left-[16.66%] top-5 h-1 -translate-y-1/2 rounded-full bg-gradient-to-r from-primary to-green-500 transition-all duration-500"
-          style={{ width: `${(pct / 100) * 66.68}%` }}
-          aria-hidden
-        />
+    <div className="mb-3 rounded-xl border border-border/70 bg-card px-3 py-2.5 shadow-sm">
+      <ol className="flex items-center" aria-label="Application progress">
         {stepLabels.map((label, i) => {
           const n = i + 1;
           const isActive = n === step;
           const isDone = n < step;
-          const Icon = stepIcons[i];
           return (
-            <div key={label} className="relative z-10 flex w-1/3 flex-col items-center text-center">
-              <div
-                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300 ${
-                  isActive
-                    ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/30 scale-110"
-                    : isDone
-                    ? "border-green-500 bg-green-500 text-white"
-                    : "border-border bg-background text-muted-foreground"
-                }`}
-              >
-                {isDone ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-4 w-4" />}
-              </div>
-              <span className={`mt-2 text-[10px] font-bold uppercase tracking-wide leading-tight ${isActive ? "text-primary" : isDone ? "text-green-600" : "text-muted-foreground"}`}>
-                Step {n}
+            <li key={label} className={`flex items-center ${i < stepLabels.length - 1 ? "flex-1" : ""}`}>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
+                    isDone
+                      ? "bg-gold text-[#0B2E19]"
+                      : isActive
+                      ? "bg-primary text-primary-foreground ring-2 ring-gold/50"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {isDone ? "✓" : n}
+                </span>
+                <span className={`whitespace-nowrap text-[11.5px] ${isActive ? "font-bold text-foreground" : "font-medium text-muted-foreground"}`}>{label}</span>
               </span>
-              <span className={`text-[11px] leading-tight ${isActive ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{label}</span>
-            </div>
+              {i < stepLabels.length - 1 && (
+                <span className={`mx-2 h-px flex-1 ${isDone ? "bg-gold" : "bg-border"}`} aria-hidden />
+              )}
+            </li>
           );
         })}
+      </ol>
+    </div>
+  );
+}
+
+/** Slim card header used by every step: serif title + light subtitle + "n / 3" pill. */
+function StepHeader({ title, sub, step }: { title: string; sub: string; step: number }) {
+  return (
+    <div className="-mx-4 -mt-4 mb-1 flex items-center justify-between gap-3 border-b border-border/60 bg-gradient-to-r from-gold/10 via-muted/30 to-transparent px-4 py-2.5">
+      <div className="min-w-0">
+        <h2 className="text-[14.5px] font-bold leading-tight text-foreground" style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}>{title}</h2>
+        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{sub}</p>
       </div>
+      <span className="shrink-0 rounded-full border border-gold/40 bg-gold/10 px-2.5 py-0.5 text-[10px] font-bold tabular-nums text-gold-strong">{step} / 3</span>
     </div>
   );
 }
@@ -88,9 +93,9 @@ function FieldTooltip({ text }: { text: string }) {
         type="button"
         onClick={() => setOpen(!open)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        className="w-4 h-4 rounded-full bg-muted text-muted-foreground flex items-center justify-center hover:bg-primary/20 hover:text-primary transition-colors"
+        className="w-3.5 h-3.5 rounded-full bg-muted/70 text-muted-foreground flex items-center justify-center hover:bg-primary/20 hover:text-primary transition-colors"
       >
-        <Info className="w-2.5 h-2.5" />
+        <Info className="w-2 h-2" />
       </button>
       {open && (
         <div className="absolute z-50 top-6 left-0 bg-popover border border-border rounded-lg shadow-lg p-2 text-[11px] text-popover-foreground max-w-[200px] whitespace-normal">
@@ -730,16 +735,16 @@ const Admission = () => {
 
         {/* ══════════ APPLY VIEW ══════════ */}
         {view === "apply" && (
-          <div className="container mx-auto px-4 pt-6 max-w-lg">
+          <div className="container mx-auto px-4 pt-4 max-w-lg">
             <button onClick={() => { setView("home"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4 hover:text-foreground">
-              <ChevronLeft className="w-4 h-4" /> Back
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground mb-2 hover:text-foreground">
+              <ChevronLeft className="w-3.5 h-3.5" /> Back
             </button>
 
-            <div className="text-center mb-2">
-              <h2 className="text-lg font-bold text-foreground">Online Application</h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                Fill in the details below to apply. Seats are filled through the Merit List.
+            <div className="text-center mb-3">
+              <h2 className="text-[17px] font-bold leading-tight text-foreground" style={{ fontFamily: "var(--font-luxe, var(--font-display))" }}>Online Application</h2>
+              <p className="text-[11px] leading-snug text-muted-foreground mt-0.5">
+                Fill in the details below. Seats are filled through the Merit List.
               </p>
             </div>
 
@@ -760,21 +765,13 @@ const Admission = () => {
             <div>
               <div key={step}>
 
-                <Card className="overflow-hidden rounded-2xl border-border shadow-md">
-                  <CardContent className="p-5 space-y-4">
+                <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
+                  <CardContent className="p-4 space-y-3">
 
                     {/* Step 1 — Student Info (with icons & tooltips) */}
                     {step === 1 && (
                       <>
-                        <div className="-mx-5 -mt-5 mb-1 flex items-center gap-3 rounded-t-xl border-b border-border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-5 py-4">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-                            <User className="h-5 w-5" />
-                          </span>
-                          <div className="min-w-0">
-                            <h2 className="text-base font-bold leading-tight">Student Information</h2>
-                            <p className="text-[11px] text-muted-foreground">Step 1 of 3 — about the student</p>
-                          </div>
-                        </div>
+                        <StepHeader title="Student Information" sub="About the student" step={1} />
                         <div className="space-y-3">
                           {[
                             { id: "full_name", label: "Full Name", placeholder: "Student full name", req: true, icon: User, tip: "Enter the student's full name as on B-Form" },
@@ -787,17 +784,16 @@ const Admission = () => {
                             { id: "occupation", label: "Occupation", placeholder: "e.g. Teacher, Farmer, Business", req: false, icon: Briefcase, tip: "Father/Guardian's profession (optional)" },
                           ].map(f => (
                             <div key={f.id}>
-                              <Label className="text-xs font-semibold mb-1 flex items-center">
+                              <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
                                 {f.label} {f.req && <span className="text-red-500 ml-0.5">*</span>}
                                 <FieldTooltip text={f.tip} />
                               </Label>
                               <div className="relative">
-                                <f.icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/60" />
                                 <Input value={(form as any)[f.id]} onChange={set(f.id)} onBlur={validateField(f.id)}
                                   placeholder={f.placeholder}
                                   {...FIELD_INPUT_PROPS[f.id]}
                                   aria-invalid={!!fieldErrors[f.id]}
-                                  className={`h-11 rounded-xl bg-muted/30 text-sm pl-10 transition-colors focus-visible:bg-background ${fieldErrors[f.id] ? "border-red-500 focus-visible:ring-red-400" : ""}`} />
+                                  className={`h-9 rounded-lg border-border/80 bg-background px-3 text-[13px] transition-colors ${fieldErrors[f.id] ? "border-red-500 focus-visible:ring-red-400" : ""}`} />
                               </div>
                               {fieldErrors[f.id] && (
                                 <p className="text-[10px] text-red-600 mt-1 flex items-center gap-1">
@@ -806,20 +802,18 @@ const Admission = () => {
                               )}
                             </div>
                           ))}
+                          <div className="grid grid-cols-2 gap-2.5">
                           <div>
-                            <Label className="text-xs font-semibold mb-1 block">Date of Birth</Label>
-                            <div className="relative">
-                              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-                              <Input type="date" value={form.date_of_birth} onChange={set("date_of_birth")}
-                                className="text-sm h-10 pl-9" />
-                            </div>
+                            <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 block">Date of Birth</Label>
+                            <Input type="date" value={form.date_of_birth} onChange={set("date_of_birth")}
+                              className="h-9 rounded-lg border-border/80 bg-background px-3 text-[13px]" />
                           </div>
                           <div>
-                            <Label className="text-xs font-semibold mb-1 block">
+                            <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 block">
                               Gender <span className="text-red-500">*</span>
                             </Label>
                             <Select value={form.gender} onValueChange={v => { setForm(f => ({ ...f, gender: v })); if (fieldErrors.gender) setFieldErrors(errs => { const n = { ...errs }; delete n.gender; return n; }); }}>
-                              <SelectTrigger className={`h-10 text-sm ${fieldErrors.gender ? "border-red-500" : ""}`}><SelectValue placeholder="Select gender" /></SelectTrigger>
+                              <SelectTrigger className={`h-9 rounded-lg border-border/80 px-3 text-[13px] ${fieldErrors.gender ? "border-red-500" : ""}`}><SelectValue placeholder="Select gender" /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="male">Male</SelectItem>
                                 <SelectItem value="female">Female</SelectItem>
@@ -831,6 +825,7 @@ const Admission = () => {
                               </p>
                             )}
                           </div>
+                          </div>
                         </div>
                       </>
                     )}
@@ -838,23 +833,16 @@ const Admission = () => {
                     {/* Step 2 — Academic Info (with icons & tooltips) */}
                     {step === 2 && (
                       <>
-                        <div className="-mx-5 -mt-5 mb-1 flex items-center gap-3 rounded-t-xl border-b border-border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-5 py-4">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-                            <BookOpen className="h-5 w-5" />
-                          </span>
-                          <div className="min-w-0">
-                            <h2 className="text-base font-bold leading-tight">Academic Information</h2>
-                            <p className="text-[11px] text-muted-foreground">Step 2 of 3 — class & previous school</p>
-                          </div>
-                        </div>
+                        <StepHeader title="Academic Information" sub="Class & previous school" step={2} />
                         <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-2.5">
                           <div>
-                            <Label className="text-xs font-semibold mb-1 flex items-center">
+                            <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
                               Applying for Class <span className="text-red-500 ml-0.5">*</span>
                               <FieldTooltip text="Select the class you want admission in" />
                             </Label>
                             <Select value={form.applying_class} onValueChange={v => { setForm(f => ({ ...f, applying_class: v })); if (fieldErrors.applying_class) setFieldErrors(errs => { const n = { ...errs }; delete n.applying_class; return n; }); }}>
-                              <SelectTrigger className={`h-10 text-sm ${fieldErrors.applying_class ? "border-red-500" : ""}`}><SelectValue placeholder="Select class" /></SelectTrigger>
+                              <SelectTrigger className={`h-9 rounded-lg border-border/80 px-3 text-[13px] ${fieldErrors.applying_class ? "border-red-500" : ""}`}><SelectValue placeholder="Select class" /></SelectTrigger>
                               <SelectContent>
                                 {["6","7","8","9","10"].map(c => <SelectItem key={c} value={c}>Class {c}</SelectItem>)}
                               </SelectContent>
@@ -866,12 +854,12 @@ const Admission = () => {
                             )}
                           </div>
                           <div>
-                            <Label className="text-xs font-semibold mb-1 flex items-center">
+                            <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
                               Admission Type <span className="text-red-500 ml-0.5">*</span>
                               <FieldTooltip text="Fresh = new student, Migration = transfer from another school" />
                             </Label>
                             <Select value={form.admission_type} onValueChange={v => { setForm(f => ({ ...f, admission_type: v as AdmissionType })); if (fieldErrors.admission_type) setFieldErrors(errs => { const n = { ...errs }; delete n.admission_type; return n; }); }}>
-                              <SelectTrigger className={`h-10 text-sm ${fieldErrors.admission_type ? "border-red-500" : ""}`}><SelectValue /></SelectTrigger>
+                              <SelectTrigger className={`h-9 rounded-lg border-border/80 px-3 text-[13px] ${fieldErrors.admission_type ? "border-red-500" : ""}`}><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="fresh">Fresh Admission</SelectItem>
                                 {["9", "10"].includes(form.applying_class) && <SelectItem value="migration">Migration / Transfer</SelectItem>}
@@ -882,6 +870,7 @@ const Admission = () => {
                                 <Info className="w-2.5 h-2.5 shrink-0" /> Note: For Class {form.applying_class}, only Fresh Admission is available.
                               </p>
                             )}
+                          </div>
                           </div>
                           {form.applying_class === "9" && (
                             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 flex gap-2">
@@ -908,17 +897,16 @@ const Admission = () => {
                             { id: "year_of_passing", label: "Year of Passing", placeholder: `${new Date().getFullYear()}`, req: true, icon: Calendar, tip: "Required — year you completed the previous class" },
                           ].map(f => (
                             <div key={f.id}>
-                              <Label className="text-xs font-semibold mb-1 flex items-center">
+                              <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
                                 {f.label} {f.req && <span className="text-red-500 ml-0.5">*</span>}
                                 <FieldTooltip text={f.tip} />
                               </Label>
                               <div className="relative">
-                                <f.icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/60" />
                                 <Input value={(form as any)[f.id]} onChange={set(f.id)} onBlur={validateField(f.id)}
                                   placeholder={f.placeholder}
                                   {...FIELD_INPUT_PROPS[f.id]}
                                   aria-invalid={!!fieldErrors[f.id]}
-                                  className={`h-11 rounded-xl bg-muted/30 text-sm pl-10 transition-colors focus-visible:bg-background ${fieldErrors[f.id] ? "border-red-500 focus-visible:ring-red-400" : ""}`} />
+                                  className={`h-9 rounded-lg border-border/80 bg-background px-3 text-[13px] transition-colors ${fieldErrors[f.id] ? "border-red-500 focus-visible:ring-red-400" : ""}`} />
                               </div>
                               {fieldErrors[f.id] && (
                                 <p className="text-[10px] text-red-600 mt-1 flex items-center gap-1">
@@ -934,15 +922,7 @@ const Admission = () => {
                     {/* Step 3 — REVIEW & SUBMIT (no document upload) */}
                     {step === 3 && (
                       <>
-                        <div className="-mx-5 -mt-5 mb-1 flex items-center gap-3 rounded-t-xl border-b border-border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-5 py-4">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-                            <Eye className="h-5 w-5" />
-                          </span>
-                          <div className="min-w-0">
-                            <h2 className="text-base font-bold leading-tight">Review & Submit</h2>
-                            <p className="text-[11px] text-muted-foreground">Step 3 of 3 — confirm and send</p>
-                          </div>
-                        </div>
+                        <StepHeader title="Review & Submit" sub="Confirm and send" step={3} />
                         {/* Review summary */}
                         <div className="space-y-3">
                           <div className="bg-muted/50 rounded-xl p-3">
@@ -1005,19 +985,19 @@ const Admission = () => {
                         </div>
 
                         {/* Styled CAPTCHA */}
-                        <div className={`mt-4 border-2 rounded-xl p-4 space-y-3 ${
+                        <div className={`mt-3 border rounded-xl p-3 space-y-2.5 ${
                           captchaError ? "border-red-400 bg-red-50/50" : "border-primary/20 bg-primary/5"
                         }`}>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                          <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
                             <Shield className="w-4 h-4 text-primary" />
                             Security Verification
                           </div>
                           <div className="flex items-center gap-3">
-                            <div className="bg-white dark:bg-card rounded-lg px-4 py-2 border border-border shadow-sm">
-                              <span className="text-lg font-bold text-foreground">{captchaQ.a}</span>
-                              <span className="text-lg font-bold text-primary mx-2">{captchaQ.op}</span>
-                              <span className="text-lg font-bold text-foreground">{captchaQ.b}</span>
-                              <span className="text-lg font-bold text-primary mx-2">=</span>
+                            <div className="bg-white dark:bg-card rounded-lg px-3 py-1.5 border border-border shadow-sm">
+                              <span className="text-base font-bold text-foreground">{captchaQ.a}</span>
+                              <span className="text-base font-bold text-primary mx-2">{captchaQ.op}</span>
+                              <span className="text-base font-bold text-foreground">{captchaQ.b}</span>
+                              <span className="text-base font-bold text-primary mx-2">=</span>
                             </div>
                             <Input
                               type="number"
@@ -1025,7 +1005,7 @@ const Admission = () => {
                               value={captchaInput}
                               onChange={e => { setCaptchaInput(e.target.value); setCaptchaError(false); }}
                               placeholder="?"
-                              className={`h-11 w-20 text-center text-xl font-bold rounded-lg ${captchaError ? "border-red-400" : ""}`}
+                              className={`h-9 w-16 text-center text-base font-bold rounded-lg ${captchaError ? "border-red-400" : ""}`}
                             />
                             <button type="button" onClick={newCaptcha}
                               className="text-xs text-muted-foreground underline hover:text-primary shrink-0">
@@ -1044,21 +1024,21 @@ const Admission = () => {
                 </Card>
 
                 {/* Navigation — mobile sticky bottom bar */}
-                <div className="flex gap-3 mt-4 pb-4 sm:pb-0">
+                <div className="flex gap-2.5 mt-3 pb-4 sm:pb-0">
                   {step > 1 && (
                     <Button variant="outline" onClick={() => setStep(s => s - 1)}
-                      className="flex-1 gap-2 rounded-xl h-11 sm:h-10">
+                      className="flex-1 gap-2 rounded-full h-9 text-[13px]">
                       <ChevronLeft className="w-4 h-4" /> Previous
                     </Button>
                   )}
                   {step < 3 ? (
                     <Button onClick={() => { if (validateStep()) setStep(s => s + 1); }}
-                      className="flex-1 gap-2 rounded-xl h-11 sm:h-10">
+                      className="flex-1 gap-2 rounded-full h-9 text-[13px]">
                       Next <ChevronRight className="w-4 h-4" />
                     </Button>
                   ) : (
                     <Button onClick={handleSubmit} disabled={submitting}
-                      className="flex-1 gap-2 rounded-xl h-11 sm:h-10">
+                      className="flex-1 gap-2 rounded-full h-9 text-[13px]">
                       {submitting
                         ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
                         : <><Send className="w-4 h-4" /> Submit Application</>
