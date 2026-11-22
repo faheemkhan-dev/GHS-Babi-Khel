@@ -357,7 +357,7 @@ const AdminLayout = ({ activeTab, onTabChange, children }: AdminLayoutProps) => 
         className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border/80 bg-card transition-transform duration-300 ease-out ${bottomHidden ? "translate-y-full" : "translate-y-0"}`}
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
-        <div className="grid grid-cols-5">
+        <div className="grid grid-cols-4">
           {bottomBarItems.map(item => {
             const isActive = activeTab === item.id;
             return (
@@ -366,7 +366,7 @@ const AdminLayout = ({ activeTab, onTabChange, children }: AdminLayoutProps) => 
                 onClick={() => onTabChange(item.id)}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "relative flex h-12 items-center justify-center px-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] transition-colors duration-200 active:bg-secondary/60",
+                  "relative flex h-12 items-center justify-center px-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap transition-colors duration-200 active:bg-secondary/60",
                   isActive ? "text-[hsl(var(--gold))]" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -377,17 +377,10 @@ const AdminLayout = ({ activeTab, onTabChange, children }: AdminLayoutProps) => 
                     isActive ? "opacity-100" : "opacity-0",
                   )}
                 />
-                <span className="truncate">{item.label}</span>
+                <span>{item.label}</span>
               </button>
             );
           })}
-          <button
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open menu"
-            className="relative flex h-12 items-center justify-center px-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:text-foreground active:bg-secondary/60"
-          >
-            Menu
-          </button>
         </div>
       </nav>
 
