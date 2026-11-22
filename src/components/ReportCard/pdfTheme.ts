@@ -104,62 +104,42 @@ export function fitLeftText(
   return yy;
 }
 
-const todayLabel = () =>
-  new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-
-/** Compact, light header: hairline accent bar, small emblem, left-aligned
- *  title block and the generation date on the right. Returns the y where
- *  content may start. (Deliberately NOT a big solid-green block.) */
+/** Compact, light, CENTRED header: hairline accent bar, then eyebrow, school
+ *  title and exam line centred on the page. No logo, no date. Returns the y
+ *  where content may start. (Deliberately NOT a big solid-green block.) */
 export function drawBand(
   d: jsPDF,
   o: { eyebrow: string; title: string; subtitle: string }
 ): number {
   const H = 76;
+  const cx = A4_W / 2;
   // thin top accent: deep green + gold hairline
   fill(d, T.greenDeep);
   d.rect(0, 0, A4_W, 4, "F");
   fill(d, T.goldLine);
   d.rect(0, 4, A4_W, 1.2, "F");
 
-  // emblem
-  const ex = MARGIN, ey = 20, es = 34;
-  fill(d, T.greenDeep);
-  d.roundedRect(ex, ey, es, es, 8, 8, "F");
-  stroke(d, T.goldLine, 0.9);
-  d.circle(ex + es / 2, ey + es / 2, 11, "S");
-  d.setFont("helvetica", "bold");
-  d.setFontSize(6.6);
-  ink(d, T.white);
-  d.text("GHS", ex + es / 2, ey + es / 2 + 2.3, { align: "center" });
-
-  const tx = MARGIN + es + 12;
   d.setFont("helvetica", "bold");
   d.setFontSize(7);
   ink(d, T.gold);
   d.setCharSpace(1.5);
-  d.text(o.eyebrow.toUpperCase(), tx, 27);
+  d.text(o.eyebrow.toUpperCase(), cx, 28, { align: "center" });
   d.setCharSpace(0);
 
   d.setFont("helvetica", "bold");
   ink(d, T.ink);
-  const after = fitLeftText(d, o.title, tx, 44, CONTENT_W - es - 12 - 100, 15.5, 11);
+  const after = fitCenteredText(d, o.title, cx, 46, CONTENT_W - 30, 16, 11);
 
   d.setFont("helvetica", "normal");
   d.setFontSize(9);
   ink(d, T.muted);
-  d.text(o.subtitle, tx, Math.min(after + 3, H - 8));
+  d.text(o.subtitle, cx, Math.min(after + 3, H - 9), { align: "center" });
 
-  // generated date (right)
-  d.setFont("helvetica", "normal");
-  d.setFontSize(7);
-  ink(d, T.muted);
-  d.text(`Generated ${todayLabel()}`, A4_W - MARGIN, 27, { align: "right" });
-
-  // base hairline + short gold segment
+  // base hairline + short centred gold segment
   stroke(d, T.border, 0.7);
   d.line(MARGIN, H, A4_W - MARGIN, H);
   fill(d, T.goldLine);
-  d.roundedRect(MARGIN, H - 1.1, 64, 2.2, 1.1, 1.1, "F");
+  d.roundedRect(cx - 32, H - 1.1, 64, 2.2, 1.1, 1.1, "F");
   return H + 20;
 }
 
