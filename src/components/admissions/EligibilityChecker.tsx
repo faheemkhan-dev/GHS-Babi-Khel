@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, CheckCircle2, XCircle, ArrowRight, Sparkles } from "lucide-react";
+import { Search, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,84 +51,87 @@ export default function EligibilityChecker({ onApply }: { onApply: (cls: string,
     setResult({ eligible: reasons.length === 0, reasons });
   };
 
+  // Thin, premium form: slim hint, two-up selects, one-line date field, pill button.
+  const labelCls = "mb-1 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground";
+  const triggerCls = "h-8 rounded-lg border-border/80 bg-background px-2.5 text-[12px]";
+
   return (
-    <div className="bg-card border border-border rounded-xl shadow-card p-3">
-      <div className="flex items-center gap-1.5 mb-2">
-        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-        <h3 className="font-bold text-foreground text-xs">Preliminary Eligibility Check</h3>
-        <span className="text-[9px] bg-amber-500/15 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold ml-auto">Quick Check</span>
-      </div>
-      <p className="text-[10px] text-muted-foreground mb-2.5">
-        Final eligibility always depends on document verification by the school office.
+    <div className="rounded-xl border border-border/70 bg-card p-3">
+      <p className="mb-3 text-center text-[10.5px] leading-snug text-muted-foreground">
+        Final eligibility depends on document verification by the school office.
       </p>
-      <div className="space-y-2">
-        <div>
-          <Label className="text-[11px] font-semibold mb-1 block">Applying for Class *</Label>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="min-w-0">
+          <Label className={labelCls}>Class <span className="text-red-500">*</span></Label>
           <Select value={cls} onValueChange={setCls}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select class" /></SelectTrigger>
+            <SelectTrigger className={triggerCls}><SelectValue placeholder="Select" /></SelectTrigger>
             <SelectContent>
               {["6","7","8","9","10"].map(c => <SelectItem key={c} value={c}>Class {c}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label className="text-[11px] font-semibold mb-1 block">Admission Type *</Label>
+        <div className="min-w-0">
+          <Label className={labelCls}>Type <span className="text-red-500">*</span></Label>
           <Select value={admissionType} onValueChange={v => setAdmissionType(v as AdmissionType)}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className={triggerCls}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="fresh">Fresh Admission</SelectItem>
               {["9", "10"].includes(cls) && <SelectItem value="migration">Migration / Transfer</SelectItem>}
             </SelectContent>
           </Select>
-          {!['9', '10'].includes(cls) && cls && (
-            <p className="text-[9px] text-muted-foreground mt-1">Note: For Class {cls}, only Fresh Admission is available. School-level transfers are handled directly between schools.</p>
-          )}
         </div>
-        <div>
-          <Label className="text-[11px] font-semibold mb-1 block">Date of Birth</Label>
-          <Input type="date" value={dob} onChange={e => setDob(e.target.value)} className="h-9 text-xs" />
-
-        </div>
-        <Button onClick={checkEligibility} className="w-full gap-2 rounded-xl h-9 text-xs">
-          <Search className="w-3.5 h-3.5" /> Check Now
-        </Button>
       </div>
+      {!['9', '10'].includes(cls) && cls && (
+        <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">
+          Class {cls}: Fresh Admission only — school-level transfers are handled directly between schools.
+        </p>
+      )}
+
+      <div className="mt-2">
+        <Label className={labelCls}>Date of Birth</Label>
+        <Input type="date" value={dob} onChange={e => setDob(e.target.value)} className="h-8 rounded-lg border-border/80 bg-background px-2.5 text-[12px]" />
+      </div>
+
+      <Button onClick={checkEligibility} className="mt-3 h-8 w-full gap-1.5 rounded-full text-[12px] font-semibold">
+        <Search className="h-3.5 w-3.5" /> Check Now
+      </Button>
 
       {result && (
         <div
-          className={`mt-3 rounded-xl p-3 border ${
+          className={`mt-3 rounded-xl border p-2.5 ${
             result.eligible
-              ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-900"
-              : "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-900"
+              ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/20"
+              : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20"
           }`}>
           {result.eligible ? (
             <>
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
-                <p className="font-bold text-sm text-green-700 dark:text-green-400">Likely eligible — preliminary result</p>
+              <div className="mb-1 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                <p className="text-[12.5px] font-bold text-green-700 dark:text-green-400">Likely eligible — preliminary result</p>
               </div>
-              <p className="text-xs text-green-700 dark:text-green-400 mb-3">
-                Based on the information provided, there's no obvious issue for Class {cls} ({admissionType} admission). This is not final — the school office will confirm eligibility after reviewing your documents. Apply now to get started!
+              <p className="mb-2.5 text-[11px] leading-snug text-green-700 dark:text-green-400">
+                No obvious issue for Class {cls} ({admissionType} admission). This is not final — the school office confirms eligibility after reviewing your documents.
               </p>
-              <Button onClick={() => onApply(cls, admissionType)} className="w-full gap-2 rounded-xl h-9 text-xs">
-                <ArrowRight className="w-3.5 h-3.5" /> Apply for Class {cls}
+              <Button onClick={() => onApply(cls, admissionType)} className="h-8 w-full gap-1.5 rounded-full text-[12px] font-semibold">
+                <ArrowRight className="h-3.5 w-3.5" /> Apply for Class {cls}
               </Button>
             </>
           ) : (
             <>
-              <div className="flex items-center gap-2 mb-2">
-                <XCircle className="w-5 h-5 text-red-600" />
-                <p className="font-bold text-sm text-red-700 dark:text-red-400">Possible issue found</p>
+              <div className="mb-1 flex items-center gap-1.5">
+                <XCircle className="h-4 w-4 shrink-0 text-red-600" />
+                <p className="text-[12.5px] font-bold text-red-700 dark:text-red-400">Possible issue found</p>
               </div>
               <ul className="space-y-1">
                 {result.reasons.map((r, i) => (
-                  <li key={i} className="text-xs text-red-700 dark:text-red-400 flex items-start gap-1.5">
-                    <span className="mt-0.5">•</span> {r}
+                  <li key={i} className="flex items-start gap-1.5 text-[11px] leading-snug text-red-700 dark:text-red-400">
+                    <span>•</span> {r}
                   </li>
                 ))}
               </ul>
-              <p className="text-[10px] text-red-600/80 dark:text-red-400/70 mt-2">
-                You may still contact the school office directly, as exceptional or hardship cases are handled case-by-case per current policy.
+              <p className="mt-2 text-[10px] leading-snug text-red-600/80 dark:text-red-400/70">
+                You may still contact the school office directly — exceptional or hardship cases are handled case-by-case.
               </p>
             </>
           )}
@@ -137,4 +140,3 @@ export default function EligibilityChecker({ onApply }: { onApply: (cls: string,
     </div>
   );
 }
-
