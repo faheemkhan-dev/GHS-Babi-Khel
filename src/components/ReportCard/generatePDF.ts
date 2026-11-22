@@ -1,5 +1,8 @@
 // src/components/ReportCard/generatePDF.ts
-// Premium A4 result gazette for ONE class (green & gold design).
+// Premium A4 result gazette for ONE class — light, airy, modern design:
+// white page, hairline rules, a compact header (deep green + gold used only as
+// thin accents), KPI cards, top-scorer card, subject pass-rate table with
+// mini bars, ranked student table and a failed-papers breakdown.
 //
 //   • A4 portrait, identical left/right margins, every table is exactly
 //     CONTENT_W wide → the whole page is centred.
@@ -12,10 +15,10 @@
 // jspdf + jspdf-autotable are imported dynamically so they only download when
 // a user actually clicks a PDF button.
 import type { ExamSelection, NormalizedResult, ResultStats } from "./types";
-import { classDisplayName } from "./classMaxMarks";
+import { classDisplayName, CLASS_MAX_MARKS } from "./classMaxMarks";
 import {
   A4_W, CONTENT_W, MARGIN, SAFE_BOTTOM, SLIM_H, T,
-  drawBand, drawFooters, fill, fitCenteredText, ink, kpiTiles, rankResults,
+  drawBand, drawFooters, fill, fitLeftText, ink, kpiTiles, rankResults,
   safeFilePart, sectionTitle, stroke, tableBase,
 } from "./pdfTheme";
 
@@ -64,24 +67,58 @@ export async function generateResultPDF(
   ]);
 
   // ── Top scorer card ──
+  const classMax = CLASS_MAX_MARKS[sel.className];
   if (stats.topScorerName) {
-    const h = 46;
-    fill(doc, T.goldSoft);
+    const h = 52;
+    fill(doc, T.white);
     stroke(doc, T.goldLine, 0.9);
-    doc.roundedRect(MARGIN, y, CONTENT_W, h, 6, 6, "FD");
+    doc.roundedRect(MARGIN, y, CONTENT_W, h, 7, 7, "FD");
+    // soft gold wash on the left + medal
+    fill(doc, T.goldSoft);
+    doc.roundedRect(MARGIN + 0.45, y + 0.45, 62, h - 0.9, 6.5, 6.5, "F");
+    fill(doc, T.white);
+    doc.rect(MARGIN + 40, y + 0.45, 24, h - 0.9, "F"); // square the inner edge
+    fill(doc, T.goldLine);
+    doc.circle(MARGIN + 31, y + h / 2, 14, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
+    doc.setFontSize(13);
+    ink(doc, T.white);
+    doc.text("1", MARGIN + 31, y + h / 2 + 4.6, { align: "center" });
+
+    const tx = MARGIN + 68;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.8);
     ink(doc, T.gold);
     doc.setCharSpace(1.4);
-    doc.text("TOP SCORER", A4_W / 2, y + 14, { align: "center" });
+    doc.text("TOP SCORER", tx, y + 16);
     doc.setCharSpace(0);
     ink(doc, T.ink);
-    fitCenteredText(doc, stats.topScorerName, A4_W / 2, y + 28, CONTENT_W - 30, 12.5, 9);
+    doc.setFont("helvetica", "bold");
+    fitLeftText(doc, stats.topScorerName, tx, y + 31, CONTENT_W - 68 - 130, 13, 9);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    ink(doc, T.text);
-    doc.text(`Roll ${stats.topScorerRoll}  ·  ${stats.highestMarks} marks`, A4_W / 2, y + 40, { align: "center" });
-    y += h + 16;
+    ink(doc, T.muted);
+    doc.text(`Roll ${stats.topScorerRoll}`, tx, y + 43.5);
+
+    // marks on the right: 484 / 600
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    const maxTxt = ` / ${classMax}`;
+    const maxW = doc.getTextWidth(maxTxt);
+    doc.setFontSize(20);
+    ink(doc, T.ink);
+    const mx = A4_W - MARGIN - 16;
+    doc.text(String(stats.highestMarks), mx - maxW, y + 33, { align: "right" });
+    doc.setFontSize(8.5);
+    ink(doc, T.muted);
+    doc.text(maxTxt, mx, y + 33, { align: "right" });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.4);
+    ink(doc, T.gold);
+    doc.setCharSpace(1);
+    doc.text("MARKS", mx, y + 43.5, { align: "right" });
+    doc.setCharSpace(0);
+    y += h + 18;
   }
 
   // ── Subject-wise pass rate ──
@@ -91,13 +128,14 @@ export async function generateResultPDF(
     autoTable(doc, {
       ...tableBase(doc, { slimLabel }),
       startY: y,
-      head: [["Subject", "Passed", "Failed", "Pass %"]],
-      body: subjectEntries.map(([name, c]) => [name, String(c.pass), String(c.fail), `${c.rate}%`]),
+      head: [["Subject", "Passed", "Failed", "Pass %", "Pass rate"]],
+      body: subjectEntries.map(([name, c]) => [name, String(c.pass), String(c.fail), `${c.rate}%`, ""]),
       columnStyles: {
-        0: { cellWidth: CONTENT_W - 300, fontStyle: "bold" },
-        1: { cellWidth: 100 },
-        2: { cellWidth: 100 },
-        3: { cellWidth: 100 },
+        0: { cellWidth: 120, fontStyle: "bold" },
+        1: { cellWidth: 64 },
+        2: { cellWidth: 64 },
+        3: { cellWidth: 64 },
+        4: { cellWidth: CONTENT_W - 312 },
       },
       didParseCell: (data) => {
         if (data.section !== "body") return;
@@ -109,8 +147,23 @@ export async function generateResultPDF(
           data.cell.styles.textColor = rate >= 80 ? T.pass : rate < 50 ? T.fail : T.ink;
         }
       },
+      // mini progress bar in the last column
+      didDrawCell: (data) => {
+        if (data.section !== "body" || data.column.index !== 4) return;
+        const entry = subjectEntries[data.row.index];
+        if (!entry) return;
+        const rate = Math.max(0, Math.min(100, entry[1].rate));
+        const bx = data.cell.x + 12, bw = data.cell.width - 24, bh = 4.2;
+        const by = data.cell.y + data.cell.height / 2 - bh / 2;
+        fill(doc, T.track);
+        doc.roundedRect(bx, by, bw, bh, 2.1, 2.1, "F");
+        if (rate > 0) {
+          fill(doc, rate >= 50 ? T.green : T.fail);
+          doc.roundedRect(bx, by, Math.max(bh, (bw * rate) / 100), bh, 2.1, 2.1, "F");
+        }
+      },
     });
-    y = lastY() + 20;
+    y = lastY() + 22;
   }
 
   // ── Student results (ranked) ──
@@ -128,27 +181,27 @@ export async function generateResultPDF(
       r.roll,
       r.name || "—",
       r.fatherName || "—",
-      r.totalMarks > 0 ? String(r.totalMarks) : "—",
+      r.totalMarks > 0 ? `${r.totalMarks} / ${classMax}` : "—",
       r.totalMarks > 0 ? `${r.percentage}%` : "—",
       r.grade || (r.isFail ? "F" : "—"),
       status,
     ];
   });
-  // 32+56+118+118+46+44+40+73 = 527 = CONTENT_W (rounded) — last col absorbs the remainder
-  const fixed = 32 + 56 + 118 + 118 + 46 + 44 + 40;
+  // 30+54+118+112+62+42+36 = 454 → last col takes the remainder (CONTENT_W − 454)
+  const fixed = 30 + 54 + 118 + 112 + 62 + 42 + 36;
   autoTable(doc, {
     ...tableBase(doc, { slimLabel }),
     startY: y,
     head: [["Pos", "Roll No", "Name", "Father Name", "Total", "%", "Grade", "Status"]],
     body,
     columnStyles: {
-      0: { cellWidth: 32 },
-      1: { cellWidth: 56 },
+      0: { cellWidth: 30 },
+      1: { cellWidth: 54 },
       2: { cellWidth: 118, fontStyle: "bold" },
-      3: { cellWidth: 118 },
-      4: { cellWidth: 46, fontStyle: "bold" },
-      5: { cellWidth: 44 },
-      6: { cellWidth: 40 },
+      3: { cellWidth: 112, textColor: T.text },
+      4: { cellWidth: 62, fontStyle: "bold" },
+      5: { cellWidth: 42 },
+      6: { cellWidth: 36 },
       7: { cellWidth: CONTENT_W - fixed },
     },
     didParseCell: (data) => {
@@ -165,8 +218,9 @@ export async function generateResultPDF(
       if (data.column.index === 7) {
         const txt = String(data.cell.raw || "");
         data.cell.styles.fontStyle = "bold";
-        if (txt.startsWith("FAIL")) data.cell.styles.textColor = T.fail;
-        else if (txt === "PASS") data.cell.styles.textColor = T.pass;
+        data.cell.styles.fontSize = 8;
+        if (txt.startsWith("FAIL")) { data.cell.styles.textColor = T.fail; data.cell.styles.fillColor = T.failSoft; }
+        else if (txt === "PASS") { data.cell.styles.textColor = T.pass; data.cell.styles.fillColor = T.passSoft; }
         else data.cell.styles.textColor = T.muted;
       }
     },
@@ -190,8 +244,8 @@ export async function generateResultPDF(
         r.name || "—",
         r.subjects.filter((s) => s.isFail).map(failedSubjectLabel).join(", ") || "—",
       ]),
-      headStyles: { ...tableBase(doc).headStyles, fillColor: T.fail, lineColor: T.fail },
-      alternateRowStyles: { fillColor: [254, 242, 242] },
+      headStyles: { ...tableBase(doc).headStyles, fillColor: T.failSoft, textColor: T.fail, lineColor: T.fail },
+      alternateRowStyles: { fillColor: [254, 248, 248] },
       columnStyles: {
         0: { cellWidth: 62 },
         1: { cellWidth: 150, fontStyle: "bold" },
