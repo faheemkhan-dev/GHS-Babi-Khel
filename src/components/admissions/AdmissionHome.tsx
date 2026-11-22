@@ -387,63 +387,69 @@ function AdmissionHome({
           </div>
         </section>
 
-        {/* ── DOWNLOADS ──────────────────────────────────────────────────── */}
+        {/* ── DOWNLOADS — slim premium list ──────────────────────────────── */}
         <section className="mt-12" style={lazySection}>
           <SectionTitle kicker="Resources" hint={isOpen ? "Printable forms and guides" : "Unlock when admissions reopen"}>Downloads</SectionTitle>
 
-          <div className={`overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card divide-y divide-border ${isOpen ? "" : "opacity-60"}`}>
-            <button
-              type="button"
-              disabled={!!downloading}
-              onClick={guard(onDownloadBlank)}
-              className="flex w-full touch-manipulation items-center gap-3 bg-gold/5 p-3.5 text-left active:bg-gold/10 disabled:opacity-60"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gold/60 text-primary">
-                {downloading === "empty_form" ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-foreground">Admission Form</span>
-                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">Blank form — print, fill by hand and submit at the office</span>
-              </span>
-              {isOpen ? <FileDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />}
-            </button>
-
-            {DOWNLOADS.map((d) => (
-              <button
-                key={d.key}
-                type="button"
-                disabled={!!downloading}
-                onClick={guard(() => onDownloadItem(d.key))}
-                className="flex w-full touch-manipulation items-center gap-3 p-3.5 text-left active:bg-muted/60 disabled:opacity-60"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-primary">
-                  {downloading === d.key ? <Loader2 className="h-5 w-5 animate-spin" /> : <d.icon className="h-5 w-5" />}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-foreground">{d.title}</span>
-                  <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{d.desc}</span>
-                </span>
-                {isOpen ? (
-                  hasLibFile(d.key)
-                    ? <FileDown className="h-4 w-4 shrink-0 text-green-600" />
-                    : <FileDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                ) : (
-                  <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
-                )}
-              </button>
-            ))}
+          <div className={`mx-auto max-w-lg overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card ${isOpen ? "" : "opacity-60"}`}>
+            <div aria-hidden className="h-[3px] bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
+            <ul className="divide-y divide-border/60">
+              <li>
+                <button
+                  type="button"
+                  disabled={!!downloading}
+                  onClick={guard(onDownloadBlank)}
+                  className="flex w-full touch-manipulation items-center gap-2.5 bg-gold/5 px-3 py-2.5 text-left active:bg-gold/10 disabled:opacity-60"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gold/50 bg-card text-primary">
+                    {downloading === "empty_form" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  </span>
+                  <span className="min-w-0 flex-1 leading-tight">
+                    <span className="block text-[13px] font-semibold text-foreground">Admission Form</span>
+                    <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">Blank form — print, fill by hand and submit at the office</span>
+                  </span>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gold/40 text-primary">
+                    {isOpen ? <FileDown className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                  </span>
+                </button>
+              </li>
+              {DOWNLOADS.map((d) => (
+                <li key={d.key}>
+                  <button
+                    type="button"
+                    disabled={!!downloading}
+                    onClick={guard(() => onDownloadItem(d.key))}
+                    className="flex w-full touch-manipulation items-center gap-2.5 px-3 py-2.5 text-left active:bg-muted/50 disabled:opacity-60"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/30 text-primary">
+                      {downloading === d.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <d.icon className="h-4 w-4" />}
+                    </span>
+                    <span className="min-w-0 flex-1 leading-tight">
+                      <span className="block text-[13px] font-semibold text-foreground">{d.title}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{d.desc}</span>
+                    </span>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground">
+                      {isOpen
+                        ? <FileDown className={`h-3.5 w-3.5 ${hasLibFile(d.key) ? "text-green-600" : ""}`} />
+                        : <Lock className="h-3.5 w-3.5" />}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {isOpen && (
+              <div className="border-t border-border/60 bg-muted/20 p-2.5">
+                <button
+                  type="button"
+                  disabled={!!downloading}
+                  onClick={onDownloadAll}
+                  className="inline-flex h-8 w-full touch-manipulation items-center justify-center gap-1.5 rounded-full border border-gold/60 bg-card px-4 text-[12px] font-semibold text-primary active:bg-gold/15 disabled:opacity-50"
+                >
+                  <FileDown className="h-3.5 w-3.5" /> Download all
+                </button>
+              </div>
+            )}
           </div>
-
-          {isOpen && (
-            <button
-              type="button"
-              disabled={!!downloading}
-              onClick={onDownloadAll}
-              className="mt-3 inline-flex h-10 w-full touch-manipulation items-center justify-center gap-1.5 rounded-full border border-gold/60 bg-gold/10 px-4 text-[13px] font-semibold text-primary active:bg-gold/20 disabled:opacity-50"
-            >
-              <FileDown className="h-4 w-4" /> Download all
-            </button>
-          )}
         </section>
 
         {/* ── HELPLINE — slim Call / Email pills ───────────────────────── */}
