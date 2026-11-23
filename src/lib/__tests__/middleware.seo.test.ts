@@ -207,3 +207,67 @@ describe("middleware crawler paths (SEO)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("middleware — AI tools without a bot user agent (DeepSeek-style fetchers)", () => {
+  const PY = "python-requests/2.32.3";
+
+  it("a bare python-requests fetcher gets the live-rendered HTML", async () => {
+    mockRenderHop(() =>
+      new Response(RENDER_200_HTML, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } })
+    );
+    const res = await middleware(makeRequest("/admission", PY, "198.51.100.40"));
+    expect(res).toBeDefined();
+    expect(res!.status).toBe(200);
+    expect(await res!.text()).toContain("<h1>Hello</h1>");
+  });
+
+  it("a request with NO user agent also gets the live-rendered HTML", async () => {
+    mockRenderHop(() =>
+      new Response(RENDER_200_HTML, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } })
+    );
+    const res = await middleware(makeRequest("/faq", "", "198.51.100.41"));
+    expect(res).toBeDefined();
+    expect(res!.status).toBe(200);
+  });
+
+  it("anonymous HTTP clients are still rate-limited (unlike named crawlers)", async () => {
+    mockRenderHop(() =>
+      new Response(RENDER_200_HTML, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } })
+    );
+    let saw429 = false;
+    for (let i = 0; i < 220; i++) {
+      const res = await middleware(makeRequest("/faq", "axios/1.7.2", "198.51.100.42"));
+      if (res && res.status === 429) { saw429 = true; break; }
+    }
+    expect(saw429).toBe(true);
+  });
+
+  it("Accept: text/markdown on a page route returns Markdown via the render hop", async () => {
+    let hopUrl = "";
+    mockRenderHop((url) => {
+      hopUrl = url;
+      return new Response("# Admissions\n", { status: 200, headers: { "content-type": "text/markdown; charset=utf-8" } });
+    });
+    const req = new Request(`${ORIGIN}/admission`, {
+      method: "GET",
+      headers: { "User-Agent": BROWSER, Accept: "text/markdown", "x-forwarded-for": "198.51.100.43" },
+    });
+    const res = await middleware(req);
+    expect(res).toBeDefined();
+    expect(hopUrl).toContain("format=md");
+    expect(res!.headers.get("content-type")).toContain("text/markdown");
+    expect(res!.headers.get("vary")).toBe("Accept");
+  });
+
+  it("a normal browser Accept header never triggers Markdown", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const req = new Request(`${ORIGIN}/faq`, {
+      method: "GET",
+      headers: { "User-Agent": BROWSER, Accept: "text/html,application/xhtml+xml,*/*;q=0.8", "x-forwarded-for": "198.51.100.44" },
+    });
+    const res = await middleware(req);
+    expect(res).toBeUndefined();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
