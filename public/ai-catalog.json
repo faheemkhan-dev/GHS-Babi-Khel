@@ -1,9 +1,9 @@
 {
   "name": "GHS Babi Khel — Government High School",
-  "description": "AI agent catalog for Government High School Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan. This catalog lists every machine-readable resource, live data feed, and AI-capable endpoint the site exposes so autonomous browsing agents can discover and use them without rendering the React application.",
+  "description": "AI agent catalog for Government High School Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan. Lists every machine-readable resource and live endpoint so agents can use the site without running JavaScript. All endpoints are public, GET-only and CORS-open; every dynamic fact is read live from the school database (edge cache at most 5 minutes).",
   "type": "Catalog",
   "url": "https://ghsbabikhel.dpdns.org",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "language": "en-PK",
   "siteType": "EducationalOrganization",
   "contact": {
@@ -13,7 +13,7 @@
   "resources": [
     {
       "name": "AI Data Feed",
-      "description": "Complete live JSON snapshot of every dynamic public fact on the site: admission procedure and status, results info, latest notices, contacts, and the full FAQ. One round trip returns everything an AI tool needs to answer questions about the school.",
+      "description": "Complete live JSON snapshot: school profile, admission status/fee/dates/classes & seats/merit lists, results info and live grading scale, school merit lists, roll-slip sessions, notices, teachers and the live FAQ. Edge-cached at most 5 minutes.",
       "type": "application/json",
       "method": "GET",
       "url": "https://ghsbabikhel.dpdns.org/api/ai-data",
@@ -21,6 +21,37 @@
         "https://ghsbabikhel.dpdns.org/ai-data.json",
         "https://ghsbabikhel.dpdns.org/ai.json"
       ]
+    },
+    {
+      "name": "Live FAQ",
+      "description": "FAQ generated at request time from the school database (nothing hard-coded). Same text as the /faq page and its FAQPage JSON-LD.",
+      "type": "application/json",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/api/faq",
+      "aliases": [
+        "https://ghsbabikhel.dpdns.org/faq.json"
+      ]
+    },
+    {
+      "name": "LLMs Full Text",
+      "description": "The whole site as one plain-text document: live facts, full FAQ answers, notices and staff.",
+      "type": "text/plain",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/llms-full.txt"
+    },
+    {
+      "name": "Markdown pages",
+      "description": "Every public page as clean Markdown: append .md (about, contact, admission, notices, results, merit-list, roll-no-slip, duties, teachers, faq, index.md for home, notices/<id>.md) or send Accept: text/markdown.",
+      "type": "text/markdown",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/admission.md"
+    },
+    {
+      "name": "OpenAPI description",
+      "description": "OpenAPI 3.1 description of the public machine endpoints.",
+      "type": "application/json",
+      "method": "GET",
+      "url": "https://ghsbabikhel.dpdns.org/openapi.json"
     },
     {
       "name": "LLMs Guide",
@@ -73,15 +104,53 @@
     }
   ],
   "pages": [
-    { "path": "/", "description": "Homepage — school overview, stats, latest notices" },
-    { "path": "/about", "description": "About the school, history, mission and principal's message" },
-    { "path": "/admission", "description": "Online admission application and procedure" },
-    { "path": "/results", "description": "Exam results lookup (school and BISE Peshawar)" },
-    { "path": "/merit-list", "description": "Published merit lists of top-performing students" },
-    { "path": "/roll-no-slip", "description": "Roll number slip download for board exams" },
-    { "path": "/notices", "description": "Latest school notices" },
-    { "path": "/teachers", "description": "Faculty and teaching staff" },
-    { "path": "/faq", "description": "Frequently asked questions" },
-    { "path": "/contact", "description": "Contact information and location map" }
+    {
+      "path": "/",
+      "description": "Homepage — school overview, stats, latest notices"
+    },
+    {
+      "path": "/about",
+      "description": "About the school, history, mission and principal's message"
+    },
+    {
+      "path": "/admission",
+      "description": "Online admission application and procedure"
+    },
+    {
+      "path": "/results",
+      "description": "Exam results lookup (school and BISE Peshawar)"
+    },
+    {
+      "path": "/merit-list",
+      "description": "Published merit lists of top-performing students"
+    },
+    {
+      "path": "/roll-no-slip",
+      "description": "Roll number slip download for board exams"
+    },
+    {
+      "path": "/notices",
+      "description": "Latest school notices"
+    },
+    {
+      "path": "/teachers",
+      "description": "Faculty and teaching staff"
+    },
+    {
+      "path": "/faq",
+      "description": "Frequently asked questions"
+    },
+    {
+      "path": "/contact",
+      "description": "Contact information and location map"
+    },
+    {
+      "path": "/admission/portal",
+      "description": "Applicant Portal — own application timeline, challan and fee status (reference no. + B-Form no.)"
+    },
+    {
+      "path": "/duties",
+      "description": "BISE Peshawar supervisory exam duty draw for teachers"
+    }
   ]
 }
