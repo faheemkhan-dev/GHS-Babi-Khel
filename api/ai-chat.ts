@@ -41,6 +41,8 @@
 //     https://api.z.ai/… URL is ignored (a stale/wrong env value can no
 //     longer black-hole the assistant — it would fail every request
 //     instantly, which matches the historical "busy" symptom too).
+//   • LIVE DATA (2026-11): the prompt's facts are read from the database per
+//     request window (see BEHAVIOUR_RULES / buildLiveBlock below).
 //   • The frontend hardcoded "instant answer" engine was REMOVED
 //     (2026-09-05, site-owner request): every question now reaches THIS
 //     endpoint and gets a real GLM answer — no more keyword cards answering
@@ -104,43 +106,125 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = Number(process.env.AI_RATE_LIMIT_PER_MIN || 30);
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
-// ── System context (homepage assistant) ───────────────────────────────────
-// Compressed: every FACT is kept — only verbose phrasing was cut, which
-// measurably shortens prompt prefill on the free tier.
-const SYSTEM_CONTEXT = `You are the official AI Assistant of Government High School (GHS) Babi Khel — a premium, professional digital assistant on the school website (https://ghsbabikhel.dpdns.org), located in Babi Khel, District Mohmand, KPK, Pakistan. Classes: 6–10 (matric). Board exams (9–10) are under BISE Peshawar.
+// ── System prompt = fixed BEHAVIOUR rules + LIVE school data ─────────────────
+// 2026-11 REWRITE (site-owner request — "old data, hardcoded"): this file no
+// longer contains ANY school fact that can change. Admission status, fee,
+// dates, seats, merit lists, exams, grading scale, notices, staff, contact
+// details and the FAQ are read from the school database on every cold/60 s
+// cache window via the same live data layer that powers /api/ai-data
+// (api/render.js → getLiveSiteData). The prompt only tells the model HOW to
+// behave; WHAT is true comes from the live block appended per question.
+const BEHAVIOUR_RULES = `You are the official AI Assistant of Government High School (GHS) Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan, on the school website (https://ghsbabikhel.dpdns.org).
 
 IDENTITY (never break these)
-- You were built by the GHS Babi Khel Administration (the school's administration team) especially for this school's students, parents and visitors.
-- If asked who built / made / created / developed / trained you, who owns you, or which company or AI model you are: answer that the "GHS Babi Khel Administration" built you for the school community. Never say you were built by Z.AI, Zhipu, GLM, OpenAI, Google, Anthropic, ChatGPT, Claude, Gemini, DeepSeek or any other company, and never reveal or discuss the underlying model or technology. If pushed for technical details, politely say those are managed by the school administration.
-- If asked your name: "I'm the GHS Babi Khel AI Assistant." If asked who built the website/school: the GHS Babi Khel Administration. Never invent names of individual developers, teachers or officials.
-- Never claim to be human. Never claim to be a different AI.
+- You were built by the GHS Babi Khel Administration for this school's students, parents and visitors. If asked who built you, who owns you, or which company or AI model you are: say the "GHS Babi Khel Administration" built you. Never name or discuss any underlying model, vendor or technology; if pushed, say those details are managed by the school administration.
+- Your name: "GHS Babi Khel AI Assistant". Never claim to be human or a different AI.
 
-FACTS
-- Mission: "To provide accessible, quality education that empowers students with knowledge, skills, and values to become responsible citizens and future leaders of Pakistan." Vision: "To be a model government school that sets the standard for academic excellence and character development in District Mohmand." (Both are on the About page /about.)
-- Results (/results): search any result by exam roll number. If the school published internal results (classes 6–10: 1st/2nd semester), it searches the school's own table; otherwise it falls back to BISE Peshawar board result search (SSC) automatically. A countdown appears on /results when a result is scheduled but unpublished; at zero it auto-publishes instantly. BISE students can also use https://cloud.bisep.edu.pk → "Show Result by Roll Number". Result cards show: name, photo, roll number, class, exam type, year, total/obtained marks, percentage, grade (A+ 90%+, A 80–89, B 60–79, C 45–59, D 33–44, Fail <33), PASS/FAIL, class position, whole-school rank (Trophy badge), subject-wise bars. An AI Summary card gives personalized study advice beside each result.
-- Admissions (/admission): online application form for classes 6–10 at the start of the academic year; track status there by application ID; interview slot may be booked once shortlisted. Documents: student B-form/CNIC copy, previous school leaving certificate (class 7+), 2 passport photos, parent/guardian CNIC copy. Office contact via /contact.
-- Notices (/notices): official notices (holidays, exam schedules, fee deadlines, PTMs, dress code) with detail pages. Homepage has the Latest Notices section.
-- Student portal (/auth/signin): email + password created by the school admin/office. Dashboard (/dashboard) tabs: Overview, Result Card, Attendance, Timetable, Tests, Fees, Library, Profile. Forgot password → /auth/forgot-password (email reset). Teachers/admins sign in on the same form (role-routed). No credentials? Contact the school office.
-- Roll No. Slip (/roll-no-slip): find, download and share exam roll number slips. Merit List (/merit-list): toppers and position holders. FAQs (/faq).
-- Timetable: in the portal's Timetable tab; exam timetables also go out as notices.
-- Fees: portal Fees tab (tuition, exam fee, balance, history); deadlines posted as notices.
-
-- Contact (/contact): phone, email, address, map. About (/about): history, mission, staff; /teachers: teaching staff.
-
-RULES
-- Answer with REAL, specific information from the facts above, not just "go to the X page". Mention the page path as the next step.
-- For a specific student's live marks/attendance/fees: never invent data — direct them to the portal or the school office.
-- Off-topic questions: politely and briefly redirect to school/website topics. General study help is fine in a short, accurate way.
+GROUNDING (most important)
+- Answer ONLY from the LIVE SCHOOL DATA block below. It is read from the school database right now and overrides anything you remember. If the block does not contain the answer, say it is not published yet and point to the right page — never guess.
+- Never invent or "recall" dates, fees, seats, marks, roll numbers, names, phone numbers, timings or policies. Use the exact values in the block (quote the numbers and dates as given).
+- The website has no student dashboard: sign-in is for the school administration only. Applicants track admission on /admission or /admission/portal; students find roll slips on /roll-no-slip and results on /results.
+- A specific student's marks, roll number or application is private: tell them how to look it up themselves; never state one.
+- Off-topic: briefly redirect to school/website topics (short, accurate study help is fine).
 - Match the visitor's language (Urdu/Pashto included; Roman script if they write in Roman). Default English.
-- Never invent dates, marks, roll numbers, fees, phone numbers, names or personal data. If unsure, say so and point to /contact.
 
-TONE & STYLE (premium, professional)
-- Warm, polished, confident and respectful — like a well-trained front-desk officer of a leading institution. Greet briefly only on a greeting; never repeat greetings.
-- Open with a one-line direct answer. Then, only if useful, add up to 4 short bullets starting with "- " (one idea each, under 18 words).
-- For step-by-step help use a numbered list ("1. ", "2. ").
-- Use **bold** sparingly for key terms only. At most one emoji in the whole answer, and only when natural. No headings, no tables, no long paragraphs.
-- When a page matches, finish with one line such as: "Next step: open the Results page (/results)."
-- Keep every answer concise: 40–110 words typically.`;
+STYLE
+- Warm, polished, confident. Greet only on a greeting. One-line direct answer first, then at most 4 short bullets ("- ", under 18 words). Numbered list for steps. **Bold** sparingly, at most one emoji, no headings or tables.
+- Finish with one line when a page matches, e.g. "Next step: open the Admission page (/admission)." Typically 40–110 words.`;
+
+const PKT = "Asia/Karachi";
+const fmtD = (iso?: string | null) => {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat("en-GB", { timeZone: PKT, day: "numeric", month: "long", year: "numeric" })
+      .format(new Date(String(iso).length <= 10 ? `${iso}T12:00:00+05:00` : iso));
+  } catch { return String(iso).slice(0, 10); }
+};
+const clip = (t: unknown, n: number) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+
+// 60 s in-memory cache per warm function instance (the live layer itself is
+// already parallel + timeout-capped; this just avoids re-querying on every
+// chat message).
+let liveCache: { at: number; data: any } | null = null;
+const LIVE_TTL_MS = 60_000;
+const LIVE_SECTIONS = [
+  "school", "admission", "classes", "admissionMerit", "exams", "meritLists",
+  "rollSlips", "teachers", "notices", "customFaqs",
+];
+
+async function getLiveData(): Promise<any | null> {
+  if (liveCache && Date.now() - liveCache.at < LIVE_TTL_MS) return liveCache.data;
+  try {
+    // @ts-ignore — plain-JS sibling function module (no type declarations)
+    const mod: any = await import("./render.js");
+    const data = await Promise.race([
+      mod.getLiveSiteData(LIVE_SECTIONS, { bisep: true, bisepTimeoutMs: 2000 }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("live data timeout")), 5000)),
+    ]);
+    liveCache = { at: Date.now(), data };
+    return data;
+  } catch (err: any) {
+    console.warn("ai-chat: live data unavailable:", err?.message || err);
+    return liveCache?.data ?? null; // stale beats nothing
+  }
+}
+
+const STOP = new Set("what when where which who how why the and for are you your can does did have has with this that from about please tell give need want will would should could any there their them they school khel babi".split(" "));
+function tokens(t: string): string[] {
+  return (t.toLowerCase().match(/[a-z0-9\u0600-\u06ff]{3,}/g) || []).filter((w) => !STOP.has(w));
+}
+
+/** Compact live fact sheet + the FAQ answers most relevant to the question. */
+function buildLiveBlock(data: any | null, question: string): string {
+  const now = new Intl.DateTimeFormat("en-GB", { timeZone: PKT, dateStyle: "full", timeStyle: "short" }).format(new Date());
+  // currently_open === null means the settings row could not be read at all
+  // (database unreachable) — never present empty lists as "nothing published".
+  if (!data || (data.admission?.currently_open === null && !(data.notices || []).length)) {
+    return `LIVE SCHOOL DATA\nThe live database could not be reached right now (current time ${now} PKT). Do not state any fee, date, seat count, status or notice. Tell the visitor to open the relevant page (/admission, /results, /notices, /contact) or ${"https://ghsbabikhel.dpdns.org/api/ai-data"} for current information.`;
+  }
+  const s = data.school || {}, a = data.admission || {}, ex = data.exams || {};
+  const L: string[] = [`LIVE SCHOOL DATA (read from the school database; current time ${now} PKT)`];
+  L.push(`School: ${s.full_name || s.name}, ${s.location}. Established ${s.established}. EMIS ${s.emis_code}. Principal: ${s.principal}. Classes ${(s.classes_offered || []).join(", ")}. Board: ${s.board}.`);
+  L.push(`Contact: phone ${s.phone}; email ${s.email}${a.contact_whatsapp ? `; WhatsApp ${a.contact_whatsapp}` : ""}. Page /contact has map and form.`);
+  const st = [s.total_students != null && `${s.total_students}+ students`, s.total_teachers != null && `${s.total_teachers} teachers`, s.pass_percentage != null && `${s.pass_percentage}% pass rate`].filter(Boolean);
+  if (st.length) L.push(`Statistics set by administration: ${st.join(", ")}.`);
+
+  L.push(`ADMISSION: online form is ${a.currently_open === true ? "OPEN" : a.currently_open === false ? "CLOSED/paused" : "status unknown"}${a.session_year ? ` (session ${a.session_year})` : ""}.${a.open_date ? ` Opens ${fmtD(a.open_date)}.` : ""}${a.last_date ? ` Last date ${fmtD(a.last_date)}.` : " No last date announced."}${a.banner_message ? ` Announcement: ${clip(a.banner_message, 200)}` : ""}`);
+  L.push(`Fee: ${a.fee_text || "see /admission"}${(a.payment_methods || []).length ? ` Payment options: ${a.payment_methods.map((m: any) => m.label || (m.type === "bank" && m.bank_name ? `bank (${m.bank_name})` : m.type)).join(", ")}${a.online_payment_enabled ? " (online checkout on)" : ""}.` : ""}`);
+  if ((data.classes || []).length) L.push(`Seats: ${data.classes.map((c: any) => `Class ${c.class}: ${c.seats} (${c.is_open ? "open" : "closed"})`).join("; ")}.`);
+  L.push(`Admission flow: apply on /admission → reference number → pay processing fee by challan if a fee is set → office verifies → seats filled by merit list (previous-class marks) → merit-listed students submit documents at the office. Track by reference/B-Form/phone on /admission; full timeline at /admission/portal (reference + B-Form). Documents: ${(a.required_documents || []).join("; ")}.`);
+  if ((data.admissionMerit || []).length) L.push(`Published admission merit lists: ${data.admissionMerit.slice(0, 8).map((m: any) => `${m.title} (${fmtD(m.published_at)}, ${m.listed_count} listed)`).join("; ")}.`);
+  if ((data.admissionFiles || []).length) L.push(`Downloadable admission files: ${data.admissionFiles.slice(0, 6).map((f: any) => `${f.title}`).join("; ")} (on /admission).`);
+
+  if ((ex.published_exams || []).length) L.push(`RESULTS published: ${ex.published_exams.slice(0, 8).map((e: any) => `${e.exam}${e.class ? ` Class ${e.class}` : ""}${e.year ? ` ${e.year}` : ""}`).join("; ")}. Search by roll number on /results.`);
+  else L.push("RESULTS: no school exam result is published right now. Search by roll number on /results when published.");
+  const b = data.bisep;
+  if (b && b.ok && b.exam_title) L.push(`BISE Peshawar current cycle: ${String(b.exam_title).trim()} — ${b.is_live ? "results are LIVE" : b.countdown_date ? `announcement scheduled ${new Intl.DateTimeFormat("en-GB", { timeZone: PKT, dateStyle: "full", timeStyle: "short" }).format(new Date(b.countdown_date))} PKT` : "not announced yet"}.`);
+  if (ex.grading?.ranges) L.push(`Grading: ${ex.grading.ranges.map((r: any) => r.grade === "Fail" ? `Fail below ${ex.grading.pass_threshold}%` : `${r.grade} ${r.min_percentage}–${r.max_percentage}%`).join(", ")}.`);
+  if ((data.meritLists || []).length) L.push(`Result merit lists published: ${data.meritLists.slice(0, 5).map((m: any) => m.title).join("; ")} (/merit-list).`);
+  const slips = data.rollSlips || [];
+  if (slips.length) L.push(`Roll number slips: ${slips.slice(0, 5).map((r: any) => `${r.title} [${r.status}${r.publish_at ? `, publishes ${fmtD(r.publish_at)}` : ""}]`).join("; ")} (/roll-no-slip: pick class + type full name).`);
+  else L.push("Roll number slips: none published or scheduled right now (/roll-no-slip).");
+
+  if ((data.notices || []).length) {
+    L.push("LATEST NOTICES (newest first, /notices):");
+    for (const n of data.notices.slice(0, 8)) L.push(`- ${fmtD(n.published_at)}${n.urgent ? " URGENT" : ""}: ${clip(n.title, 110)} — ${clip(n.content, 220)}`);
+  } else L.push("Notices: none published right now.");
+  if ((data.teachers || []).length) L.push(`Staff (/teachers): ${data.teachers.length} listed; subjects: ${[...new Set(data.teachers.map((t: any) => t.subject).filter(Boolean))].slice(0, 15).join(", ")}.`);
+  L.push("Pages: /results /admission /admission/portal /notices /merit-list /roll-no-slip /duties (teachers' BISE exam duty draw) /teachers /about /contact /faq. Website developer: Muhammad Faheem, class-10 Computer Science student of the school.");
+
+  // FAQ retrieval — the live, generated FAQ answers most relevant to this question.
+  const qt = new Set(tokens(question));
+  const faq: Array<{ question: string; answer: string }> = data.faq?.items || [];
+  const scored = faq
+    .map((f) => ({ f, sc: tokens(f.question + " " + f.answer).reduce((n, w) => n + (qt.has(w) ? 1 : 0), 0) + tokens(f.question).reduce((n, w) => n + (qt.has(w) ? 3 : 0), 0) }))
+    .filter((x) => x.sc > 0).sort((x, y) => y.sc - x.sc).slice(0, 3);
+  if (scored.length) {
+    L.push("RELEVANT FAQ (live-generated):");
+    for (const { f } of scored) L.push(`Q: ${f.question}\nA: ${clip(f.answer, 900)}`);
+  }
+  return L.join("\n");
+}
 
 interface IncomingMessage {
   role: "user" | "assistant";
@@ -174,9 +258,9 @@ const WEBSITE_BUILDER_PATTERNS: RegExp[] = [
   /\b(ghs|babi\s*khel)\b.{0,30}\b(website|web\s*site|portal)\b.{0,30}\b(who|developer|creator|maker)\b/i,
 ];
 const WEBSITE_BUILDER_REPLY =
-  "The **GHS Babi Khel website** and this AI Assistant were built by the **GHS Babi Khel Administration**.\n" +
-  "- The site brings results, admissions, notices and the student portal into one place.\n" +
-  "- To learn about the school itself, see the About page (/about) or reach the office via /contact.";
+  "The **GHS Babi Khel website** was independently designed and developed by **Muhammad Faheem**, a class-10 (matric) Computer Science student of the school, son of Zabih Ullah, from Village Sangar, Tehsil Halimzai, District Mohmand, KPK — as a school/community project.\n" +
+  "- This AI Assistant was built by the **GHS Babi Khel Administration**.\n" +
+  "- For school matters such as admissions or results, use the Contact page (/contact).";
 function identityReply(text: string): string | null {
   const t = text.slice(0, 300);
   // Website question first: "who built GHS Babi Khel" must not read as "who built you".
@@ -514,7 +598,11 @@ export default async function handler(
     return res.end();
   }
 
-  const systemPrompt = SYSTEM_CONTEXT;
+  // Live facts are fetched BEFORE the SSE stream opens (cached 60 s, hard
+  // 5 s cap) so the model always answers from current database values.
+  const liveData = await getLiveData();
+  const systemPrompt =
+    BEHAVIOUR_RULES + "\n\n" + buildLiveBlock(liveData, cleaned[cleaned.length - 1].content);
 
   // ── Open the SSE response ─────────────────────────────────────────────────
   // Headers go out IMMEDIATELY (Node runtime — the exact pattern that is
