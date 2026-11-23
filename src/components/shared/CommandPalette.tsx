@@ -22,7 +22,7 @@ import Fuse from "fuse.js";
 import {
   Search, Hash, FileText, Phone, Moon, SunMedium, CornerDownLeft, ChevronRight,
   ArrowUp, ArrowDown, X, Clock, Sparkles, Mic, MicOff, GraduationCap, Bell, Medal,
-  Bot, BellRing,
+  Bot,
 } from "lucide-react";
 import { useSiteSearch, PAGE_INDEX, type SearchHit } from "@/hooks/useSiteSearch";
 import { useSchoolSettings } from "@/hooks/useSchoolSettings";
@@ -109,11 +109,6 @@ const GROUP_LABEL: Record<SearchHit["group"], string> = {
   pages: "Pages",
   notices: "Notices",
   teachers: "Teachers",
-};
-const GROUP_TONE: Record<SearchHit["group"], string> = {
-  pages: "from-emerald-500 to-emerald-700",
-  notices: "from-amber-400 to-amber-600",
-  teachers: "from-sky-500 to-indigo-600",
 };
 
 /** Highlights the first occurrence of the query inside a title. */
@@ -459,40 +454,55 @@ export default function CommandPalette() {
 
   const showRecents = query.trim().length === 0 && recents.length > 0;
   const hasQuery = query.trim().length > 0;
-  const tiles = rows.map((r, i) => ({ r, i })).filter((x) => x.r.kind === "action" && (x.r as QuickAction).variant === "tile");
-  const chips = rows.map((r, i) => ({ r, i })).filter((x) => x.r.kind === "action" && (x.r as QuickAction).variant === "chip");
-  const noticeRows = rows.map((r, i) => ({ r, i })).filter((x) => x.r.kind === "hit" && !hasQuery);
-  const listRows = rows.map((r, i) => ({ r, i })).filter((x) => hasQuery);
+  const idx = rows.map((r, i) => ({ r, i }));
+  const actionList = idx.filter((x) => x.r.kind === "action" && (x.r as QuickAction).variant === "tile");
+  const chips = idx.filter((x) => x.r.kind === "action" && (x.r as QuickAction).variant === "chip");
+  const noticeRows = idx.filter((x) => x.r.kind === "hit" && !hasQuery);
+  const listRows = hasQuery ? idx : [];
 
-  const renderRow = (row: Row, idx: number) => {
-    const active = idx === activeIndex;
+  const Label = ({ children }: { children: React.ReactNode }) => (
+    <p className="px-2 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">{children}</p>
+  );
+
+  // One slim row used everywhere (actions, notices, search hits).
+  const renderRow = (row: Row, i: number) => {
+    const active = i === activeIndex;
     const isAction = row.kind === "action";
     const Icon = isAction ? (row as QuickAction).icon : (row as HitRow).hit.icon;
-    const tone = isAction ? (row as QuickAction).tone || "from-primary to-emerald-700" : GROUP_TONE[(row as HitRow).hit.group];
     const title = isAction ? (row as QuickAction).label : (row as HitRow).hit.title;
     const sub = isAction
       ? (row as QuickAction).hint
       : `${GROUP_LABEL[(row as HitRow).hit.group]}${(row as HitRow).hit.snippet ? ` · ${(row as HitRow).hit.snippet}` : ""}`;
+    const badge = isAction ? (row as QuickAction).badge : undefined;
     return (
       <button
         key={row.id}
-        data-row-index={idx}
-        onMouseEnter={() => setActiveIndex(idx)}
+        data-row-index={i}
+        onMouseEnter={() => setActiveIndex(i)}
         onClick={() => runRow(row)}
-        className={`group w-full flex items-center gap-3 rounded-2xl px-2.5 py-2.5 text-left transition-all ${
-          active ? "bg-primary/10 ring-1 ring-primary/25" : "hover:bg-secondary/60"
+        className={`relative flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${
+          active ? "bg-secondary" : "hover:bg-secondary/60"
         }`}
       >
-        <span className={`w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br ${tone} text-white flex items-center justify-center shadow-sm`}>
-          <Icon className="w-[18px] h-[18px]" />
+        {active && <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-primary" />}
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${active ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>
+          <Icon className="h-[15px] w-[15px]" strokeWidth={1.75} />
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[14px] font-semibold text-foreground truncate">
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="block truncate text-[13.5px] font-medium text-foreground">
             {isAction ? title : <Highlight text={title} q={query} />}
           </span>
-          {sub && <span className="block text-[11.5px] text-muted-foreground truncate">{sub}</span>}
+          {sub && <span className="block truncate text-[11px] text-muted-foreground">{sub}</span>}
         </span>
-        <ChevronRight className={`w-4 h-4 shrink-0 transition-all ${active ? "text-primary translate-x-0.5" : "text-muted-foreground/40"}`} />
+        {badge && (
+          <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium ${
+            badge.ok ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400" : "border-border text-muted-foreground"
+          }`}>
+            <span className={`h-1 w-1 rounded-full ${badge.ok ? "bg-emerald-500" : "bg-muted-foreground/60"}`} />
+            {badge.text}
+          </span>
+        )}
+        <ChevronRight className={`h-3.5 w-3.5 shrink-0 ${active ? "text-primary" : "text-muted-foreground/30"}`} strokeWidth={1.75} />
       </button>
     );
   };
@@ -504,200 +514,155 @@ export default function CommandPalette() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.16 }}
-          className="fixed inset-0 z-[100] flex items-start justify-center px-3 sm:px-4 pt-[max(env(safe-area-inset-top),12px)] sm:pt-[10vh]"
+          transition={{ duration: 0.14 }}
+          className="fixed inset-0 z-[100] flex items-start justify-center px-3 pt-[max(env(safe-area-inset-top),10px)] sm:px-4 sm:pt-[12vh]"
           onClick={(e) => { if (e.target === e.currentTarget) close(); }}
-          style={{ background: "radial-gradient(120% 80% at 50% 0%, rgba(6,40,24,0.55), rgba(4,8,12,0.78))", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+          style={{ background: "rgba(6,12,10,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
           role="dialog"
           aria-modal="true"
           aria-label="Search and quick actions"
         >
           <motion.div
-            initial={{ opacity: 0, y: -18, scale: 0.97 }}
+            initial={{ opacity: 0, y: -10, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -12, scale: 0.97 }}
-            transition={{ type: "spring", stiffness: 380, damping: 32 }}
-            className="relative mt-2 sm:mt-0 w-full max-w-[640px] overflow-hidden rounded-[28px] border border-border/60 bg-card/95 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+            exit={{ opacity: 0, y: -8, scale: 0.985 }}
+            transition={{ type: "spring", stiffness: 420, damping: 36 }}
+            className="relative mt-2 w-full max-w-[520px] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_20px_50px_-16px_rgba(0,0,0,0.5)] sm:mt-0"
             onKeyDown={onKeyDown}
           >
-            {/* accent line */}
-            <div aria-hidden className="h-[3px] bg-gradient-to-r from-primary via-emerald-400 to-amber-400" />
+            <div aria-hidden className="h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
 
-            {/* ── Search pill ── */}
-            <div className="px-4 pt-4 pb-3">
-              <div className="flex items-center gap-2 rounded-2xl border border-border bg-secondary/50 pl-3.5 pr-2 py-1.5 transition-all focus-within:border-primary/50 focus-within:bg-card focus-within:ring-4 focus-within:ring-primary/10">
-                <Search className="w-[18px] h-[18px] text-primary shrink-0" aria-hidden="true" />
-                <input
-                  ref={inputRef}
-                  value={listening && interim ? interim : query}
-                  onChange={(e) => { setQuery(e.target.value); if (voiceError) setVoiceError(""); }}
-                  placeholder={listening ? "Listening…" : "Search pages, notices, teachers…"}
-                  className="flex-1 min-w-0 bg-transparent border-none outline-none text-[16px] py-2 text-foreground placeholder:text-muted-foreground/70"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  enterKeyHint="go"
-                  aria-label="Search"
-                />
-                {hasQuery && (
-                  <button onClick={() => setQuery("")} aria-label="Clear" className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:bg-secondary">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                {voiceSupported && (
-                  <button
-                    type="button"
-                    onClick={toggleVoice}
-                    aria-label={listening ? "Stop voice search" : "Start voice search"}
-                    aria-pressed={listening}
-                    className={`relative shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                      listening
-                        ? "bg-gradient-to-br from-gold to-gold-strong text-white shadow-[0_0_0_4px_hsl(var(--gold)/0.25)]"
-                        : "bg-gradient-to-br from-primary to-emerald-700 text-white shadow-sm hover:brightness-110"
-                    }`}
-                  >
-                    {listening && <span className="absolute inset-0 rounded-xl bg-gold/40 animate-ping" aria-hidden="true" />}
-                    {listening ? <MicOff className="relative w-[18px] h-[18px]" /> : <Mic className="relative w-[18px] h-[18px]" />}
-                  </button>
-                )}
-                <button
-                  onClick={close}
-                  aria-label="Close"
-                  className="shrink-0 h-8 px-2.5 rounded-lg border border-border bg-card text-[11px] font-semibold text-muted-foreground hover:text-foreground"
-                >
-                  Esc
+            {/* ── Slim search field ── */}
+            <div className="flex items-center gap-2 border-b border-border/70 px-3 py-2">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
+              <input
+                ref={inputRef}
+                value={listening && interim ? interim : query}
+                onChange={(e) => { setQuery(e.target.value); if (voiceError) setVoiceError(""); }}
+                placeholder={listening ? "Listening…" : "Search pages, notices, teachers"}
+                className="min-w-0 flex-1 border-none bg-transparent py-1 text-[16px] text-foreground outline-none placeholder:text-muted-foreground/60 sm:text-[14px]"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                enterKeyHint="go"
+                aria-label="Search"
+              />
+              {hasQuery && (
+                <button onClick={() => setQuery("")} aria-label="Clear" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary">
+                  <X className="h-3.5 w-3.5" />
                 </button>
-              </div>
-
-              {/* filter chips */}
-              {hasQuery && hits.length > 0 && (
-                <div className="mt-3 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Filter results">
-                  {(["all", "pages", "notices", "teachers"] as const).map((g) =>
-                    g === "all" || groupCounts[g] > 0 ? (
-                      <button
-                        key={g}
-                        role="tab"
-                        aria-selected={filter === g}
-                        onClick={() => setFilter(g)}
-                        className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold transition-colors ${
-                          filter === g ? "bg-primary text-primary-foreground shadow-sm" : "bg-secondary/70 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {g === "all" ? "All" : GROUP_LABEL[g]}
-                        <span className={`rounded-full px-1.5 text-[10px] ${filter === g ? "bg-white/20" : "bg-background/70"}`}>{groupCounts[g]}</span>
-                      </button>
-                    ) : null
-                  )}
-                </div>
               )}
+              {voiceSupported && (
+                <button
+                  type="button"
+                  onClick={toggleVoice}
+                  aria-label={listening ? "Stop voice search" : "Start voice search"}
+                  aria-pressed={listening}
+                  className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors ${
+                    listening ? "bg-gold text-white" : "text-muted-foreground hover:bg-secondary hover:text-primary"
+                  }`}
+                >
+                  {listening && <span className="absolute inset-0 animate-ping rounded-md bg-gold/40" aria-hidden="true" />}
+                  {listening ? <MicOff className="relative h-4 w-4" strokeWidth={1.75} /> : <Mic className="relative h-4 w-4" strokeWidth={1.75} />}
+                </button>
+              )}
+              <button onClick={close} className="hidden h-6 shrink-0 items-center rounded border border-border px-1.5 text-[10px] font-medium text-muted-foreground hover:text-foreground sm:flex">
+                esc
+              </button>
+              <button onClick={close} aria-label="Close" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary sm:hidden">
+                <X className="h-4 w-4" strokeWidth={1.75} />
+              </button>
             </div>
 
-            {/* ── Voice status strip ── */}
+            {/* ── Voice status ── */}
             <AnimatePresence initial={false}>
               {(listening || voiceError) && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.18 }}
-                  className="overflow-hidden border-y border-border/70"
+                  transition={{ duration: 0.16 }}
+                  className="overflow-hidden border-b border-border/70"
                 >
                   {listening ? (
-                    <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-gold/10 via-transparent to-primary/5" role="status" aria-live="polite">
-                      <div className="flex items-end gap-[3px] h-5" aria-hidden="true">
-                        {[0, 1, 2, 3, 4].map((i) => (
-                          <motion.span
-                            key={i}
-                            className="w-[3px] rounded-full bg-gold"
+                    <div className="flex items-center gap-2.5 px-3 py-2" role="status" aria-live="polite">
+                      <div className="flex h-4 items-end gap-[2px]" aria-hidden="true">
+                        {[0, 1, 2, 3, 4].map((n) => (
+                          <motion.span key={n} className="w-[2px] rounded-full bg-gold"
                             animate={{ height: ["25%", "100%", "40%", "85%", "25%"] }}
-                            transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.12, ease: "easeInOut" }}
-                            style={{ height: "25%" }}
-                          />
+                            transition={{ duration: 0.9, repeat: Infinity, delay: n * 0.12, ease: "easeInOut" }}
+                            style={{ height: "25%" }} />
                         ))}
                       </div>
-                      <p className="text-xs text-muted-foreground flex-1 truncate">
-                        {interim ? <span className="text-foreground font-medium">{interim}</span> : "Listening… speak now"}
+                      <p className="flex-1 truncate text-xs text-muted-foreground">
+                        {interim ? <span className="font-medium text-foreground">{interim}</span> : "Listening… speak now"}
                       </p>
-                      <button onClick={stopVoice} className="text-[11px] font-semibold text-primary hover:underline">Stop</button>
+                      <button onClick={stopVoice} className="text-[11px] font-medium text-primary hover:underline">Stop</button>
                     </div>
                   ) : (
-                    <p className="px-4 py-2.5 text-xs text-destructive bg-destructive/5" role="alert">{voiceError}</p>
+                    <p className="px-3 py-2 text-xs text-destructive" role="alert">{voiceError}</p>
                   )}
                 </motion.div>
               )}
             </AnimatePresence>
 
+            {/* ── Filter chips (thin) ── */}
+            {hasQuery && hits.length > 0 && (
+              <div className="flex gap-1 overflow-x-auto border-b border-border/70 px-3 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Filter results">
+                {(["all", "pages", "notices", "teachers"] as const).map((g) =>
+                  g === "all" || groupCounts[g] > 0 ? (
+                    <button
+                      key={g}
+                      role="tab"
+                      aria-selected={filter === g}
+                      onClick={() => setFilter(g)}
+                      className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium transition-colors ${
+                        filter === g ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {g === "all" ? "All" : GROUP_LABEL[g]} <span className="opacity-60">{groupCounts[g]}</span>
+                    </button>
+                  ) : null
+                )}
+              </div>
+            )}
+
             {/* ── Body ── */}
-            <div ref={listRef} className="max-h-[min(66dvh,560px)] overflow-y-auto overscroll-contain px-3 pb-3">
+            <div ref={listRef} className="max-h-[min(62dvh,440px)] overflow-y-auto overscroll-contain px-1.5 pb-1.5">
               {!hasQuery ? (
                 <>
                   {showRecents && (
-                    <div className="px-1 pt-1 pb-2">
-                      <p className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70 flex items-center gap-1.5">
-                        <Clock className="w-3 h-3" /> Recent
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
+                    <>
+                      <Label>Recent</Label>
+                      <div className="flex flex-wrap gap-1 px-2 pb-1">
                         {recents.map((r) => (
-                          <button key={r} onClick={() => setQuery(r)} className="px-3 py-1 rounded-full bg-secondary/70 hover:bg-secondary text-xs text-foreground/80 transition-colors">
-                            {r}
+                          <button key={r} onClick={() => setQuery(r)} className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-[11.5px] text-foreground/80 hover:bg-secondary">
+                            <Clock className="h-3 w-3 text-muted-foreground" /> {r}
                           </button>
                         ))}
                       </div>
-                    </div>
+                    </>
                   )}
 
-                  <p className="px-1 pt-1 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70">Quick actions</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {tiles.map(({ r, i }) => {
-                      const a = r as QuickAction;
-                      const active = i === activeIndex;
-                      return (
-                        <button
-                          key={a.id}
-                          data-row-index={i}
-                          onMouseEnter={() => setActiveIndex(i)}
-                          onClick={() => runRow(r)}
-                          className={`relative flex items-center gap-3 rounded-2xl border p-3 text-left transition-all ${
-                            active ? "border-primary/40 bg-primary/10 shadow-md -translate-y-0.5" : "border-border/70 bg-card hover:border-primary/30 hover:shadow-sm"
-                          }`}
-                        >
-                          <span className={`w-11 h-11 shrink-0 rounded-xl bg-gradient-to-br ${a.tone} text-white flex items-center justify-center shadow-sm`}>
-                            <a.icon className="w-5 h-5" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[13.5px] font-semibold text-foreground truncate">{a.label}</span>
-                            <span className="block text-[11px] text-muted-foreground truncate">{a.hint}</span>
-                          </span>
-                          {a.badge && (
-                            <span className={`absolute top-2 right-2 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold ${
-                              a.badge.ok ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground"
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${a.badge.ok ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/60"}`} />
-                              {a.badge.text}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <Label>Quick actions</Label>
+                  <div>{actionList.map(({ r, i }) => renderRow(r, i))}</div>
 
                   {chips.length > 0 && (
-                    <div className="mt-2.5 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5 px-2 pt-2">
                       {chips.map(({ r, i }) => {
                         const a = r as QuickAction;
-                        const active = i === activeIndex;
                         return (
                           <button
                             key={a.id}
                             data-row-index={i}
                             onMouseEnter={() => setActiveIndex(i)}
                             onClick={() => runRow(r)}
-                            className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-all ${
-                              active ? "border-primary/40 bg-primary/10 text-primary" : "border-border/70 bg-card text-foreground/80 hover:border-primary/30"
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                              i === activeIndex ? "border-primary/50 bg-primary/10 text-primary" : "border-border text-foreground/80 hover:bg-secondary"
                             }`}
                           >
-                            <a.icon className="w-4 h-4 text-primary" /> {a.label}
+                            <a.icon className="h-3.5 w-3.5 text-primary" strokeWidth={1.75} /> {a.label}
                           </button>
                         );
                       })}
@@ -706,20 +671,18 @@ export default function CommandPalette() {
 
                   {noticeRows.length > 0 && (
                     <>
-                      <p className="px-1 pt-4 pb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70 flex items-center gap-1.5">
-                        <BellRing className="w-3 h-3" /> Latest notices
-                      </p>
-                      <div className="space-y-0.5">{noticeRows.map(({ r, i }) => renderRow(r, i))}</div>
+                      <Label>Latest notices</Label>
+                      <div>{noticeRows.map(({ r, i }) => renderRow(r, i))}</div>
                     </>
                   )}
                 </>
               ) : (
-                <div className="space-y-0.5 pt-0.5">
+                <div className="pt-1">
                   {hits.length === 0 && (
-                    <div className="px-4 py-7 text-center">
-                      <Sparkles className="w-5 h-5 mx-auto text-gold mb-2" />
-                      <p className="text-sm font-medium text-foreground">No pages or notices match “{query.trim()}”</p>
-                      <p className="text-xs text-muted-foreground mt-1">Ask the AI Assistant below — it answers from the school's live records{voiceSupported ? ", or tap the mic" : ""}.</p>
+                    <div className="px-3 py-5 text-center">
+                      <Sparkles className="mx-auto mb-1.5 h-4 w-4 text-gold" />
+                      <p className="text-[13px] font-medium text-foreground">No matches for “{query.trim()}”</p>
+                      <p className="mt-0.5 text-[11.5px] text-muted-foreground">Ask the AI Assistant — it answers from live school records.</p>
                     </div>
                   )}
                   {listRows.map(({ r, i }) => renderRow(r, i))}
@@ -728,13 +691,11 @@ export default function CommandPalette() {
             </div>
 
             {/* ── Footer ── */}
-            <div className="flex items-center gap-4 px-4 py-2.5 border-t border-border/70 bg-secondary/30 text-[11px] text-muted-foreground">
-              <span className="hidden sm:flex items-center gap-1"><ArrowUp className="w-3 h-3" /><ArrowDown className="w-3 h-3" /> Navigate</span>
-              <span className="hidden sm:flex items-center gap-1"><CornerDownLeft className="w-3 h-3" /> Open</span>
-              <span className="flex items-center gap-1.5 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live school data
-              </span>
-              <span className="ml-auto hidden sm:inline font-medium">⌘K · /</span>
+            <div className="flex items-center gap-3 border-t border-border/70 px-3 py-1.5 text-[10.5px] text-muted-foreground">
+              <span className="hidden items-center gap-1 sm:flex"><ArrowUp className="h-3 w-3" /><ArrowDown className="h-3 w-3" /> navigate</span>
+              <span className="hidden items-center gap-1 sm:flex"><CornerDownLeft className="h-3 w-3" /> open</span>
+              <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Live school data</span>
+              <span className="ml-auto hidden sm:inline">⌘K</span>
             </div>
           </motion.div>
         </motion.div>
