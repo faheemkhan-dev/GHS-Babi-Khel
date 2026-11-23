@@ -1,17 +1,18 @@
 // src/components/shared/CommandPalette.tsx
-// ⌘K / Ctrl+K global command palette — the fastest path to any page, quick
-// action, notice, or teacher on the site. Opens as a floating
-// overlay from anywhere (any route, any scroll position), fuzzy-matches as
-// you type via Fuse.js layered on top of the same useSiteSearch index the
-// navbar dropdown already uses (so results always agree), and is fully
-// keyboard-driven: Arrow keys to move, Enter to go, Escape to close.
-//
-// Quick actions (Go to Roll No. Slip, Download Result DMC, Call school
-// office, Toggle dark/light mode) are pinned above search results so the
-// most common jumps never require typing anything.
-//
-// Recent searches persist in localStorage (last 5) and resurface as
-// one-tap suggestions the next time the palette opens with an empty query.
+// Global command palette (⌘K / Ctrl+K, "/", the bottom-bar Search tab and the
+// navbar search icon). 2026-11 PREMIUM REDESIGN:
+//   • glass card with a green→gold accent line, large rounded search pill
+//     (16 px input text — no iOS zoom), gradient voice button
+//   • empty state = live dashboard: 6 gradient quick-action tiles (Admission
+//     shows its LIVE Open/Closed badge, Call shows the live school phone),
+//     the 3 latest published notices, Ask-AI + theme chips, recent searches
+//   • typing = filter chips (All / Pages / Notices / Teachers with counts),
+//     highlighted matches, colour-coded result icons, and an always-available
+//     "Ask the AI Assistant" row that hands the query to the AI widget
+//   • everything is live (useAdmissionSettings / useNotices / useSchoolSettings /
+//     useSiteSearch) — no typed-in school facts.
+// Keyboard: ↑ ↓ (← → in the tile grid) move, Enter opens, Esc closes.
+// Fuzzy matching (Fuse.js) and voice search (Web Speech API) are unchanged.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -19,11 +20,14 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Fuse from "fuse.js";
 import {
-  Search, Hash, FileText, Phone, Moon, SunMedium, CornerDownLeft,
-  ArrowUp, ArrowDown, X, Clock, Sparkles, Command as CommandIcon, Mic, MicOff,
+  Search, Hash, FileText, Phone, Moon, SunMedium, CornerDownLeft, ChevronRight,
+  ArrowUp, ArrowDown, X, Clock, Sparkles, Mic, MicOff, GraduationCap, Bell, Medal,
+  Bot, BellRing,
 } from "lucide-react";
 import { useSiteSearch, PAGE_INDEX, type SearchHit } from "@/hooks/useSiteSearch";
 import { useSchoolSettings } from "@/hooks/useSchoolSettings";
+import { useAdmissionSettings } from "@/hooks/useAdmission";
+import { useNotices } from "@/hooks/useNotices";
 import { useTheme } from "@/hooks/useTheme";
 
 const RECENTS_KEY = "ghs_cmdk_recent_searches";
@@ -69,6 +73,12 @@ interface QuickAction {
   hint?: string;
   icon: typeof Hash;
   run: () => void;
+  /** gradient classes for the icon tile */
+  tone?: string;
+  /** small live badge, e.g. Open / Closed */
+  badge?: { text: string; ok: boolean };
+  /** "tile" = big grid tile, "chip" = compact pill, "row" = list row (search) */
+  variant?: "tile" | "chip" | "row";
 }
 interface HitRow {
   kind: "hit";
@@ -100,6 +110,33 @@ const GROUP_LABEL: Record<SearchHit["group"], string> = {
   notices: "Notices",
   teachers: "Teachers",
 };
+const GROUP_TONE: Record<SearchHit["group"], string> = {
+  pages: "from-emerald-500 to-emerald-700",
+  notices: "from-amber-400 to-amber-600",
+  teachers: "from-sky-500 to-indigo-600",
+};
+
+/** Highlights the first occurrence of the query inside a title. */
+function Highlight({ text, q }: { text: string; q: string }) {
+  const needle = q.trim();
+  if (!needle) return <>{text}</>;
+  const i = text.toLowerCase().indexOf(needle.toLowerCase());
+  if (i < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, i)}
+      <mark className="rounded bg-gold/25 px-0.5 text-foreground">{text.slice(i, i + needle.length)}</mark>
+      {text.slice(i + needle.length)}
+    </>
+  );
+}
+
+const fmtShort = (iso: string) => {
+  try { return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
+  catch { return ""; }
+};
+
+const OPEN_AI_EVENT = "ghs:open-ai-assistant";
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -109,7 +146,10 @@ export default function CommandPalette() {
   const listRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { data: settings } = useSchoolSettings();
+  const { data: admission } = useAdmissionSettings();
+  const { data: allNotices = [] } = useNotices();
   const { theme, setTheme } = useTheme();
+  const [filter, setFilter] = useState<"all" | SearchHit["group"]>("all");
   const [recents, setRecents] = useState<string[]>([]);
 
   // ── Voice search state ────────────────────────────────────────────────
@@ -223,6 +263,7 @@ export default function CommandPalette() {
     if (open) {
       setRecents(readRecents());
       setQuery("");
+      setFilter("all");
       setActiveIndex(0);
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
@@ -237,49 +278,39 @@ export default function CommandPalette() {
 
   const close = useCallback(() => setOpen(false), []);
 
-  // ── Quick actions ──────────────────────────────────────────────────
+  // ── Quick actions (all values live) ────────────────────────────────────
   const quickActions = useMemo<QuickAction[]>(() => {
     const phone = settings?.phone?.trim();
+    const admOpen = admission ? !!admission.is_open : null;
+    const tile = (a: Omit<QuickAction, "kind" | "variant">): QuickAction => ({ kind: "action", variant: "tile", ...a });
     const actions: QuickAction[] = [
-      {
-        kind: "action",
-        id: "qa-roll-slip",
-        label: "Go to Roll No. Slip",
-        hint: "Find, download & share your exam roll slip",
-        icon: Hash,
-        run: () => navigate("/roll-no-slip"),
-      },
-      {
-        kind: "action",
-        id: "qa-results",
-        label: "Download Result DMC",
-        hint: "Open Results — Report Card & DMC download",
-        icon: FileText,
-        run: () => navigate("/results"),
-      },
+      tile({ id: "qa-roll-slip", label: "Roll No. Slip", hint: "Find & download your slip", icon: Hash,
+        tone: "from-emerald-500 to-emerald-700", run: () => navigate("/roll-no-slip") }),
+      tile({ id: "qa-results", label: "Results & DMC", hint: "Report card download", icon: FileText,
+        tone: "from-teal-500 to-cyan-700", run: () => navigate("/results") }),
+      tile({ id: "qa-admission", label: "Admission", icon: GraduationCap,
+        hint: admission?.session_year ? `Session ${admission.session_year}` : "Apply & track",
+        badge: admOpen === null ? undefined : { text: admOpen ? "Open" : "Closed", ok: admOpen },
+        tone: "from-amber-400 to-amber-600", run: () => navigate("/admission") }),
+      tile({ id: "qa-notices", label: "Notices", hint: "Latest announcements", icon: Bell,
+        tone: "from-rose-400 to-rose-600", run: () => navigate("/notices") }),
+      tile({ id: "qa-merit", label: "Merit List", hint: "Position holders", icon: Medal,
+        tone: "from-violet-500 to-purple-700", run: () => navigate("/merit-list") }),
     ];
     if (phone) {
-      actions.push({
-        kind: "action",
-        id: "qa-call",
-        label: "Call School Office",
-        hint: phone,
-        icon: Phone,
-        run: () => {
-          window.location.href = `tel:${phone.replace(/\s/g, "")}`;
-        },
-      });
+      actions.push(tile({ id: "qa-call", label: "Call Office", hint: phone, icon: Phone,
+        tone: "from-sky-500 to-blue-700",
+        run: () => { window.location.href = `tel:${phone.replace(/\s/g, "")}`; } }));
     }
-    actions.push({
-      kind: "action",
-      id: "qa-theme",
-      label: theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode",
-      hint: "Toggle site appearance",
-      icon: theme === "dark" ? SunMedium : Moon,
-      run: () => setTheme(theme === "dark" ? "system" : "dark"),
-    });
+    const chip = (a: Omit<QuickAction, "kind" | "variant">): QuickAction => ({ kind: "action", variant: "chip", ...a });
+    actions.push(
+      chip({ id: "qa-ai", label: "Ask AI Assistant", icon: Bot,
+        run: () => window.dispatchEvent(new CustomEvent(OPEN_AI_EVENT)) }),
+      chip({ id: "qa-theme", label: theme === "dark" ? "Light mode" : "Dark mode", icon: theme === "dark" ? SunMedium : Moon,
+        run: () => setTheme(theme === "dark" ? "system" : "dark") })
+    );
     return actions;
-  }, [settings?.phone, theme, setTheme, navigate]);
+  }, [settings?.phone, admission, theme, setTheme, navigate]);
 
   // ── Search: reuse the same live index the navbar dropdown uses, then
   //      layer Fuse.js fuzzy matching on top so typos / abbreviations
@@ -330,31 +361,54 @@ export default function CommandPalette() {
     return combined;
   }, [query, rawHits, pageFuse]);
 
-  // ── Unified row list: quick actions first (only when query is empty or
-  //      a quick action's own label fuzzily matches), then search hits. ──
+  // Latest published notices — live, shown on the empty state.
+  const latestNotices = useMemo(() => allNotices.slice(0, 3), [allNotices]);
+
+  const groupCounts = useMemo(() => {
+    const c: Record<string, number> = { all: hits.length, pages: 0, notices: 0, teachers: 0 };
+    for (const h of hits) c[h.group] += 1;
+    return c;
+  }, [hits]);
+  const shownHits = useMemo(
+    () => (filter === "all" ? hits : hits.filter((h) => h.group === filter)),
+    [hits, filter]
+  );
+
+  // ── Unified row list (drives keyboard navigation) ────────────────────────
+  //   empty query : quick actions → latest notices
+  //   typing      : matching quick actions → search hits → "Ask AI" row
   const rows = useMemo<Row[]>(() => {
     const q = query.trim().toLowerCase();
-    const actionRows: Row[] = (
-      q.length === 0
-        ? quickActions
-        : quickActions.filter((a) => a.label.toLowerCase().includes(q))
-    ).map((a) => ({ kind: "action", id: a.id, ...a }));
-
-    const hitRows: Row[] = hits.map((h) => ({ kind: "hit", id: `${h.group}-${h.id}`, hit: h }));
-
-    return [...actionRows, ...hitRows];
-  }, [query, quickActions, hits]);
+    if (!q) {
+      const noticeRows: Row[] = latestNotices.map((n) => ({
+        kind: "hit",
+        id: `latest-${n.id}`,
+        hit: { id: n.id, title: n.title, snippet: fmtShort(n.created_at), href: `/notices/${n.id}`, group: "notices", icon: Bell },
+      }));
+      return [...quickActions, ...noticeRows];
+    }
+    const actionRows: Row[] = quickActions
+      .filter((a) => a.variant === "tile" && a.label.toLowerCase().includes(q))
+      .map((a) => ({ ...a, variant: "row" as const }));
+    const hitRows: Row[] = shownHits.map((h) => ({ kind: "hit", id: `${h.group}-${h.id}`, hit: h }));
+    const askAi: Row = {
+      kind: "action", id: "qa-ask-ai", variant: "row", icon: Bot, tone: "from-primary to-emerald-700",
+      label: `Ask the AI Assistant`, hint: `“${query.trim()}”`,
+      run: () => window.dispatchEvent(new CustomEvent(OPEN_AI_EVENT, { detail: { prompt: query.trim() } })),
+    };
+    return [...actionRows, ...hitRows, askAi];
+  }, [query, quickActions, shownHits, latestNotices]);
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query]);
+  }, [query, filter]);
 
   const runRow = useCallback(
     (row: Row) => {
       if (row.kind === "action") {
         (row as QuickAction).run();
       } else {
-        pushRecent(query.trim() || row.hit.title);
+        if (query.trim()) pushRecent(query.trim());
         navigate(row.hit.href);
       }
       close();
@@ -375,6 +429,11 @@ export default function CommandPalette() {
         setActiveIndex((i) => Math.min(i + 1, Math.max(rows.length - 1, 0)));
         return;
       }
+      if (query.trim() === "" && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(Math.max(i + (e.key === "ArrowRight" ? 1 : -1), 0), Math.max(rows.length - 1, 0)));
+        return;
+      }
       if (e.key === "ArrowUp") {
         e.preventDefault();
         setActiveIndex((i) => Math.max(i - 1, 0));
@@ -387,7 +446,7 @@ export default function CommandPalette() {
         return;
       }
     },
-    [rows, activeIndex, close, runRow]
+    [rows, activeIndex, close, runRow, query]
   );
 
   // Keep the active row scrolled into view as the user arrows through.
@@ -399,6 +458,44 @@ export default function CommandPalette() {
   if (!open) return null;
 
   const showRecents = query.trim().length === 0 && recents.length > 0;
+  const hasQuery = query.trim().length > 0;
+  const tiles = rows.map((r, i) => ({ r, i })).filter((x) => x.r.kind === "action" && (x.r as QuickAction).variant === "tile");
+  const chips = rows.map((r, i) => ({ r, i })).filter((x) => x.r.kind === "action" && (x.r as QuickAction).variant === "chip");
+  const noticeRows = rows.map((r, i) => ({ r, i })).filter((x) => x.r.kind === "hit" && !hasQuery);
+  const listRows = rows.map((r, i) => ({ r, i })).filter((x) => hasQuery);
+
+  const renderRow = (row: Row, idx: number) => {
+    const active = idx === activeIndex;
+    const isAction = row.kind === "action";
+    const Icon = isAction ? (row as QuickAction).icon : (row as HitRow).hit.icon;
+    const tone = isAction ? (row as QuickAction).tone || "from-primary to-emerald-700" : GROUP_TONE[(row as HitRow).hit.group];
+    const title = isAction ? (row as QuickAction).label : (row as HitRow).hit.title;
+    const sub = isAction
+      ? (row as QuickAction).hint
+      : `${GROUP_LABEL[(row as HitRow).hit.group]}${(row as HitRow).hit.snippet ? ` · ${(row as HitRow).hit.snippet}` : ""}`;
+    return (
+      <button
+        key={row.id}
+        data-row-index={idx}
+        onMouseEnter={() => setActiveIndex(idx)}
+        onClick={() => runRow(row)}
+        className={`group w-full flex items-center gap-3 rounded-2xl px-2.5 py-2.5 text-left transition-all ${
+          active ? "bg-primary/10 ring-1 ring-primary/25" : "hover:bg-secondary/60"
+        }`}
+      >
+        <span className={`w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br ${tone} text-white flex items-center justify-center shadow-sm`}>
+          <Icon className="w-[18px] h-[18px]" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-semibold text-foreground truncate">
+            {isAction ? title : <Highlight text={title} q={query} />}
+          </span>
+          {sub && <span className="block text-[11.5px] text-muted-foreground truncate">{sub}</span>}
+        </span>
+        <ChevronRight className={`w-4 h-4 shrink-0 transition-all ${active ? "text-primary translate-x-0.5" : "text-muted-foreground/40"}`} />
+      </button>
+    );
+  };
 
   return createPortal(
     <AnimatePresence>
@@ -407,64 +504,93 @@ export default function CommandPalette() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[8vh] sm:pt-0"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) close();
-          }}
-          style={{ background: "linear-gradient(180deg, rgba(8,10,14,0.55), rgba(4,6,10,0.7))", backdropFilter: "blur(2px)" }}
+          transition={{ duration: 0.16 }}
+          className="fixed inset-0 z-[100] flex items-start justify-center px-3 sm:px-4 pt-[max(env(safe-area-inset-top),12px)] sm:pt-[10vh]"
+          onClick={(e) => { if (e.target === e.currentTarget) close(); }}
+          style={{ background: "radial-gradient(120% 80% at 50% 0%, rgba(6,40,24,0.55), rgba(4,8,12,0.78))", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
           role="dialog"
           aria-modal="true"
-          aria-label="Command palette"
+          aria-label="Search and quick actions"
         >
           <motion.div
-            initial={{ opacity: 0, y: -14, scale: 0.98 }}
+            initial={{ opacity: 0, y: -18, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 420, damping: 34 }}
-            className="w-full max-w-xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/5"
+            exit={{ opacity: 0, y: -12, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 380, damping: 32 }}
+            className="relative mt-2 sm:mt-0 w-full max-w-[640px] overflow-hidden rounded-[28px] border border-border/60 bg-card/95 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.55)] backdrop-blur-xl"
             onKeyDown={onKeyDown}
           >
-            {/* ── Input row ── */}
-            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/70">
-              <Search className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
-              <input
-                ref={inputRef}
-                value={listening && interim ? interim : query}
-                onChange={(e) => { setQuery(e.target.value); if (voiceError) setVoiceError(""); }}
-                placeholder={listening ? "Listening…" : "Search pages, notices, teachers…"}
-                className="flex-1 bg-transparent border-none outline-none text-sm sm:text-[15px] text-foreground placeholder:text-muted-foreground/70"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                aria-label="Command palette search"
-              />
-              {voiceSupported && (
-                <>
+            {/* accent line */}
+            <div aria-hidden className="h-[3px] bg-gradient-to-r from-primary via-emerald-400 to-amber-400" />
+
+            {/* ── Search pill ── */}
+            <div className="px-4 pt-4 pb-3">
+              <div className="flex items-center gap-2 rounded-2xl border border-border bg-secondary/50 pl-3.5 pr-2 py-1.5 transition-all focus-within:border-primary/50 focus-within:bg-card focus-within:ring-4 focus-within:ring-primary/10">
+                <Search className="w-[18px] h-[18px] text-primary shrink-0" aria-hidden="true" />
+                <input
+                  ref={inputRef}
+                  value={listening && interim ? interim : query}
+                  onChange={(e) => { setQuery(e.target.value); if (voiceError) setVoiceError(""); }}
+                  placeholder={listening ? "Listening…" : "Search pages, notices, teachers…"}
+                  className="flex-1 min-w-0 bg-transparent border-none outline-none text-[16px] py-2 text-foreground placeholder:text-muted-foreground/70"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  enterKeyHint="go"
+                  aria-label="Search"
+                />
+                {hasQuery && (
+                  <button onClick={() => setQuery("")} aria-label="Clear" className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:bg-secondary">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {voiceSupported && (
                   <button
                     type="button"
                     onClick={toggleVoice}
                     aria-label={listening ? "Stop voice search" : "Start voice search"}
                     aria-pressed={listening}
-                    className={`relative shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                    className={`relative shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
                       listening
                         ? "bg-gradient-to-br from-gold to-gold-strong text-white shadow-[0_0_0_4px_hsl(var(--gold)/0.25)]"
-                        : "bg-primary/10 text-primary hover:bg-primary/20"
+                        : "bg-gradient-to-br from-primary to-emerald-700 text-white shadow-sm hover:brightness-110"
                     }`}
                   >
-                    {listening && <span className="absolute inset-0 rounded-full bg-gold/40 animate-ping" aria-hidden="true" />}
-                    {listening ? <MicOff className="relative w-4 h-4" /> : <Mic className="relative w-4 h-4" />}
+                    {listening && <span className="absolute inset-0 rounded-xl bg-gold/40 animate-ping" aria-hidden="true" />}
+                    {listening ? <MicOff className="relative w-[18px] h-[18px]" /> : <Mic className="relative w-[18px] h-[18px]" />}
                   </button>
-                </>
+                )}
+                <button
+                  onClick={close}
+                  aria-label="Close"
+                  className="shrink-0 h-8 px-2.5 rounded-lg border border-border bg-card text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                >
+                  Esc
+                </button>
+              </div>
+
+              {/* filter chips */}
+              {hasQuery && hits.length > 0 && (
+                <div className="mt-3 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Filter results">
+                  {(["all", "pages", "notices", "teachers"] as const).map((g) =>
+                    g === "all" || groupCounts[g] > 0 ? (
+                      <button
+                        key={g}
+                        role="tab"
+                        aria-selected={filter === g}
+                        onClick={() => setFilter(g)}
+                        className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold transition-colors ${
+                          filter === g ? "bg-primary text-primary-foreground shadow-sm" : "bg-secondary/70 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {g === "all" ? "All" : GROUP_LABEL[g]}
+                        <span className={`rounded-full px-1.5 text-[10px] ${filter === g ? "bg-white/20" : "bg-background/70"}`}>{groupCounts[g]}</span>
+                      </button>
+                    ) : null
+                  )}
+                </div>
               )}
-              <button
-                onClick={close}
-                aria-label="Close"
-                className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
             </div>
 
             {/* ── Voice status strip ── */}
@@ -475,7 +601,7 @@ export default function CommandPalette() {
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.18 }}
-                  className="overflow-hidden border-b border-border/70"
+                  className="overflow-hidden border-y border-border/70"
                 >
                   {listening ? (
                     <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-gold/10 via-transparent to-primary/5" role="status" aria-live="polite">
@@ -502,110 +628,113 @@ export default function CommandPalette() {
               )}
             </AnimatePresence>
 
-            {/* ── Results / actions / recents ── */}
-            <div ref={listRef} className="max-h-[60vh] overflow-y-auto py-1.5">
-              {showRecents && (
-                <div className="px-2 pb-1">
-                  <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1.5">
-                    <Clock className="w-3 h-3" /> Recent Searches
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 px-2.5 pb-2">
-                    {recents.map((r) => (
-                      <button
-                        key={r}
-                        onClick={() => setQuery(r)}
-                        className="px-2.5 py-1 rounded-full bg-secondary/70 hover:bg-secondary text-xs text-foreground/80 transition-colors"
-                      >
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {rows.length === 0 ? (
-                <div className="px-4 py-10 text-center">
-                  <Sparkles className="w-5 h-5 mx-auto text-muted-foreground/50 mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    No matches for &ldquo;{query.trim()}&rdquo;
-                  </p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">
-                    Try a page name, a teacher, or a notice title{voiceSupported ? " — or tap the mic" : ""}
-                  </p>
-                </div>
-              ) : (
+            {/* ── Body ── */}
+            <div ref={listRef} className="max-h-[min(66dvh,560px)] overflow-y-auto overscroll-contain px-3 pb-3">
+              {!hasQuery ? (
                 <>
-                  {/* Quick actions group */}
-                  {rows.some((r) => r.kind === "action") && (
-                    <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                      Quick Actions
-                    </p>
-                  )}
-                  {rows.map((row, idx) => {
-                    const active = idx === activeIndex;
-                    // Insert a "Results" divider right before the first hit row.
-                    const isFirstHit = row.kind === "hit" && rows[idx - 1]?.kind !== "hit";
-                    return (
-                      <div key={row.id}>
-                        {isFirstHit && (
-                          <p className="px-3.5 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                            Results
-                          </p>
-                        )}
-                        {row.kind === "action" ? (
-                          <button
-                            data-row-index={idx}
-                            onMouseEnter={() => setActiveIndex(idx)}
-                            onClick={() => runRow(row)}
-                            className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors ${
-                              active ? "bg-azure/10" : "hover:bg-secondary/60"
-                            }`}
-                          >
-                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-azure text-white" : "bg-secondary text-azure"}`}>
-                              <row.icon className="w-4 h-4" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-semibold text-foreground truncate">{row.label}</span>
-                              {row.hint && <span className="block text-[11px] text-muted-foreground truncate">{row.hint}</span>}
-                            </span>
-                            {active && <CornerDownLeft className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-hidden="true" />}
+                  {showRecents && (
+                    <div className="px-1 pt-1 pb-2">
+                      <p className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70 flex items-center gap-1.5">
+                        <Clock className="w-3 h-3" /> Recent
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {recents.map((r) => (
+                          <button key={r} onClick={() => setQuery(r)} className="px-3 py-1 rounded-full bg-secondary/70 hover:bg-secondary text-xs text-foreground/80 transition-colors">
+                            {r}
                           </button>
-                        ) : (
-                          <button
-                            data-row-index={idx}
-                            onMouseEnter={() => setActiveIndex(idx)}
-                            onClick={() => runRow(row)}
-                            className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors ${
-                              active ? "bg-azure/10" : "hover:bg-secondary/60"
-                            }`}
-                          >
-                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-azure text-white" : "bg-secondary text-muted-foreground"}`}>
-                              <row.hit.icon className="w-4 h-4" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-semibold text-foreground truncate">{row.hit.title}</span>
-                              <span className="block text-[11px] text-muted-foreground truncate">
-                                {GROUP_LABEL[row.hit.group]}{row.hit.snippet ? ` · ${row.hit.snippet}` : ""}
-                              </span>
-                            </span>
-                            {active && <CornerDownLeft className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-hidden="true" />}
-                          </button>
-                        )}
+                        ))}
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
+
+                  <p className="px-1 pt-1 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70">Quick actions</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {tiles.map(({ r, i }) => {
+                      const a = r as QuickAction;
+                      const active = i === activeIndex;
+                      return (
+                        <button
+                          key={a.id}
+                          data-row-index={i}
+                          onMouseEnter={() => setActiveIndex(i)}
+                          onClick={() => runRow(r)}
+                          className={`relative flex items-center gap-3 rounded-2xl border p-3 text-left transition-all ${
+                            active ? "border-primary/40 bg-primary/10 shadow-md -translate-y-0.5" : "border-border/70 bg-card hover:border-primary/30 hover:shadow-sm"
+                          }`}
+                        >
+                          <span className={`w-11 h-11 shrink-0 rounded-xl bg-gradient-to-br ${a.tone} text-white flex items-center justify-center shadow-sm`}>
+                            <a.icon className="w-5 h-5" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[13.5px] font-semibold text-foreground truncate">{a.label}</span>
+                            <span className="block text-[11px] text-muted-foreground truncate">{a.hint}</span>
+                          </span>
+                          {a.badge && (
+                            <span className={`absolute top-2 right-2 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold ${
+                              a.badge.ok ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground"
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${a.badge.ok ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/60"}`} />
+                              {a.badge.text}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {chips.length > 0 && (
+                    <div className="mt-2.5 flex flex-wrap gap-2">
+                      {chips.map(({ r, i }) => {
+                        const a = r as QuickAction;
+                        const active = i === activeIndex;
+                        return (
+                          <button
+                            key={a.id}
+                            data-row-index={i}
+                            onMouseEnter={() => setActiveIndex(i)}
+                            onClick={() => runRow(r)}
+                            className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-all ${
+                              active ? "border-primary/40 bg-primary/10 text-primary" : "border-border/70 bg-card text-foreground/80 hover:border-primary/30"
+                            }`}
+                          >
+                            <a.icon className="w-4 h-4 text-primary" /> {a.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {noticeRows.length > 0 && (
+                    <>
+                      <p className="px-1 pt-4 pb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70 flex items-center gap-1.5">
+                        <BellRing className="w-3 h-3" /> Latest notices
+                      </p>
+                      <div className="space-y-0.5">{noticeRows.map(({ r, i }) => renderRow(r, i))}</div>
+                    </>
+                  )}
                 </>
+              ) : (
+                <div className="space-y-0.5 pt-0.5">
+                  {hits.length === 0 && (
+                    <div className="px-4 py-7 text-center">
+                      <Sparkles className="w-5 h-5 mx-auto text-gold mb-2" />
+                      <p className="text-sm font-medium text-foreground">No pages or notices match “{query.trim()}”</p>
+                      <p className="text-xs text-muted-foreground mt-1">Ask the AI Assistant below — it answers from the school's live records{voiceSupported ? ", or tap the mic" : ""}.</p>
+                    </div>
+                  )}
+                  {listRows.map(({ r, i }) => renderRow(r, i))}
+                </div>
               )}
             </div>
 
-            {/* ── Footer hint bar ── */}
-            <div className="hidden sm:flex items-center gap-4 px-4 py-2 border-t border-border/70 bg-secondary/30 text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1"><ArrowUp className="w-3 h-3" /><ArrowDown className="w-3 h-3" /> Navigate</span>
-              <span className="flex items-center gap-1"><CornerDownLeft className="w-3 h-3" /> Select</span>
-              <span className="flex items-center gap-1">Esc Close</span>
-              <span className="ml-auto flex items-center gap-1 font-medium">
-                <CommandIcon className="w-3 h-3" />K to reopen
+            {/* ── Footer ── */}
+            <div className="flex items-center gap-4 px-4 py-2.5 border-t border-border/70 bg-secondary/30 text-[11px] text-muted-foreground">
+              <span className="hidden sm:flex items-center gap-1"><ArrowUp className="w-3 h-3" /><ArrowDown className="w-3 h-3" /> Navigate</span>
+              <span className="hidden sm:flex items-center gap-1"><CornerDownLeft className="w-3 h-3" /> Open</span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live school data
               </span>
+              <span className="ml-auto hidden sm:inline font-medium">⌘K · /</span>
             </div>
           </motion.div>
         </motion.div>
