@@ -29,6 +29,15 @@
   ],
   "rewrites": [
     { "source": "/llms.txt", "destination": "/api/seo?kind=llms" },
+    { "source": "/llms-full.txt", "destination": "/api/seo?kind=llms-full" },
+    { "source": "/.well-known/llms.txt", "destination": "/api/seo?kind=llms" },
+    { "source": "/.well-known/ai.json", "destination": "/api/render?feed=ai" },
+    { "source": "/.well-known/ai-catalog.json", "destination": "/ai-catalog.json" },
+    { "source": "/api/faq", "destination": "/api/render?feed=faq" },
+    { "source": "/faq.json", "destination": "/api/render?feed=faq" },
+    { "source": "/index.md", "destination": "/api/render?path=/&format=md" },
+    { "source": "/(about|contact|admission|notices|results|merit-list|roll-no-slip|duties|teachers|faq)\\.md", "destination": "/api/render?path=/$1&format=md" },
+    { "source": "/notices/([0-9a-fA-F-]{36})\\.md", "destination": "/api/render?path=/notices/$1&format=md" },
     { "source": "/ai-data.json", "destination": "/api/render?feed=ai" },
     { "source": "/ai.json", "destination": "/api/render?feed=ai" },
     { "source": "/sitemap.xml", "destination": "/api/seo?kind=sitemap" },
@@ -37,6 +46,7 @@
     { "source": "/feed.xml", "destination": "/api/seo?kind=rss" },
     { "source": "/api/ai-data", "destination": "/api/render?feed=ai" },
     { "source": "/api/llms", "destination": "/api/seo?kind=llms" },
+    { "source": "/api/llms-full", "destination": "/api/seo?kind=llms-full" },
     { "source": "/api/sitemap", "destination": "/api/seo?kind=sitemap" },
     { "source": "/api/robots", "destination": "/api/seo?kind=robots" },
     { "source": "/api/rss", "destination": "/api/seo?kind=rss" },
@@ -149,14 +159,37 @@
       ]
     },
     {
+      "source": "/((?!llms\\.txt$|llms-full\\.txt$|ai-data\\.json$|ai\\.json$|faq\\.json$|api/ai-data$|api/faq$|api/llms$|api/llms-full$|sitemap\\.xml$|rss\\.xml$|feed\\.xml$|robots\\.txt$|ai-catalog\\.json$|openapi\\.json$|humans\\.txt$|\\.well-known/|.*\\.md$).*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "https://ghsbabikhel.dpdns.org" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-CSRF-Token" },
+        { "key": "Access-Control-Max-Age", "value": "86400" }
+      ]
+    },
+    {
+      "source": "/(llms\\.txt|llms-full\\.txt|ai-data\\.json|ai\\.json|faq\\.json|api/ai-data|api/faq|api/llms|api/llms-full|sitemap\\.xml|rss\\.xml|feed\\.xml|robots\\.txt|ai-catalog\\.json|openapi\\.json|humans\\.txt|index\\.md|(?:about|contact|admission|notices|results|merit-list|roll-no-slip|duties|teachers|faq)\\.md|\\.well-known/ai\\.json|\\.well-known/llms\\.txt|\\.well-known/ai-catalog\\.json)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Accept" },
+        { "key": "Access-Control-Max-Age", "value": "86400" }
+      ]
+    },
+    {
+      "source": "/openapi.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json; charset=utf-8" },
+        { "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains; preload" },
         { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com https://plausible.io https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https: https://*.tile.openstreetmap.org https://apod.nasa.gov https://server.arcgisonline.com https://*.opentopomap.org https://covers.openlibrary.org https://gutendex.com https://newsdata.io https://*.newsdata.io https://api.alquran.cloud https://*.alquran.cloud https://flagcdn.com https://*.flagcdn.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://opentdb.com https://api.cloudinary.com https://restcountries.com https://api.open-meteo.com https://air-quality-api.open-meteo.com https://ipapi.co https://ipwho.is https://freeipapi.com https://api.bigdatacloud.net https://nominatim.openstreetmap.org https://overpass-api.de https://api.rainviewer.com https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://server.arcgisonline.com https://*.opentopomap.org https://api.nasa.gov https://api.wheretheiss.at https://api.open-notify.org https://api.allorigins.win https://numbersapi.com https://plausible.io https://openlibrary.org https://gutendex.com https://newsdata.io https://*.newsdata.io https://pubchem.ncbi.nlm.nih.gov https://services.swpc.noaa.gov https://raw.githubusercontent.com https://countriesnow.space; media-src 'self' https://res.cloudinary.com https://*.supabase.co; frame-src 'self' blob: https: https://www.youtube.com https://youtube.com https://youtu.be https://meet.jit.si https://*.meet.jit.si https://www.geogebra.org https://phet.colorado.edu https://*.phet.colorado.edu; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests; frame-ancestors 'self'" },
-        { "key": "Access-Control-Allow-Origin", "value": "https://ghsbabikhel.dpdns.org" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-CSRF-Token" },
-        { "key": "Access-Control-Max-Age", "value": "86400" },
+        { "key": "Link", "value": "</llms.txt>; rel=\"describedby\"; type=\"text/plain\", </openapi.json>; rel=\"service-desc\"; type=\"application/json\", </api/ai-data>; rel=\"alternate\"; type=\"application/json\"" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
