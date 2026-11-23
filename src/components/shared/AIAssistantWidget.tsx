@@ -55,6 +55,7 @@ import { m, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { X, Send, Copy, Check, Pencil, RotateCcw, Trophy, GraduationCap, Bell, Search, type LucideIcon } from "lucide-react";
 import AiSparkleIcon from "./AiSparkleIcon";
+import { useLiveFaq } from "@/hooks/useLiveFaq";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -72,12 +73,15 @@ const API_ENDPOINT = "/api/ai-chat";
 // own error/done frame always wins.
 const CLIENT_TIMEOUT_MS = 34000;
 
-// Starter suggestions — the four most common homepage questions.
-const STARTER_SUGGESTIONS: { text: string; Icon: LucideIcon }[] = [
-  { text: "When will the result be announced?", Icon: Trophy },
-  { text: "How do I apply for admission?", Icon: GraduationCap },
-  { text: "What's new on the Notices page?", Icon: Bell },
-  { text: "How do I check my result by roll number?", Icon: Search },
+// Starter suggestions — NOT typed here. Each slot points at an id of the LIVE
+// FAQ (generated from the school database, see useLiveFaq), so the question
+// text always matches the current data. A slot whose question does not exist
+// is simply not shown.
+const STARTER_SLOTS: { id: string; Icon: LucideIcon }[] = [
+  { id: "adm-open", Icon: GraduationCap },
+  { id: "res-check", Icon: Trophy },
+  { id: "res-rollslip", Icon: Search },
+  { id: "web-notices", Icon: Bell },
 ];
 
 // ── "Thinking" indicator ──────────────────────────────────────────────────
@@ -216,6 +220,15 @@ function friendlyError(err: unknown): string {
 
 const AIAssistantWidget = () => {
   const [open, setOpen] = useState(false);
+  const liveFaq = useLiveFaq().items;
+  const starters = useMemo(
+    () =>
+      STARTER_SLOTS.map(({ id, Icon }) => ({
+        text: liveFaq.find((i) => i.id === id)?.question || "",
+        Icon,
+      })).filter((x) => x.text),
+    [liveFaq]
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false); // true while streaming is in progress
@@ -667,6 +680,18 @@ const AIAssistantWidget = () => {
     [navigate]
   );
 
+  // Open from anywhere (e.g. the search palette's "Ask AI" row):
+  //   window.dispatchEvent(new CustomEvent("ghs:open-ai-assistant", { detail: { prompt } }))
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const prompt = (e as CustomEvent<{ prompt?: string }>).detail?.prompt?.trim();
+      setOpen(true);
+      if (prompt) setTimeout(() => sendMessage(prompt), 250);
+    };
+    window.addEventListener("ghs:open-ai-assistant", onOpen);
+    return () => window.removeEventListener("ghs:open-ai-assistant", onOpen);
+  }, [sendMessage]);
+
   // Escape closes the panel (desktop keyboards).
   useEffect(() => {
     if (!open) return;
@@ -772,7 +797,7 @@ const AIAssistantWidget = () => {
                       Welcome to GHS Babi Khel
                     </p>
                     <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-                      I'm the official school assistant. Ask me about results, admissions, notices, news, the student portal or how to find anything on this site.
+                      I'm the official school assistant. My answers come live from the school's records — ask about admissions, results, roll number slips, notices or anything on this site.
                     </p>
                   </div>
                   <div>
@@ -780,7 +805,7 @@ const AIAssistantWidget = () => {
                       Popular questions
                     </p>
                     <div className="grid grid-cols-1 gap-2">
-                      {STARTER_SUGGESTIONS.map(({ text, Icon }) => (
+                      {starters.map(({ text, Icon }) => (
                         <button
                           key={text}
                           type="button"
