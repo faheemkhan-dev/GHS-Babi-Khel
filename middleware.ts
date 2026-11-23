@@ -55,7 +55,7 @@ export const config = {
   runtime: "edge",
   matcher: [
     // Page routes — everything except static assets and most /api/ routes.
-    "/((?!api/|assets/|\\.well-known/|favicon|icon-|apple-touch-icon|manifest.json|robots.txt|sitemap.xml|rss.xml|feed.xml|og-image|sw.js|.*\\.(?:js|css|png|jpg|jpeg|svg|ico|webp|woff2?|ttf|json|xml|txt)$).*)",
+    "/((?!api/|assets/|\\.well-known/|favicon|icon-|apple-touch-icon|manifest.json|robots.txt|sitemap.xml|rss.xml|feed.xml|og-image|sw.js|.*\\.(?:js|css|png|jpg|jpeg|svg|ico|webp|woff2?|ttf|json|xml|txt|md)$).*)",
     // Outbound-scraping endpoints get the tighter 'scrapeProxy' rate limit.
     "/api/bisep-proxy",
     "/api/bisep-draw",
@@ -204,6 +204,36 @@ function isSearchOrAICrawler(ua: string): boolean {
   );
 }
 
+// ─── AI tools that DO NOT identify themselves as bots ────────────────────────
+// Many chat assistants' "browse this URL" tools (DeepSeek, Kimi, Qwen, small
+// open-source agents, no-code AI builders, RAG pipelines) fetch pages with a
+// bare HTTP-library user agent — "python-requests/2.x", "axios/1.x",
+// "Go-http-client/2.0", "curl/8.x", "node-fetch", "okhttp" — or with NO user
+// agent at all, and they never run JavaScript. Previously those requests got
+// the empty React shell. They now get the same live, database-rendered HTML as
+// the named crawlers (or Markdown, see wantsMarkdown). Real browsers (every
+// Mozilla/5.0 … Chrome/Safari/Firefox/Edge UA) never match these anchored
+// tokens, so human traffic is untouched. UNLIKE the named crawlers these
+// clients still pass the standard rate limiter first (see middleware()).
+const HTTP_CLIENT_UA_RE =
+  /^(?:python-requests|python-httpx|python-urllib|urllib|aiohttp|httpx|go-http-client|node-fetch|node\b|axios|undici|got\b|okhttp|curl|wget|libwww-perl|java\/|apache-httpclient|scrapy|reactor-netty|deno|bun\/|guzzlehttp|php\/|ruby|faraday|postmanruntime|insomnia|jina|firecrawl|crawl4ai|apify|scrapingbee|browserless|trafilatura|newspaper|readability|langchain|llamaindex|openai|anthropic|cohere|mistral|deepseek|moonshot|kimi|qwen|manus|phind|perplexity)/i;
+
+function isHttpClientUA(ua: string): boolean {
+  const t = ua.trim();
+  return t === "" || HTTP_CLIENT_UA_RE.test(t);
+}
+
+/** Markdown content negotiation + explicit ?format=md for page routes. */
+function wantsMarkdown(request: Request, url: URL): boolean {
+  if ((url.searchParams.get("format") || "").toLowerCase() === "md") return true;
+  const accept = (request.headers.get("accept") || "").toLowerCase();
+  if (!accept.includes("text/markdown")) return false;
+  // A browser that merely lists */* after text/html is not asking for Markdown.
+  const mdAt = accept.indexOf("text/markdown");
+  const htmlAt = accept.indexOf("text/html");
+  return htmlAt === -1 || mdAt < htmlAt;
+}
+
 // Paths that must NEVER be proxied to the live renderer:
 //   • private/authenticated areas (they are robots-disallowed and
 //     authentication-protected — bots get the real protected behaviour),
@@ -333,7 +363,11 @@ async function fetchPrerenderedPage(request: Request, pathname: string): Promise
   }
 }
 
-async function proxyToLiveRender(request: Request, pathname: string): Promise<Response> {
+async function proxyToLiveRender(
+  request: Request,
+  pathname: string,
+  markdown = false
+): Promise<Response> {
   // NOTE: a renderer 404 is a DELIBERATE answer ("this route does not exist"),
   // not a failure. It MUST be passed through to the crawler — previously any
   // non-200 (including 404) threw and fell through to the static pipeline,
@@ -352,11 +386,12 @@ async function proxyToLiveRender(request: Request, pathname: string): Promise<Re
   };
   const renderUrl = new URL("/api/render", request.url);
   renderUrl.searchParams.set("path", pathname);
+  if (markdown) renderUrl.searchParams.set("format", "md");
   const resp = await fetch(renderUrl.toString(), {
     method: "GET",
     headers: {
       "User-Agent": "GHSRenderBot/1.0 (internal dynamic-render hop)",
-      Accept: "text/html",
+      Accept: markdown ? "text/markdown" : "text/html",
     },
     redirect: "follow",
     // Hard ceiling on the live-render hop. AbortSignal.timeout is supported
@@ -370,7 +405,7 @@ async function proxyToLiveRender(request: Request, pathname: string): Promise<Re
   if (resp.status === 404 && contentType.includes("text/html")) {
     return new Response(resp.body, { status: 404, statusText: "Not Found", headers: sanitize(resp.headers) });
   }
-  if (!resp.ok || !contentType.includes("text/html")) {
+  if (!resp.ok || !contentType.includes(markdown ? "text/markdown" : "text/html")) {
     // Renderer failed (cold-start 504, Supabase outage 5xx, rate limit, …).
     // Throw so the caller serves the prerendered page instead of piping the
     // error body to the crawler.
@@ -403,6 +438,12 @@ async function proxyToLiveRender(request: Request, pathname: string): Promise<Re
   // 120s s-maxage window are served from cache regardless of UA. Bots get
   // the live-rendered HTML (cached) → fast, consistent, single crawl per URL.
   out.headers.set("X-GHS-Live-Render", "1");
+  if (markdown) {
+    // Same URL, different representation → never let the CDN hand Markdown to
+    // a browser (or HTML to an AI tool) from a shared cache entry.
+    out.headers.set("Vary", "Accept");
+    out.headers.set("Cache-Control", "private, no-store");
+  }
   return out;
 }
 
@@ -585,7 +626,8 @@ function canonicalIndexHtmlRedirect(url: URL): Response | null {
 // ─── Main Edge Middleware ─────────────────────────────────────────────────────
 // Order of operations (each stage can short-circuit):
 //   OPTIONS passthrough → /index.html 308 → attack-UA 403 →
-//   social-crawler 302 → AI/search-crawler live render → rate limit → pass.
+//   social-crawler 302 → AI/search-crawler / HTTP-client / Markdown live
+//   render → rate limit → pass.
 export default async function middleware(
   request: Request
 ): Promise<Response | undefined> {
@@ -631,10 +673,21 @@ export default async function middleware(
   //    (homepage title, og:url=/, no canonical) for EVERY route whenever the
   //    renderer was cold/slow — the exact byte-identical-shell behaviour that
   //    produced Search Console's "Duplicate without user-selected canonical".
-  if (!isApiRoute && isSearchOrAICrawler(ua) && shouldLiveRender(pathname)) {
+  const markdown = !isApiRoute && wantsMarkdown(request, url);
+  const declaredCrawler = !isApiRoute && isSearchOrAICrawler(ua);
+  const httpClient = !isApiRoute && !declaredCrawler && isHttpClientUA(ua);
+
+  if ((declaredCrawler || httpClient || markdown) && shouldLiveRender(pathname)) {
+    // Declared crawlers are never throttled; anonymous HTTP clients and
+    // Markdown negotiators (who can be anyone) pass the rate limiter first.
+    if (!declaredCrawler) {
+      const gate = checkRateLimit(fingerprint, "default");
+      if (!gate.allowed) return tooManyRequests(gate.retryAfter);
+    }
     try {
-      return await proxyToLiveRender(request, pathname);
+      return await proxyToLiveRender(request, pathname, markdown);
     } catch {
+      if (markdown) return undefined;
       const prerendered = await fetchPrerenderedPage(request, pathname);
       if (prerendered) return prerendered;
       return undefined;
