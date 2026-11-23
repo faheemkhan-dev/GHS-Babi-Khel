@@ -6,6 +6,8 @@ import { SITE_URL } from "./SEO";
 // zero drift. (Types come from src/data/faqData.d.mts. The import stays
 // INSIDE src/ on purpose — the frontend build must never depend on api/.)
 import { buildFaqJsonLd } from "../../data/faqData.mjs";
+import type { FaqItem } from "../../data/faqData.mjs";
+import { useLiveFaq } from "@/hooks/useLiveFaq";
 
 interface RouteSEO {
   pattern: string;
@@ -16,79 +18,16 @@ interface RouteSEO {
   noIndex?: boolean;
   hasUrdu?: boolean;
   breadcrumbs?: (params: Record<string, string | undefined>) => { name: string; path: string }[];
-  jsonLd?: (params: Record<string, string | undefined>, path: string) => Record<string, any> | Record<string, any>[];
+  jsonLd?: (params: Record<string, string | undefined>, path: string, faq: FaqItem[]) => Record<string, any> | Record<string, any>[];
 }
 
 const baseBreadcrumb = { name: "Home", path: "/" };
 
 // ─── Reusable schemas ────────────────────────────────────────────────────────
 
-/** FAQPage schema for the Admission page — boosts rich results in Google.
- *  Updated to lead with an explicit "are admissions open" Q&A so the SERP
- *  snippet reinforces the open status even when the admin has paused live
- *  form submissions in the database. */
-const admissionFAQSchema = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: [
-    {
-      "@type": "Question",
-      name: "Are admissions open at GHS Babi Khel right now?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Yes — admissions at Government High School Babi Khel are open every academic session. The online admission application form is available at https://ghsbabikhel.dpdns.org/admission for Class 6 to Class 10. Apply directly from your phone or computer.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Which classes can apply for admission at GHS Babi Khel?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Fresh admissions are available for Class 6, 7, 8 (middle school) and Class 9. Migration cases are accepted for Class 9 and Class 10 through the BISEP migration process.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "What documents are required for admission?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Required documents include: B-Form (NADRA) — mandatory, passport size photo — mandatory, previous result card or marksheet, school leaving certificate (for migration), father's CNIC copy, and migration certificate if applicable.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "How can I track my admission application?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "You can track your admission application online by visiting the Admission page and entering your CNIC or application reference number in the Track Application section.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "What is the migration process for Class 10?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "The Class 10 migration process involves 8 steps: submit online application, write migration letter to current school principal, get principal signature, both principals sign, current school applies migration on BISEP portal, our school approves on BISEP, BISEP generates bank challan, submit fee at bank — migration confirmed.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Is there an online application form available?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Yes, GHS Babi Khel provides an online admission application form available at https://ghsbabikhel.dpdns.org/admission. You can apply directly from your phone or computer.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "What is the school address and how can I contact GHS Babi Khel?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "GHS Babi Khel is located in Babi Khel, District Mohmand, Khyber Pakhtunkhwa, Pakistan. You can email at ghsbabikhel@gmail.com or visit the school directly.",
-      },
-    },
-  ],
-};
+// The Admission page FAQPage schema is NOT hard-coded any more: it is built
+// from the LIVE FAQ (admission questions only) passed to jsonLd() — identical
+// to the answers shown on /faq and served at /api/faq.
 
 const ROUTES: RouteSEO[] = [
   {
@@ -391,14 +330,14 @@ const ROUTES: RouteSEO[] = [
     //      "Programs" rich result).
     //   3. EducationalOrganization anchor (reused) — links the page back to
     //      the school's main schema identity.
-    jsonLd: () => [
-      admissionFAQSchema,
+    jsonLd: (_p, _path, faq) => [
+      buildFaqJsonLd(faq.filter((i) => i.id.startsWith("adm-"))),
       {
         "@context": "https://schema.org",
         "@type": "EducationalOccupationalProgram",
         name: "GHS Babi Khel Admissions",
         description:
-          "Admissions Open at Government High School Babi Khel for Class 6 to Class 10 — fresh admissions and migration cases via the BISE Peshawar migration process.",
+          "Online admission at Government High School Babi Khel for the classes with open seats (Class 6 to Class 10) — fresh admissions and class 9/10 migration via the BISE Peshawar process. Session, dates, seats and fee are published live on the page.",
         url: `${SITE_URL}/admission`,
         provider: {
           "@type": "HighSchool",
@@ -409,13 +348,6 @@ const ROUTES: RouteSEO[] = [
         educationalCredentialAwarded: "Secondary School Certificate (SSC)",
         applicationDeadline: undefined,
         timeToComplete: "P5Y",
-        offers: {
-          "@type": "Offer",
-          category: "Free education (Government school)",
-          price: "0",
-          priceCurrency: "PKR",
-          availability: "https://schema.org/InStock",
-        },
       },
     ],
   },
@@ -430,7 +362,7 @@ const ROUTES: RouteSEO[] = [
     // ✅ Full FAQPage rich-result schema — built from the SAME canonical
     // dataset (src/data/faqData.mjs) the AI feed and crawler HTML use. One source,
     // zero drift: if a Q&A is edited there, this schema updates too.
-    jsonLd: () => buildFaqJsonLd(),
+    jsonLd: (_p, _path, faq) => buildFaqJsonLd(faq),
   },
   // ── Private / noindex pages ──
   { pattern: "/auth/signin",         title: "Sign In — Student, Teacher & Admin Login",    description: "Sign in to your GHS Babi Khel account.",            noIndex: true },
@@ -464,6 +396,8 @@ const NOT_FOUND: RouteSEO = {
 const RouteSEOInjector = () => {
   const location = useLocation();
   const path = location.pathname;
+  // Live FAQ only where a FAQPage schema is emitted (/faq, /admission).
+  const faq = useLiveFaq(path === "/faq" || path === "/admission").items;
 
   let matched: RouteSEO | null = null;
   let matchedParams: Record<string, string | undefined> = {};
@@ -480,7 +414,7 @@ const RouteSEOInjector = () => {
   const titleOut = matched.title;
 
   const breadcrumbs = matched.breadcrumbs ? matched.breadcrumbs(matchedParams) : undefined;
-  const extraJsonLd = matched.jsonLd ? matched.jsonLd(matchedParams, path) : undefined;
+  const extraJsonLd = matched.jsonLd ? matched.jsonLd(matchedParams, path, faq) : undefined;
 
   const webPage = {
     "@context": "https://schema.org",
