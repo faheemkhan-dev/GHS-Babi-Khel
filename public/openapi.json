@@ -1,0 +1,133 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GHS Babi Khel public data API",
+    "version": "2.0.0",
+    "description": "Read-only, public, CORS-open endpoints of the official website of Government High School Babi Khel (District Mohmand, KPK, Pakistan). All dynamic data is read live from the school database; responses are edge-cached for at most 5 minutes. No student marks or applications are ever listed."
+  },
+  "servers": [
+    {
+      "url": "https://ghsbabikhel.dpdns.org"
+    }
+  ],
+  "paths": {
+    "/api/ai-data": {
+      "get": {
+        "summary": "Complete live site snapshot (JSON)",
+        "responses": {
+          "200": {
+            "description": "School, admission, results, notices, teachers, merit lists, roll-slip sessions, FAQ",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/faq": {
+      "get": {
+        "summary": "Live FAQ generated from the database",
+        "responses": {
+          "200": {
+            "description": "{ok, generated_at, count, categories, items[{id,category,question,answer}]}",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/llms.txt": {
+      "get": {
+        "summary": "Guide for language models (live)",
+        "responses": {
+          "200": {
+            "description": "text/plain",
+            "content": {
+              "text/plain": {}
+            }
+          }
+        }
+      }
+    },
+    "/llms-full.txt": {
+      "get": {
+        "summary": "Whole site as plain text (live)",
+        "responses": {
+          "200": {
+            "description": "text/plain",
+            "content": {
+              "text/plain": {}
+            }
+          }
+        }
+      }
+    },
+    "/{page}.md": {
+      "get": {
+        "summary": "Any public page as Markdown",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "index",
+                "about",
+                "contact",
+                "admission",
+                "notices",
+                "results",
+                "merit-list",
+                "roll-no-slip",
+                "duties",
+                "teachers",
+                "faq"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/markdown",
+            "content": {
+              "text/markdown": {}
+            }
+          }
+        }
+      }
+    },
+    "/rss.xml": {
+      "get": {
+        "summary": "Latest notices (RSS 2.0)",
+        "responses": {
+          "200": {
+            "description": "application/rss+xml"
+          }
+        }
+      }
+    },
+    "/sitemap.xml": {
+      "get": {
+        "summary": "XML sitemap",
+        "responses": {
+          "200": {
+            "description": "application/xml"
+          }
+        }
+      }
+    },
+    "/robots.txt": {
+      "get": {
+        "summary": "Crawler rules",
+        "responses": {
+          "200": {
+            "description": "text/plain"
+          }
+        }
+      }
+    }
+  }
+}
