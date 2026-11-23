@@ -74,7 +74,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { getPageMeta, NAV_LINKS, SITE_URL, SITE_NAME } from "../scripts/seo-page-content.mjs";
-import { FAQ_ITEMS, FAQ_CATEGORIES, buildFaqJsonLd } from "../src/data/faqData.mjs";
+import { FAQ_CATEGORIES, buildFaqItems, buildFaqJsonLd } from "../src/data/faqData.mjs";
 import { getCurrentBisepPayload } from "./bisep-proxy.js";
 
 // Deterministic function ceiling (Vercel serverless). All DB work is capped
@@ -198,18 +198,30 @@ async function fetchSchoolProfile() {
 }
 
 async function fetchAdmissionInfo() {
-  const rows = await safeQuery("admission_settings", (sb) =>
-    sb
-      .from("admission_settings")
-      .select(
-        "id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at"
-      )
-      .eq("id", 1)
-      .limit(1)
+  // Select with the payment columns first; if the project has not applied
+  // migration 20 yet, fall back to the original column list so the section
+  // never disappears.
+  const FULL =
+    "id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at, processing_fee, online_payment_enabled, payment_accounts, contact_whatsapp";
+  const BASE = "id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at";
+  let rows = await safeQuery("admission_settings", (sb) =>
+    sb.from("admission_settings").select(FULL).eq("id", 1).limit(1)
   );
+  if (!rows.length) {
+    rows = await safeQuery("admission_settings_base", (sb) =>
+      sb.from("admission_settings").select(BASE).eq("id", 1).limit(1)
+    );
+  }
   const a = rows[0] || null;
-  // Live status straight from the admin dashboard — falls back to a clear
-  // "check the page" message when the table can't be read.
+  const fee = a && typeof a.processing_fee === "number" ? a.processing_fee : null;
+  // PUBLIC payment METHODS only — never account numbers, IBANs or phones.
+  const paymentMethods = (Array.isArray(a?.payment_accounts) ? a.payment_accounts : [])
+    .filter(Boolean)
+    .map((acc) => ({
+      type: acc.type || "other",
+      ...(acc.bank_name ? { bank_name: String(acc.bank_name) } : {}),
+      ...(acc.label ? { label: String(acc.label) } : {}),
+    }));
   return {
     currently_open: a ? Boolean(a.is_open) : null,
     session_year: a?.session_year || null,
@@ -220,24 +232,139 @@ async function fetchAdmissionInfo() {
     updated_at: a?.updated_at || null,
     apply_url: `${SITE_URL}/admission`,
     track_url: `${SITE_URL}/admission`,
-    classes: ["6", "7", "8", "9", "10"],
-    fee: "Free of charge (government school)",
+    portal_url: `${SITE_URL}/admission/portal`,
+    // Live fee data straight from the admin dashboard (Admissions → Settings).
+    processing_fee: fee,
+    processing_fee_currency: "PKR",
+    fee_text:
+      fee === null
+        ? "The application processing fee, if any, is shown live on the Admission page."
+        : fee > 0
+          ? `One-time application processing fee: Rs ${fee.toLocaleString("en-PK")}. Tuition follows the Government of Khyber Pakhtunkhwa free-education policy for government schools; BISE Peshawar charges for class 9/10 are board fees paid through the board's channels.`
+          : "No application processing fee is currently set. Tuition follows the Government of Khyber Pakhtunkhwa free-education policy for government schools; BISE Peshawar charges for class 9/10 are board fees paid through the board's channels.",
+    online_payment_enabled: typeof a?.online_payment_enabled === "boolean" ? a.online_payment_enabled : null,
+    payment_methods: paymentMethods,
+    contact_whatsapp: a?.contact_whatsapp || null,
     how_to_apply: [
-      "Fill the online admission form at " +
-        `${SITE_URL}/admission and submit it`,
-      "Save the reference number issued after submission",
-      "Track the application any time by reference number, B-Form number or contact number",
-      "Once approved, download the printable form, attach documents and complete enrolment at the school office",
+      `Open ${SITE_URL}/admission, run the eligibility check and fill the online application (fresh admission or migration)`,
+      "Submit — a reference number is issued immediately; keep it",
+      "Pay the application processing fee (if the school has set one) with the challan/reference shown after submitting, before the fee deadline",
+      "Track the application any time by reference number, B-Form number or contact number; the Applicant Portal at /admission/portal shows the full timeline",
+      "Seats per class are filled through the admission merit list (ranked on previous-class marks); merit-listed students submit their documents at the school office to complete enrolment",
+      "Offline route: download and print the admission form from the Admission page, fill it by hand and submit it with photocopies at the school office",
     ],
     required_documents: [
       "Student B-Form (NADRA)",
       "Recent passport-size photograph",
-      "Previous class result card (where applicable)",
+      "Previous class result card / marksheet (where applicable)",
       "School Leaving Certificate (SLC) — required for ALL admissions, fresh and migration",
       "Father's/Guardian's CNIC copy",
       "For class 9/10 migration from another board/school: DMC, migration certificate and enrollment letter — processed by the schools on the BISE Peshawar portal",
     ],
   };
+}
+
+// ── Classes & seats (admission_class_seats — public read) ──────────────────
+async function fetchAdmissionClasses() {
+  const rows = await safeQuery("admission_class_seats", (sb) =>
+    sb
+      .from("admission_class_seats")
+      .select('"class", seats, is_open, display_order')
+      .order("display_order", { ascending: true })
+  );
+  return rows.map((r) => ({
+    class: String(r.class),
+    seats: Number(r.seats) || 0,
+    is_open: Boolean(r.is_open),
+  }));
+}
+
+// ── Published ADMISSION merit lists (counts only — no applicant names) ─────
+async function fetchAdmissionMerit(limit = 20) {
+  const rows = await safeQuery("admission_merit_lists_public", (sb) =>
+    sb
+      .from("admission_merit_lists")
+      .select("id, class, list_no, title, session_year, published_at, admission_merit_list_entries(is_listed)")
+      .eq("is_published", true)
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(limit)
+  );
+  return rows.map((m) => {
+    const entries = Array.isArray(m.admission_merit_list_entries) ? m.admission_merit_list_entries : [];
+    return {
+      class: String(m.class),
+      list_no: m.list_no,
+      title: m.title,
+      session_year: m.session_year || null,
+      published_at: m.published_at || null,
+      listed_count: entries.filter((e) => e.is_listed).length,
+      not_listed_count: entries.filter((e) => !e.is_listed).length,
+      url: `${SITE_URL}/admission`,
+    };
+  });
+}
+
+// ── Active grading scheme (grading_schemes is optional → app default) ──────
+const DEFAULT_GRADING = {
+  name: null,
+  pass_threshold: 33,
+  ranges: [
+    { min_percentage: 90, max_percentage: 100, grade: "A+" },
+    { min_percentage: 80, max_percentage: 89, grade: "A" },
+    { min_percentage: 60, max_percentage: 79, grade: "B" },
+    { min_percentage: 45, max_percentage: 59, grade: "C" },
+    { min_percentage: 33, max_percentage: 44, grade: "D" },
+    { min_percentage: 0, max_percentage: 32, grade: "Fail" },
+  ],
+  source: "app-default",
+};
+async function fetchGrading() {
+  const rows = await safeQuery("grading_schemes", (sb) =>
+    sb
+      .from("grading_schemes")
+      .select("name, ranges, pass_threshold, is_default, is_active")
+      .eq("is_active", true)
+      .order("is_default", { ascending: false })
+      .limit(1)
+  );
+  const g = rows[0];
+  if (g && Array.isArray(g.ranges) && g.ranges.length) {
+    const ranges = g.ranges
+      .map((r) => ({
+        min_percentage: Number(r.min_percentage),
+        max_percentage: Number(r.max_percentage),
+        grade: String(r.grade),
+      }))
+      .filter((r) => Number.isFinite(r.min_percentage) && Number.isFinite(r.max_percentage))
+      .sort((x, y) => y.min_percentage - x.min_percentage);
+    if (ranges.length) {
+      return {
+        name: g.name || null,
+        pass_threshold: Number.isFinite(Number(g.pass_threshold)) ? Number(g.pass_threshold) : 33,
+        ranges,
+        source: "grading_schemes",
+      };
+    }
+  }
+  return DEFAULT_GRADING;
+}
+
+// ── Admin-written extra FAQ entries (optional table faq_entries) ───────────
+async function fetchCustomFaqs() {
+  const rows = await safeQuery("faq_entries", (sb) =>
+    sb
+      .from("faq_entries")
+      .select("id, category, question, answer, sort_order")
+      .eq("is_published", true)
+      .order("sort_order", { ascending: true })
+      .limit(100)
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    category: r.category || "School Information",
+    question: r.question,
+    answer: r.answer,
+  }));
 }
 
 async function fetchNotices(limit = 20) {
@@ -468,14 +595,8 @@ async function fetchExamInfo() {
     published_exams: exams,
     how_to_check:
       "Select the exam on ghsbabikhel.dpdns.org/results and enter the student's roll number. BISE Peshawar SSC results are fetched live from the official board portal on the same page.",
-    grading: {
-      "A+": "90% and above",
-      A: "80–89%",
-      B: "60–79%",
-      C: "45–59%",
-      D: "33–44%",
-      Fail: "below 33%",
-    },
+    // Live grading scale (grading_schemes table → app default fallback).
+    grading: await fetchGrading(),
     note: "Individual student marks are private — they are only shown to the person searching with the exact roll number, never listed publicly.",
   };
 }
@@ -490,7 +611,16 @@ const SECTION_FETCHERS = {
   meritLists: () => fetchMeritLists(10),
   rollSlips: () => fetchRollSlipSessions(10),
   exams: fetchExamInfo,
+  classes: fetchAdmissionClasses,
+  admissionMerit: () => fetchAdmissionMerit(20),
+  customFaqs: fetchCustomFaqs,
 };
+
+/** Every section the live FAQ is generated from. */
+const FAQ_SECTIONS = [
+  "school", "admission", "classes", "admissionMerit", "exams",
+  "meritLists", "rollSlips", "teachers", "notices", "customFaqs",
+];
 
 // Which sections each public route needs. PER-ROUTE FETCHING (2026-08):
 // previously EVERY page — including /faq, whose content is a static dataset —
@@ -499,14 +629,14 @@ const SECTION_FETCHERS = {
 // only queries the sections it actually renders, so responses are fast.
 const ROUTE_SECTIONS = {
   "/":                ["school", "admission", "admissionFiles", "notices"],
-  "/admission":       ["school", "admission", "admissionFiles"],
+  "/admission":       ["school", "admission", "admissionFiles", "classes", "admissionMerit"],
   "/notices":         ["school", "notices"],
   "/results":         ["school", "exams"],
   "/merit-list":      ["school", "exams", "meritLists"],
   "/roll-no-slip":    ["school", "exams", "rollSlips"],
   "/duties":          ["school"],
   "/teachers":        ["school", "teachers"],
-  "/faq":             ["school"],
+  "/faq":             FAQ_SECTIONS,
   "/about":           ["school"],
   "/contact":         ["school"],
   // notice detail pages
@@ -525,8 +655,16 @@ function sectionsForRoute(route) {
  * All sections run in parallel, so the response is bounded by the slowest
  * single query (≤ 8 s), never by their sum.
  */
-async function getLiveSiteData(sections) {
+export async function getLiveSiteData(sections, opts = {}) {
   const wanted = sections || Object.keys(SECTION_FETCHERS); // default: all (AI feed)
+  // Live BISE Peshawar exam cycle (title / countdown) — optional, guarded by
+  // a short race so a slow board portal can never delay the response.
+  const bisepPromise = opts.bisep
+    ? Promise.race([
+        getCurrentBisepPayload(Date.now()).catch(() => null),
+        new Promise((resolve) => setTimeout(() => resolve(null), opts.bisepTimeoutMs || 2500)),
+      ]).catch(() => null)
+    : Promise.resolve(null);
   const entries = await Promise.all(
     wanted.map(async (key) => {
       const fetcher = SECTION_FETCHERS[key];
@@ -564,9 +702,44 @@ async function getLiveSiteData(sections) {
   data.teachers = data.teachers || [];
   data.meritLists = data.meritLists || [];
   data.rollSlips = data.rollSlips || [];
-  data.exams = data.exams || { published_exams: [], grading: {} };
-  data.faq = { categories: FAQ_CATEGORIES, items: FAQ_ITEMS };
+  data.exams = data.exams || { published_exams: [], grading: DEFAULT_GRADING };
+  data.classes = data.classes || [];
+  data.admissionMerit = data.admissionMerit || [];
+  data.customFaqs = data.customFaqs || [];
+  data.bisep = await bisepPromise;
+  // The FAQ is GENERATED from the live data above (src/data/faqData.mjs) —
+  // there is no frozen question list any more.
+  data.faq = buildLiveFaq(data);
   return data;
+}
+
+/** Compose the generator's live context from an already-fetched snapshot. */
+function buildLiveFaq(data) {
+  const sch = data.school || {};
+  const ctx = {
+    school: sch,
+    admission: data.admission || {},
+    classes: data.classes && data.classes.length ? data.classes : null,
+    admissionMerit: data.admissionMerit || [],
+    grading: data.exams && data.exams.grading && Array.isArray(data.exams.grading.ranges) ? data.exams.grading : null,
+    exams: (data.exams && data.exams.published_exams) || [],
+    bisep: data.bisep && data.bisep.ok ? data.bisep : null,
+    schoolMerit: (data.meritLists || []).map((m) => ({
+      title: m.title,
+      total_students: m.total_students,
+      passing_count: m.passing_count,
+    })),
+    rollSlips: data.rollSlips || [],
+    teacherCount: (data.teachers || []).length || null,
+    teacherSubjects: [...new Set((data.teachers || []).map((t) => t.subject).filter(Boolean))],
+    latestNotice: data.notices && data.notices[0]
+      ? { title: data.notices[0].title, published_at: data.notices[0].published_at }
+      : null,
+    customFaqs: data.customFaqs || [],
+    generated_at: new Date().toISOString(),
+  };
+  const items = buildFaqItems(ctx);
+  return { categories: FAQ_CATEGORIES, items, generated_at: ctx.generated_at };
 }
 
 /** ISO timestamp right now, in the school's timezone, for display. */
@@ -749,6 +922,27 @@ function liveSections(route, data) {
     }
     case route === "/admission": {
       parts.push(admissionStatusHtml(admission));
+      parts.push("<h2>Fee (live)</h2>");
+      parts.push(`<p>${esc(admission.fee_text || "")}</p>`);
+      if (Array.isArray(admission.payment_methods) && admission.payment_methods.length) {
+        parts.push(`<p>Payment options set by the school: ${esc(admission.payment_methods.map((m) => m.label || (m.type === "bank" && m.bank_name ? `bank transfer (${m.bank_name})` : m.type)).join(", "))}${admission.online_payment_enabled ? " — online checkout is enabled." : "."}</p>`);
+      }
+      if (Array.isArray(data.classes) && data.classes.length) {
+        parts.push("<h2>Classes and seats (live)</h2>");
+        parts.push(
+          `<ul>${data.classes
+            .map((c) => `<li>Class ${esc(c.class)} — ${esc(String(c.seats))} seats (${c.is_open ? "open" : "closed"})</li>`)
+            .join("")}</ul>`
+        );
+      }
+      if (Array.isArray(data.admissionMerit) && data.admissionMerit.length) {
+        parts.push("<h2>Published admission merit lists (live)</h2>");
+        parts.push(
+          `<ul>${data.admissionMerit
+            .map((m) => `<li>${esc(m.title)}${m.published_at ? ` — ${esc(prettyDate(m.published_at))}` : ""} — ${esc(String(m.listed_count))} listed</li>`)
+            .join("")}</ul>`
+        );
+      }
       parts.push("<h2>How to apply (full procedure)</h2>");
       parts.push(
         `<ol>${admission.how_to_apply.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`
@@ -762,7 +956,7 @@ function liveSections(route, data) {
       parts.push(`<h2>Documents generated on the Admission page itself</h2>
 <ul>
 <li>Admission Prospectus (PDF) — school introduction, admission process and rules</li>
-<li>Fee Structure (PDF) — free-of-charge government education, BISE Peshawar exam fees where applicable</li>
+<li>Fee Structure (PDF) — tuition policy of government schools and BISE Peshawar fee information where applicable</li>
 <li>School-to-School Transfer Reference Letter (PDF) — for migration cases between schools</li>
 <li>Admission Rules &amp; Regulations (PDF) — eligibility, documents and code of conduct</li>
 </ul>
@@ -898,7 +1092,7 @@ function liveSections(route, data) {
     case route === "/faq": {
       // Grouped Q&A — the full FAQ with every answer inline.
       const byCat = new Map();
-      for (const item of FAQ_ITEMS) {
+      for (const item of data.faq.items) {
         if (!byCat.has(item.category)) byCat.set(item.category, []);
         byCat.get(item.category).push(item);
       }
@@ -1116,7 +1310,7 @@ function jsonLdFor(route, data, detail, pageName) {
     });
   }
 
-  if (route === "/faq") graph.push(buildFaqJsonLd());
+  if (route === "/faq") graph.push(buildFaqJsonLd(data.faq.items));
 
 
   if (route === "/notices" && data.notices.length) {
@@ -1168,11 +1362,12 @@ const RESULT_SEARCH_STEPS = [
   "View total/obtained marks, percentage, grade and pass status",
 ];
 
-// Shared cache policy for /api/ai-data (GET and HEAD): one hour at every
-// layer — browser (max-age) and Vercel CDN (s-maxage) — plus up to 24h of
-// stale-while-revalidate so a slow revalidation never fails a crawler fetch.
+// Shared cache policy for /api/ai-data and /api/faq (GET and HEAD): 60 s in
+// the browser, 5 min at the Vercel CDN, plus up to 1 h of stale-while-
+// revalidate so a slow revalidation never fails a crawler fetch. Dashboard
+// changes therefore reach AI tools within ~5 minutes (was up to 1 hour).
 const AI_DATA_CACHE_CONTROL =
-  "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400";
+  "public, max-age=60, s-maxage=300, stale-while-revalidate=3600";
 
 // ── MODE 2 handler — the JSON feed (former api/ai-data.js, behaviour intact) ─
 async function aiDataHandler(req, res) {
@@ -1199,7 +1394,7 @@ async function aiDataHandler(req, res) {
     return res.status(405).json({ error: "Method not allowed. Use GET." });
   }
 
-  const data = await getLiveSiteData();
+  const data = await getLiveSiteData(undefined, { bisep: true, bisepTimeoutMs: 2500 });
 
   const payload = {
     // ── Meta ────────────────────────────────────────────────────────────────
@@ -1211,13 +1406,19 @@ async function aiDataHandler(req, res) {
       generated_at_display: `${nowInSchoolTz()} (PKT)`,
       timezone: "Asia/Karachi",
       freshness:
-        "Data is fetched live from the school database on every request; the response is cached for one hour (Cache-Control max-age=3600) to keep the endpoint fast for repeat AI crawler hits, so answers can lag dashboard changes by up to an hour.",
+        "Data is read live from the school database. The response is edge-cached for at most 5 minutes (s-maxage=300, stale-while-revalidate=3600), so dashboard changes appear here within about 5 minutes. Always compare generated_at with the current time.",
       site_url: "https://ghsbabikhel.dpdns.org",
       companion_sources: [
         "https://ghsbabikhel.dpdns.org/llms.txt",
+        "https://ghsbabikhel.dpdns.org/llms-full.txt",
+        "https://ghsbabikhel.dpdns.org/api/faq",
+        "https://ghsbabikhel.dpdns.org/openapi.json",
+        "https://ghsbabikhel.dpdns.org/ai-catalog.json",
         "https://ghsbabikhel.dpdns.org/sitemap.xml",
         "https://ghsbabikhel.dpdns.org/rss.xml",
       ],
+      markdown_pages:
+        "Every public page is also available as clean Markdown: append .md to the path (e.g. https://ghsbabikhel.dpdns.org/admission.md, /faq.md, /results.md, /index.md for the homepage) or send 'Accept: text/markdown'.",
       content_type: "application/json; charset=utf-8",
       // Developer attribution (machine-readable only — never rendered in the
       // visual UI). Full details in the website_development section below.
@@ -1291,6 +1492,10 @@ async function aiDataHandler(req, res) {
       // transfer letter, rules …) with DIRECT download URLs — from the same
       // shared file storage used by the Downloads section of the Admission page.
       downloadable_files: data.admissionFiles,
+      // Live seats per class (admin → Admissions → Classes & Seats).
+      classes_and_seats: data.classes,
+      // Published admission merit lists — counts only, never applicant names.
+      merit_lists: data.admissionMerit,
     },
 
     // ── Results (metadata only — no student data, ever) ─────────────────────
@@ -1323,7 +1528,11 @@ async function aiDataHandler(req, res) {
       page_url: "https://ghsbabikhel.dpdns.org/faq",
       categories: data.faq.categories,
       items: data.faq.items,
-      count: FAQ_ITEMS.length,
+      count: data.faq.items.length,
+      generated_at: data.faq.generated_at,
+      generated_from:
+        "Every answer is generated at request time from the school database (school settings, admission settings, class seats, merit lists, grading scheme, published exams, staff, notices and admin-written FAQ entries). Nothing is hard-coded.",
+      json_url: "https://ghsbabikhel.dpdns.org/api/faq",
     },
 
     // ── Where each piece of information lives ───────────────────────────────
@@ -1376,43 +1585,12 @@ async function renderHandler(req, res) {
 
   // Per-route live snapshot — only the sections this page renders. (Detail
   // pages need just school facts; /faq needs none of the dynamic tables.)
-  const data = await getLiveSiteData(sectionsForRoute(route));
+  const data = await getLiveSiteData(sectionsForRoute(route), {
+    bisep: route === "/results" || route === "/faq",
+    bisepTimeoutMs: 3000,
+  });
 
-  // ── Live BISE Peshawar exam title / countdown (for /results only) ──────────
-  // Crawlers (Google, AI tools) previously got a static "no results published"
-  // snapshot even while real visitors saw a live BISE Peshawar countdown or
-  // "results are live" banner — because that data only ever loaded client-side
-  // via /api/bisep-proxy. Fetching it here (same runtime, no network hop) lets
-  // the crawler-facing page carry the SAME live exam title, so the page can
-  // rank for searches like "GHS Babi Khel result" / "HSSC Annual-I Examination
-  // 2026 Result". A short guard keeps a slow/unreachable board from ever
-  // delaying the whole render — on any failure this just stays null and the
-  // page falls back to its normal static content, exactly as before.
-  // CRITICAL FIX (2026-11-18): the payload is now attached to `data` (as
-  // data.bisep) BEFORE liveSections() is called — liveSections previously
-  // read an undeclared `bisep` variable inside its "/results" case, which
-  // crashed the entire render for /results.
-  let bisep = null;
-  if (route === "/results") {
-    try {
-      bisep = await Promise.race([
-        getCurrentBisepPayload(Date.now()),
-        // 3000 ms (was 4500): the middleware's live-render hop aborts at
-        // 6000 ms, and 4500 (this race) + a cold function start (1-2 s)
-        // regularly pushed /results past that ceiling — Googlebot then got
-        // the SPA fallback shell (no canonical, ~100 words) instead of the
-        // live page. 3 s keeps the worst case comfortably inside the hop
-        // budget; a slow board just means the live BISEP banner is omitted
-        // (the rest of the page renders from Supabase as usual).
-        new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
-      ]);
-    } catch {
-      bisep = null;
-    }
-  }
-  // CRITICAL FIX (2026-11-18): expose the resolved payload to liveSections()
-  // through `data` (previously an undeclared-variable ReferenceError there).
-  data.bisep = bisep;
+  const bisep = data.bisep || null;
 
   // ── Title / description ────────────────────────────────────────────────────
   let title, description, h1;
@@ -1458,7 +1636,7 @@ ${detail.content ? detail.content.split(/\n{2,}|\n/).map((p) => `<p>${esc(p)}</p
         const parts = [];
         if (block.__faqCategory) {
           // FAQ page — every canonical Q&A of this category (src/data/faqData.mjs).
-          const items = FAQ_ITEMS.filter((it) => it.category === block.__faqCategory);
+          const items = data.faq.items.filter((it) => it.category === block.__faqCategory);
           if (block.h2) parts.push(`<h2>${esc(block.h2)}</h2>`);
           for (const it of items) {
             parts.push(`<article><h3>${esc(it.question)}</h3><p>${esc(it.answer)}</p></article>`);
@@ -1521,6 +1699,20 @@ ${detail.content ? detail.content.split(/\n{2,}|\n/).map((p) => `<p>${esc(p)}</p
   // CRITICAL FIX (2026-11-18): pass the live BISEP payload into liveSections
   // via `data` (see the liveSections comment) — the "/results" case used to
   // read an undeclared `bisep` variable and crashed the render.
+  // ── Markdown mode (?format=md — /<page>.md and Accept: text/markdown) ─────
+  if (String(req.query?.format || "").toLowerCase() === "md") {
+    const mdBody =
+      `# ${h1}\n\n> ${description || ""}\n\nSource: ${canonical}\nGenerated live: ${new Date().toISOString()}\n` +
+      `School: ${data.school.full_name || data.school.name} — ${data.school.location} · Phone ${data.school.phone} · Email ${data.school.email}\n\n` +
+      htmlToMarkdown(contentHtml).replace(/^# .*\n+/, "") +
+      `\n---\nMachine-readable: ${SITE_URL}/api/ai-data · ${SITE_URL}/api/faq · ${SITE_URL}/llms.txt · ${SITE_URL}/llms-full.txt · ${SITE_URL}/sitemap.xml\n`;
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=30, s-maxage=120, stale-while-revalidate=3600");
+    res.setHeader("Link", `<${canonical}>; rel="canonical"`);
+    return res.status(200).send(mdBody);
+  }
+
   const nav = NAV_LINKS.map(
     ([label, href]) => `<a href="${esc(href)}" style="margin-right:14px">${esc(label)}</a>`
   ).join("");
@@ -1599,13 +1791,68 @@ function notFoundHtml(pathname) {
 </main></body></html>`;
 }
 
+// ── MODE 3 handler — the live FAQ as JSON (GET /api/faq) ────────────────────
+// Used by the React /faq page and the FAQPage JSON-LD (so humans, Google and
+// AI tools read IDENTICAL text) and open to any AI tool / script (CORS *).
+async function faqFeedHandler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=600");
+  if (req.method === "HEAD") return res.status(200).end();
+  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed. Use GET." });
+  const data = await getLiveSiteData(FAQ_SECTIONS, { bisep: true, bisepTimeoutMs: 2500 });
+  return res.status(200).send(
+    JSON.stringify({
+      ok: true,
+      generated_at: data.faq.generated_at,
+      count: data.faq.items.length,
+      categories: data.faq.categories,
+      items: data.faq.items,
+      page_url: `${SITE_URL}/faq`,
+      source: "Generated live from the school database — nothing is hard-coded.",
+    })
+  );
+}
+
+// ── Markdown conversion (clean text for AI tools that dislike HTML) ─────────
+// The crawler HTML built above is fully controlled markup (h1–h3, p, ul/ol,
+// li, a, strong, em, article, table), so a small deterministic converter is
+// enough — no dependency, no DOM.
+function htmlToMarkdown(html) {
+  const decode = (t) =>
+    t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+  let t = String(html || "");
+  t = t.replace(/<(script|style)[\s\S]*?<\/\1>/gi, "");
+  t = t.replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, label) => {
+    const abs = href.startsWith("/") ? `${SITE_URL}${href}` : href;
+    return `[${label.replace(/<[^>]+>/g, "")}](${abs})`;
+  });
+  t = t.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, "\n# $1\n");
+  t = t.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, "\n## $1\n");
+  t = t.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, "\n### $1\n");
+  t = t.replace(/<(strong|b)>([\s\S]*?)<\/\1>/gi, "**$2**");
+  t = t.replace(/<(em|i)>([\s\S]*?)<\/\1>/gi, "*$2*");
+  t = t.replace(/<li[^>]*>/gi, "\n- ").replace(/<\/li>/gi, "");
+  t = t.replace(/<br\s*\/?>/gi, "\n");
+  t = t.replace(/<\/(p|ul|ol|article|nav|div|header|footer|main|section|table)>/gi, "\n");
+  t = t.replace(/<tr[^>]*>/gi, "\n").replace(/<\/t[hd]>/gi, " | ");
+  t = t.replace(/<[^>]+>/g, "");
+  t = decode(t);
+  return t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+
 // ── Entry point — tiny dispatcher, zero overhead ─────────────────────────────
 //   ?feed=ai  → JSON feed (the old /api/ai-data behaviour; vercel.json rewrites
 //               /api/ai-data, /ai-data.json and /ai.json here with feed=ai)
-//   otherwise → live crawler HTML (?path=/…)
+//   ?feed=faq → live FAQ JSON (/api/faq)
+//   otherwise → live crawler HTML (?path=/…), or Markdown with &format=md
 export default async function handler(req, res) {
-  if (String(req.query?.feed || "").toLowerCase() === "ai") {
-    return aiDataHandler(req, res);
-  }
+  const feed = String(req.query?.feed || "").toLowerCase();
+  if (feed === "ai") return aiDataHandler(req, res);
+  if (feed === "faq") return faqFeedHandler(req, res);
   return renderHandler(req, res);
 }
