@@ -22,9 +22,8 @@ import {
 // build-time prerender filler (scripts/seo-page-content.mjs). Types come
 // from src/data/faqData.d.mts. The import stays inside src/ on purpose —
 // the frontend build must never depend on api/.
-import { FAQ_ITEMS, FAQ_CATEGORIES } from "../data/faqData.mjs";
-
-type FaqItem = (typeof FAQ_ITEMS)[number];
+import type { FaqItem } from "../data/faqData.mjs";
+import { useLiveFaq } from "@/hooks/useLiveFaq";
 
 /** Icon + one-line blurb per FAQ category (keys must match FAQ_CATEGORIES). */
 const CATEGORY_META: Record<
@@ -33,7 +32,7 @@ const CATEGORY_META: Record<
 > = {
   "Admissions": {
     icon: GraduationCap,
-    blurb: "Applying online, required documents, tracking your application and fees",
+    blurb: "Admission status, classes and seats, applying online, documents, fees, merit lists and tracking your application",
   },
   "Results & Exams": {
     icon: ClipboardList,
@@ -41,7 +40,7 @@ const CATEGORY_META: Record<
   },
   "School Information": {
     icon: School,
-    blurb: "Location, timings, teachers, events and school information",
+    blurb: "Location, timings, teachers and school information",
   },
   "Website & Contact": {
     icon: Globe,
@@ -50,6 +49,8 @@ const CATEGORY_META: Record<
 };
 
 const FAQ = () => {
+  // Live FAQ — generated from the school database (see src/hooks/useLiveFaq.ts).
+  const { items: FAQ_ITEMS, categories: FAQ_CATEGORIES, live, generatedAt } = useLiveFaq();
   const [query, setQuery] = useState("");
   const normalized = query.trim().toLowerCase();
 
@@ -71,7 +72,7 @@ const FAQ = () => {
         );
       }),
     })).filter((section) => section.items.length > 0);
-  }, [normalized]);
+  }, [normalized, FAQ_ITEMS, FAQ_CATEGORIES]);
 
   const totalMatches = sections.reduce((n, s) => n + s.items.length, 0);
 
@@ -79,7 +80,7 @@ const FAQ = () => {
     <PageLayout>
       <PageBanner
         title="Frequently Asked Questions"
-        subtitle="Quick answers about admissions, results, notes, school information and using this website"
+        subtitle="Quick answers about admissions, results, school information and using this website"
       />
 
       {/* ── Search ─────────────────────────────────────────────────────── */}
@@ -101,6 +102,14 @@ const FAQ = () => {
               className="w-full rounded-2xl border border-border bg-card pl-11 pr-4 py-3 text-sm md:text-base text-foreground placeholder:text-muted-foreground shadow-card outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
+          {live && !normalized && (
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              Answers are generated live from the school's records
+              {generatedAt
+                ? ` · updated ${new Date(generatedAt).toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" })}`
+                : ""}
+            </p>
+          )}
           {normalized && (
             <p className="mt-2 text-center text-xs text-muted-foreground">
               {totalMatches > 0
