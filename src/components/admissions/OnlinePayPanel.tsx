@@ -1,15 +1,11 @@
-// src/components/admissions/OnlinePayPanel.tsx — the GHSS-Ghallanai payment
-// panel, adapted for GHS Babi Khel:
-//   • ONLINE (Safepay): "Pay Rs N Online" (Easypaisa · JazzCash · wallets),
-//     auto-confirmed by the Safepay webhook a few seconds after checkout
-//   • MANUAL TRANSFER: always available — school accounts + WhatsApp
-//     verification message + fee challan download
+// src/components/admissions/OnlinePayPanel.tsx — processing-fee payment panel:
+//   • MANUAL TRANSFER — school accounts + WhatsApp verification message +
+//     fee challan download (the school office verifies and marks the fee paid)
 // The panel only renders while the processing fee is UNPAID; the parent
 // component shows the paid state itself.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Loader2, ShieldCheck, Wallet, Building2, Smartphone, Banknote, ChevronDown, MessageCircle, FileDown, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,10 +13,8 @@ import { toast } from "react-hot-toast";
 import {
   type AdmissionPaymentAccount,
   admissionWhatsappLink,
-  createOnlinePayment,
   describePaymentAccount,
   ensurePaymentReference,
-  fetchOnlinePaymentEnabled,
   formatDeadline,
   manualVerifyMessage,
 } from "@/lib/admissionPayment";
@@ -52,16 +46,7 @@ export default function OnlinePayPanel({
   referenceNo, bFormNo, processingFee, paymentReference, feeDeadline,
   accounts, whatsappNumber, schoolPhone, onReference, onDownloadChallan, challanBusy,
 }: OnlinePayPanelProps) {
-  const [paying, setPaying] = useState(false);
-  const [manualOpen, setManualOpen] = useState(false);
   const [ensuringRef, setEnsuringRef] = useState(false);
-
-  const { data: onlineEnabled = false, isLoading: probing } = useQuery({
-    queryKey: ["admission-online-payment-config"],
-    queryFn: fetchOnlinePaymentEnabled,
-    staleTime: 60 * 1000,
-    retry: 1,
-  });
 
   const ensureRef = async (): Promise<string | null> => {
     if (paymentReference) return paymentReference;
@@ -82,25 +67,6 @@ export default function OnlinePayPanel({
     }
   };
 
-  const handlePayOnline = async () => {
-    setPaying(true);
-    try {
-      const ref = await ensureRef();
-      if (!ref) return;
-      const res = await createOnlinePayment(referenceNo, bFormNo);
-      if (!res.ok || !res.url) {
-        toast.error(res.error || "Could not start the online payment.");
-        // Fall back to the manual path for this attempt.
-        setManualOpen(true);
-        return;
-      }
-      toast.success("Opening secure Safepay checkout…", { duration: 2500 });
-      window.location.assign(res.url);
-    } finally {
-      setPaying(false);
-    }
-  };
-
   const handleGenerateChallan = async () => {
     const ref = await ensureRef();
     if (ref && onDownloadChallan) onDownloadChallan();
@@ -112,7 +78,7 @@ export default function OnlinePayPanel({
     manualVerifyMessage(processingFee, referenceNo, paymentReference),
   );
 
-  const busy = paying || ensuringRef;
+  const busy = ensuringRef;
 
   return (
     <Card className="border-2 border-amber-200 dark:border-amber-900/60">
@@ -129,42 +95,16 @@ export default function OnlinePayPanel({
                   {feeDeadline ? <> · pay by <span className="font-medium text-foreground">{formatDeadline(feeDeadline)}</span></> : null}
                 </>
               ) : (
-                <>Generate your payment reference, then pay online or by manual transfer.</>
+                <>Generate your payment reference, then pay by manual transfer.</>
               )}
             </p>
           </div>
         </div>
 
-        {/* ONLINE (Safepay) — primary when enabled */}
-        {probing ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground py-1.5">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking online payment…
-          </div>
-        ) : onlineEnabled ? (
-          <div className="space-y-2">
-            <Button onClick={handlePayOnline} disabled={busy}
-              className="w-full h-11 gap-2 rounded-xl font-semibold">
-              {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Preparing checkout…</>
-                : <><Wallet className="w-4 h-4" /> Pay Rs {Number(processingFee).toLocaleString("en-PK")} Online</>}
-            </Button>
-            <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-600" />
-              Easypaisa · JazzCash · wallets — secure checkout by Safepay. Your fee is confirmed automatically within a few seconds of paying.
-            </p>
-          </div>
-        ) : null}
-
         {/* MANUAL TRANSFER — always available */}
         <div className="rounded-xl border border-border/70 bg-muted/30 overflow-hidden">
-          <button type="button"
-            onClick={() => setManualOpen(v => !v)}
-            className="w-full flex items-center justify-between gap-2 px-3.5 py-3 text-left">
-            <span className="text-xs font-bold text-foreground">
-              Manual Transfer {!onlineEnabled && <span className="text-muted-foreground font-medium">(Slower verification)</span>}
-            </span>
-            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${manualOpen || !onlineEnabled ? "rotate-180" : ""}`} />
-          </button>
-          {(manualOpen || !onlineEnabled) && (
+          <p className="px-3.5 pt-3 text-xs font-bold text-foreground">Pay by Manual Transfer</p>
+          {(
             <div className="px-3.5 pb-3.5 space-y-3 text-xs">
               <ol className="space-y-1.5 text-muted-foreground list-decimal list-inside">
                 <li>Send Rs {Number(processingFee).toLocaleString("en-PK")} to a school account below.</li>
