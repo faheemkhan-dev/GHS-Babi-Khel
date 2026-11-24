@@ -128,7 +128,7 @@ export function resolveAdmissionStage(
         next = "The school office verifies your details next. The status here changes to Under Review once that check starts.";
       } else {
         note = "Your application is received. Pay the processing fee to continue.";
-        next = "Pay the processing fee online, or by manual transfer using the payment reference on your challan. The application moves to review as soon as the fee is received.";
+        next = "Pay the processing fee by manual transfer using the payment reference on your challan. The application moves to review as soon as the fee is received.";
       }
   }
 
