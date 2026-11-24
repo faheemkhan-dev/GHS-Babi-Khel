@@ -8,7 +8,7 @@
 //   • search + status chips + class / type filters
 //   • centred table (desktop) / top-barred cards (mobile) with  View · Fee ·
 //     Delete  per application
-//   • Settings dialog (window, fee, Safepay switch, school payment accounts)
+//   • Settings dialog (window, fee, school payment accounts)
 //   • Delete All (typed confirmation + Excel backup) · Export Excel · Walk-in
 //
 // FIXED in this version: the old tab computed its counters, search and stat
@@ -61,7 +61,7 @@ const PAGE_SIZE = 25;
 
 const PAYMENT_METHOD_CHOICES: [string, string][] = [
   ["bank", "Bank"], ["easypaisa", "EasyPaisa"], ["jazzcash", "JazzCash"],
-  ["cash", "Cash at School"], ["safepay", "Online Payment"], ["other", "Other"],
+  ["cash", "Cash at School"], ["other", "Other"],
 ];
 
 /* ── Small shared pieces ────────────────────────────────────────────────── */
@@ -274,7 +274,6 @@ function SettingsBody({ settings, onDone }: { settings: AdmissionSettings; onDon
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     is_open: !!settings.is_open,
-    online_payment_enabled: !!settings.online_payment_enabled,
     session_year: settings.session_year ?? String(new Date().getFullYear()),
     processing_fee: String(settings.processing_fee ?? 100),
     open_date: settings.open_date ?? "",
@@ -314,7 +313,6 @@ function SettingsBody({ settings, onDone }: { settings: AdmissionSettings; onDon
         .upsert({
           id: 1,
           is_open: form.is_open,
-          online_payment_enabled: form.online_payment_enabled,
           session_year: year,
           processing_fee: Math.round(feeNum),
           open_date: form.open_date || null,
@@ -352,7 +350,6 @@ function SettingsBody({ settings, onDone }: { settings: AdmissionSettings; onDon
   return (
     <div className="space-y-4">
       {switchCard("Admissions Open", "When off, applications, tracking and downloads are locked on the public Admission page.", form.is_open, (v) => setForm((f) => ({ ...f, is_open: v })))}
-      {switchCard("Online Payment (Safepay)", "Easypaisa / JazzCash / wallet checkout with automatic fee confirmation. Manual transfer always stays available. Also needs the SAFEPAY_* env keys on Vercel.", form.online_payment_enabled, (v) => setForm((f) => ({ ...f, online_payment_enabled: v })))}
 
       {/* School Payment Accounts */}
       <div>
@@ -471,7 +468,7 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><Settings2 className="h-4 w-4" /></span>
             Admission Settings
           </DialogTitle>
-          <DialogDescription className="text-left text-xs">Admission window, processing fee, Safepay and school payment accounts.</DialogDescription>
+          <DialogDescription className="text-left text-xs">Admission window, processing fee and school payment accounts.</DialogDescription>
         </DialogHeader>
         {isLoading || !settings ? (
           <Skeleton className="h-56 rounded-xl" />
