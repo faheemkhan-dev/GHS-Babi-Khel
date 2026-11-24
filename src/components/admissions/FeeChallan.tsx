@@ -643,7 +643,7 @@ export default function FeeChallan({
             <div className="space-y-3">
               <p className="font-semibold text-sm flex items-center gap-2" style={{ color: "#2d231e" }}>
                 <Wallet className="w-4 h-4" style={{ color: "#785032" }} /> 
-                Online Payment Options
+                Payment Options
               </p>
               <p className="text-xs" style={{ color: "#998474" }}>
                 Pay using any of the following methods. After payment, bring the receipt to school office.
@@ -739,7 +739,7 @@ export default function FeeChallan({
               </div>
             </div>
           ) : (
-            /* No online payment - Show office submission message */
+            /* No payment account - show office submission message */
             <div 
               className="rounded-xl p-4 space-y-3 border"
               style={{ backgroundColor: "#faf6ed", borderColor: "#e6dcc8" }}
@@ -751,7 +751,7 @@ export default function FeeChallan({
                     Submit Fee at School Office
                   </p>
                   <p className="text-xs mt-1" style={{ color: "#998474" }}>
-                    No online payment method is configured for this fee. Please visit the school office to submit the fee along with your enrollment documents.
+                    No payment account is configured for this fee. Please visit the school office to submit the fee along with your enrollment documents.
                   </p>
                 </div>
               </div>
