@@ -46,7 +46,7 @@ const STEPS = [
   { title: "Student Information", desc: "Name, father's name, B-Form number, contact and address." },
   { title: "Academic Information", desc: "Class, fresh or migration, previous school and marks." },
   { title: "Review & Submit",     desc: "Check everything, solve the security question and submit. You get a Reference Number." },
-  { title: "Pay the Fee",         desc: "If a processing fee applies, pay online or by manual transfer using your fee challan." },
+  { title: "Pay the Fee",         desc: "If a processing fee applies, pay by manual transfer using your fee challan." },
   { title: "Track Status",        desc: "Check payment and application status with your Reference Number, B-Form or mobile." },
   { title: "Merit List & Visit",  desc: "Seats are filled on merit. Merit-listed students bring original documents to the school office." },
 ] as const;
