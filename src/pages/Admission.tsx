@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useCallback, useEffect, useMemo } from "react";
+import { lazy, Suspense, useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Search, ChevronRight, ChevronLeft, Loader2, AlertCircle, User, BookOpen, Download, Shield, XCircle, MapPin, Phone, GraduationCap, TrendingUp, Calendar, Send, Eye, Edit3, Save, Trash2, Info, X, Briefcase, FileText, FileDown, BadgeCheck, LayoutDashboard, ArrowRight } from "lucide-react";
@@ -25,6 +25,8 @@ import {
   setAdmissionSession, hasAdmissionSession, ADMISSION_SESSION_EVENT,
 } from "@/lib/admissionSession";
 import { ensurePaymentReference, formatDeadline } from "@/lib/admissionPayment";
+import TurnstileWidget, { type TurnstileHandle } from "@/components/shared/TurnstileWidget";
+import { turnstileEnabled, verifyTurnstile } from "@/lib/turnstile";
 const TrackResult = lazy(() => import("@/components/admissions/TrackResult"));
 const ClassesAndSeats = lazy(() => import("@/components/admissions/ClassesAndSeats"));
 const AdmissionMeritLists = lazy(() => import("@/components/admissions/AdmissionMeritLists"));
@@ -183,7 +185,7 @@ const Admission = () => {
   });
   const [downloading, setDownloading] = useState<string | null>(null);
 
-  // ── Processing-fee payment state (success view + Safepay return) ─────────
+  // ── Processing-fee payment state (success view) ──────────────────────────
   const [paymentRef, setPaymentRef]   = useState<string | null>(null);
   const [payBefore, setPayBefore]     = useState<string | null>(null);
   const [pdfBusy, setPdfBusy]         = useState<string | null>(null);
@@ -200,50 +202,9 @@ const Admission = () => {
     return () => window.removeEventListener(ADMISSION_SESSION_EVENT, onChange);
   }, []);
 
-  // Safepay checkout return: /admission?payment=return&ref=… (poll until the
-  // webhook flips the fee to paid) or ?payment=cancelled&ref=… (calm toast).
-  useEffect(() => {
-    const mode = searchParams.get("payment");
-    const ref = searchParams.get("ref");
-    if (!mode || !ref) return;
-    // clean the URL once consumed (no re-trigger on re-render)
-    setSearchParams({}, { replace: true });
-    setView("track");
-    setTrackQuery(ref);
-    setDoTrack(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    if (mode === "cancelled") {
-      toast("Payment was not completed. You can try again whenever you are ready.", { icon: "ℹ️", duration: 5000 });
-      return;
-    }
-    if (mode === "return") {
-      setAwaitingPaymentRef(ref);
-      let tries = 0;
-      const poll = window.setInterval(async () => {
-        tries += 1;
-        await qc.invalidateQueries({ queryKey: ["track-admission"] });
-        if (tries >= 12) window.clearInterval(poll);
-      }, 3000);
-      // Safety: stop polling when the visitor leaves the page.
-      return () => window.clearInterval(poll);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once on mount — the params are consumed immediately
-
-  // ── Track (moved up: the Safepay watcher needs its results) ─────────────
+  // ── Track ────────────────────────────────────────────────────────────────
   const trackEnabled = doTrack && trackQuery.length >= 5;
   const { data: trackResults, isFetching: trackLoading } = useTrackAdmission(trackEnabled ? trackQuery : "");
-
-  // When the polled refetch shows the fee as paid, confirm it once.
-  const [awaitingPaymentRef, setAwaitingPaymentRef] = useState<string | null>(null);
-  useEffect(() => {
-    if (!awaitingPaymentRef || !trackResults) return;
-    const match = (trackResults as any[]).find((r) => r?.reference_no === awaitingPaymentRef);
-    if (match?.payment_status === "paid") {
-      setAwaitingPaymentRef(null);
-      toast.success("Payment received. Thank you!");
-    }
-  }, [trackResults, awaitingPaymentRef]);
 
   const defaultForm = {
     full_name: "", father_name: "", date_of_birth: "", b_form_no: "",
@@ -268,6 +229,9 @@ const Admission = () => {
   const [captchaQ, setCaptchaQ] = useState<{ a: number; b: number; op: "+" | "-" | "×" }>({ a: 0, b: 0, op: "+" });
   const [captchaInput, setCaptchaInput] = useState("");
   const [captchaError, setCaptchaError] = useState(false);
+  // Cloudflare Turnstile (replaces the math question when a site key exists).
+  const [tsToken, setTsToken] = useState<string | null>(null);
+  const tsRef = useRef<TurnstileHandle>(null);
 
   const captchaAnswer = (a: number, b: number, op: "+" | "-" | "×") =>
     op === "+" ? a + b : op === "-" ? a - b : a * b;
@@ -595,8 +559,11 @@ const Admission = () => {
 
   const handleSubmit = async () => {
     if (step !== 3) return;
-    // CAPTCHA check
-    if (parseInt(captchaInput, 10) !== captchaAnswer(captchaQ.a, captchaQ.b, captchaQ.op)) {
+    // Security check — Cloudflare Turnstile when configured, otherwise the
+    // built-in math question (so a missing env var never removes protection).
+    if (turnstileEnabled) {
+      if (!tsToken) { toast.error("Please wait for the security check to finish."); return; }
+    } else if (parseInt(captchaInput, 10) !== captchaAnswer(captchaQ.a, captchaQ.b, captchaQ.op)) {
       setCaptchaError(true); newCaptcha();
       toast.error("Incorrect answer. Please solve the math question.");
       return;
@@ -609,6 +576,11 @@ const Admission = () => {
 
     setSubmitting(true);
     try {
+      if (turnstileEnabled) {
+        const v = await verifyTurnstile(tsToken!, "admission");
+        tsRef.current?.reset(); // the token is single-use
+        if (!v.ok) throw new Error(v.error || "Security check failed. Please try again.");
+      }
       const { data: inserted, error: insErr } = await supabasePublic.from("admissions").insert({
         full_name: form.full_name.trim(),
         father_name: form.father_name.trim(),
@@ -979,40 +951,47 @@ const Admission = () => {
                           </button>
                         </div>
 
-                        {/* Styled CAPTCHA */}
-                        <div className={`mt-3 border rounded-xl p-3 space-y-2.5 ${
-                          captchaError ? "border-red-400 bg-red-50/50" : "border-primary/20 bg-primary/5"
-                        }`}>
-                          <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
-                            <Shield className="w-4 h-4 text-primary" />
-                            Security Verification
+                        {/* Security verification */}
+                        {turnstileEnabled ? (
+                          <div className="mt-3 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5">
+                            <TurnstileWidget ref={tsRef} action="admission" onToken={setTsToken} />
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="bg-white dark:bg-card rounded-lg px-3 py-1.5 border border-border shadow-sm">
-                              <span className="text-base font-bold text-foreground">{captchaQ.a}</span>
-                              <span className="text-base font-bold text-primary mx-2">{captchaQ.op}</span>
-                              <span className="text-base font-bold text-foreground">{captchaQ.b}</span>
-                              <span className="text-base font-bold text-primary mx-2">=</span>
+                        ) : (
+                          <div className={`mt-3 border rounded-xl p-3 space-y-2.5 ${
+                            captchaError ? "border-red-400 bg-red-50/50" : "border-primary/20 bg-primary/5"
+                          }`}>
+                            <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                              <Shield className="w-4 h-4 text-primary" />
+                              Security Verification
                             </div>
-                            <Input
-                              type="number"
-                              inputMode="numeric"
-                              value={captchaInput}
-                              onChange={e => { setCaptchaInput(e.target.value); setCaptchaError(false); }}
-                              placeholder="?"
-                              className={`h-9 w-16 text-center text-base font-bold rounded-lg ${captchaError ? "border-red-400" : ""}`}
-                            />
-                            <button type="button" onClick={newCaptcha}
-                              className="text-xs text-muted-foreground underline hover:text-primary shrink-0">
-                              New
-                            </button>
+                            <div className="flex items-center gap-3">
+                              <div className="bg-white dark:bg-card rounded-lg px-3 py-1.5 border border-border shadow-sm">
+                                <span className="text-base font-bold text-foreground">{captchaQ.a}</span>
+                                <span className="text-base font-bold text-primary mx-2">{captchaQ.op}</span>
+                                <span className="text-base font-bold text-foreground">{captchaQ.b}</span>
+                                <span className="text-base font-bold text-primary mx-2">=</span>
+                              </div>
+                              <Input
+                                type="number"
+                                inputMode="numeric"
+                                value={captchaInput}
+                                onChange={e => { setCaptchaInput(e.target.value); setCaptchaError(false); }}
+                                placeholder="?"
+                                className={`h-9 w-16 text-center text-base font-bold rounded-lg ${captchaError ? "border-red-400" : ""}`}
+                              />
+                              <button type="button" onClick={newCaptcha}
+                                className="text-xs text-muted-foreground underline hover:text-primary shrink-0">
+                                New
+                              </button>
+                            </div>
+                            {captchaError && (
+                              <p className="text-xs text-red-600 font-medium flex items-center gap-1">
+                                <XCircle className="w-3 h-3" /> Wrong answer — try again
+                              </p>
+                            )}
                           </div>
-                          {captchaError && (
-                            <p className="text-xs text-red-600 font-medium flex items-center gap-1">
-                              <XCircle className="w-3 h-3" /> Wrong answer — try again
-                            </p>
-                          )}
-                        </div>
+
+                        )}
                       </>
                     )}
                   </CardContent>
