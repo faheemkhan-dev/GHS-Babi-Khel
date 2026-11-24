@@ -8,7 +8,6 @@
 //   • payment accounts (school bank / EasyPaisa / JazzCash / cash / other
 //     rows configured in Admin → Admissions → Settings)
 //   • ensurePaymentReference() — idempotent challan reference (RPC)
-//   • online payment (Safepay) — config probe + checkout creation; the
 //     browser never sees a secret and never sends an amount
 //   • public cached readers for Classes & Seats and Merit Lists
 //     (/api/public-data CDN first, direct RPC fallback — same pattern as
@@ -107,7 +106,6 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   easypaisa: "EasyPaisa",
   jazzcash: "JazzCash",
   cash: "Cash at School",
-  safepay: "Online Payment",
   other: "Other",
 };
 
@@ -227,66 +225,6 @@ export async function ensurePaymentReference(
   if (error) return { ok: false, error: error.message };
   const row = Array.isArray(data) ? data[0] : data;
   return row ?? { ok: false, error: "No response from server." };
-}
-
-// ── Online payment (Safepay) ───────────────────────────────────────────────
-
-const SAFEPAY_TIMEOUT_MS = 20000;
-
-/** Probe /api/safepay?kind=config — true only when keys exist AND the school switched it on. */
-export async function fetchOnlinePaymentEnabled(): Promise<boolean> {
-  try {
-    const res = await fetch("/api/safepay?kind=config", {
-      signal: AbortSignal.timeout(SAFEPAY_TIMEOUT_MS),
-    });
-    if (!res.ok) return false;
-    const data = await res.json();
-    return data?.enabled === true;
-  } catch {
-    return false;
-  }
-}
-
-export interface CreatePaymentResult {
-  ok: boolean;
-  url?: string;
-  error?: string;
-}
-
-/**
- * Start a Safepay checkout. The server pulls the amount from the database —
- * the browser only proves who is paying (reference + B-Form). Returns the
- * hosted-checkout URL after allow-listing it to https://*.getsafepay.com.
- */
-export async function createOnlinePayment(
-  referenceNo: string,
-  bFormNo: string,
-): Promise<CreatePaymentResult> {
-  try {
-    const res = await fetch("/api/create-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reference_no: referenceNo, b_form_no: bFormNo }),
-      signal: AbortSignal.timeout(SAFEPAY_TIMEOUT_MS),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.ok || !data?.url) {
-      return { ok: false, error: data?.error || "Could not start the online payment. Please try again." };
-    }
-    // Allow-list: only a https Safepay hosted-checkout URL may be opened.
-    let parsed: URL;
-    try {
-      parsed = new URL(data.url);
-    } catch {
-      return { ok: false, error: "Invalid checkout URL." };
-    }
-    if (parsed.protocol !== "https:" || !/(^|\.)getsafepay\.com$/.test(parsed.hostname)) {
-      return { ok: false, error: "Invalid checkout URL." };
-    }
-    return { ok: true, url: data.url };
-  } catch {
-    return { ok: false, error: "Network problem — check your internet and try again." };
-  }
 }
 
 // ── Public cached reads (classes & seats, merit lists) ─────────────────────
