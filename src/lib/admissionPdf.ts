@@ -378,7 +378,7 @@ export async function downloadApplicationForm(input: ApplicationFormInput): Prom
   doc.setFontSize(7.4);
   doc.setTextColor(MUTED);
   const feeNote =
-    `Pay the processing fee online (Easypaisa / wallet) or by manual transfer, quoting your payment reference, on or before ${fmtFeeDate(input.deadline)}. ` +
+    `Pay the processing fee by manual transfer (bank / Easypaisa / JazzCash), quoting your payment reference, on or before ${fmtFeeDate(input.deadline)}. ` +
     "Admission is subject to eligibility and merit.";
   const feeNoteLines = doc.splitTextToSize(feeNote, 186);
   let fy = stripY + 27;
