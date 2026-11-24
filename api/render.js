@@ -202,7 +202,7 @@ async function fetchAdmissionInfo() {
   // migration 20 yet, fall back to the original column list so the section
   // never disappears.
   const FULL =
-    "id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at, processing_fee, online_payment_enabled, payment_accounts, contact_whatsapp";
+    "id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at, processing_fee, payment_accounts, contact_whatsapp";
   const BASE = "id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at";
   let rows = await safeQuery("admission_settings", (sb) =>
     sb.from("admission_settings").select(FULL).eq("id", 1).limit(1)
@@ -242,7 +242,6 @@ async function fetchAdmissionInfo() {
         : fee > 0
           ? `One-time application processing fee: Rs ${fee.toLocaleString("en-PK")}. Tuition follows the Government of Khyber Pakhtunkhwa free-education policy for government schools; BISE Peshawar charges for class 9/10 are board fees paid through the board's channels.`
           : "No application processing fee is currently set. Tuition follows the Government of Khyber Pakhtunkhwa free-education policy for government schools; BISE Peshawar charges for class 9/10 are board fees paid through the board's channels.",
-    online_payment_enabled: typeof a?.online_payment_enabled === "boolean" ? a.online_payment_enabled : null,
     payment_methods: paymentMethods,
     contact_whatsapp: a?.contact_whatsapp || null,
     how_to_apply: [
@@ -925,7 +924,7 @@ function liveSections(route, data) {
       parts.push("<h2>Fee (live)</h2>");
       parts.push(`<p>${esc(admission.fee_text || "")}</p>`);
       if (Array.isArray(admission.payment_methods) && admission.payment_methods.length) {
-        parts.push(`<p>Payment options set by the school: ${esc(admission.payment_methods.map((m) => m.label || (m.type === "bank" && m.bank_name ? `bank transfer (${m.bank_name})` : m.type)).join(", "))}${admission.online_payment_enabled ? " — online checkout is enabled." : "."}</p>`);
+        parts.push(`<p>Payment options set by the school: ${esc(admission.payment_methods.map((m) => m.label || (m.type === "bank" && m.bank_name ? `bank transfer (${m.bank_name})` : m.type)).join(", "))}.</p>`);
       }
       if (Array.isArray(data.classes) && data.classes.length) {
         parts.push("<h2>Classes and seats (live)</h2>");
