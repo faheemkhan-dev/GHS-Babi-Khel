@@ -246,7 +246,6 @@ export default function AdminWalkinDialog({ open, onClose }: { open: boolean; on
                         <SelectItem value="bank">Bank</SelectItem>
                         <SelectItem value="easypaisa">EasyPaisa</SelectItem>
                         <SelectItem value="jazzcash">JazzCash</SelectItem>
-                        <SelectItem value="safepay">Online Payment</SelectItem>
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
