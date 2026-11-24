@@ -27,7 +27,6 @@ export interface AdmissionSettings {
   // Processing-fee payment (file 20 migration)
   processing_fee: number | null;
   payment_accounts: import("@/lib/admissionPayment").AdmissionPaymentAccount[] | null;
-  online_payment_enabled: boolean | null;
   contact_whatsapp: string | null;
 }
 
@@ -109,7 +108,7 @@ export function useAdmissionSettings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("admission_settings")
-        .select("id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at, processing_fee, payment_accounts, online_payment_enabled, contact_whatsapp")
+        .select("id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at, processing_fee, payment_accounts, contact_whatsapp")
         .eq("id", 1)
         .maybeSingle();
       if (error) throw error;
