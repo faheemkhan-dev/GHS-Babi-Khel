@@ -227,7 +227,7 @@ function buildLlmsTxt(data, full = false) {
   if (a.banner_message) L.push(`- School announcement: ${oneLine(a.banner_message, 300)}`);
   if (a.fee_text) L.push(`- Fee: ${a.fee_text}`);
   if (a.payment_methods && a.payment_methods.length) {
-    L.push(`- Payment options: ${a.payment_methods.map((m) => m.label || (m.type === "bank" && m.bank_name ? `bank transfer (${m.bank_name})` : m.type)).join(", ")}${a.online_payment_enabled ? " (online checkout enabled)" : ""}`);
+    L.push(`- Payment options: ${a.payment_methods.map((m) => m.label || (m.type === "bank" && m.bank_name ? `bank transfer (${m.bank_name})` : m.type)).join(", ")}`);
   }
   if (data.classes && data.classes.length) {
     L.push(`- Classes & seats: ${data.classes.map((c) => `Class ${c.class} — ${c.seats} seats (${c.is_open ? "open" : "closed"})`).join("; ")}`);
