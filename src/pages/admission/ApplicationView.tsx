@@ -1,7 +1,7 @@
 // src/pages/admission/ApplicationView.tsx — the applicant's full application
 // record (GHSS Ghallanai /admission/application/:id, ported to the GHS Babi
 // Khel High School model). Reached from the Applicant Dashboard via
-// "View & Pay Fee" / "View Application" and from the Safepay checkout return.
+// "View & Pay Fee" / "View Application".
 //
 // GHSS layout, top to bottom:
 //   • header + Fee Challan / Application PDF downloads
@@ -11,8 +11,6 @@
 //   • Application / Personal Information / Academic Information review tables
 //   • PII masking (B-Form + mobiles) with a Show / Hide toggle
 //   • declaration bar + Application Timeline card
-//   • Safepay return handling (?payment=return polls until paid,
-//     ?payment=cancelled calm toast) — GHSS behaviour 1:1
 // GHS-specific sections (kept, restyled): migration progress, interview slot
 // booking, admit card, admission-fee challan voucher, admin note / rejection.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -82,52 +80,9 @@ export default function ApplicationView() {
   const [showPii, setShowPii] = useState(false);
   const [pdfBusy, setPdfBusy] = useState<string | null>(null);
   const [liveRef, setLiveRef] = useState<string | null>(null);
-  const [confirmingPayment, setConfirmingPayment] = useState(false);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
   useEffect(() => { if (app) setLiveRef(app.payment_reference ?? null); }, [app?.payment_reference]);
-
-  /* ── Safepay checkout return (?payment=return|cancelled) — GHSS 1:1 ───── */
-  useEffect(() => {
-    const mode = searchParams.get("payment");
-    if (!mode) return;
-    // consume only the `payment` flag — keep &ref= for the session-less case
-    setSearchParams((prev) => {
-      const p = new URLSearchParams(prev);
-      p.delete("payment");
-      return p;
-    }, { replace: true });
-    if (mode === "cancelled") {
-      toast("Payment was not completed. You can try again whenever you are ready.", { icon: "ℹ️", duration: 5000 });
-      return;
-    }
-    if (mode === "return") {
-      setConfirmingPayment(true);
-      let tries = 0;
-      const poll = window.setInterval(async () => {
-        tries += 1;
-        await qc.invalidateQueries({ queryKey: ["admission-portal-state"] });
-        if (tries >= 12) window.clearInterval(poll);
-      }, 3000);
-      const stop = window.setTimeout(() => {
-        window.clearInterval(poll);
-        setConfirmingPayment((still) => {
-          if (still) toast("Your payment is still being confirmed. Please check again in a few minutes.", { icon: "⏳", duration: 6000 });
-          return false;
-        });
-      }, 40000);
-      return () => { window.clearInterval(poll); window.clearTimeout(stop); };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Confirm the payment the moment the polled refetch shows it as paid.
-  useEffect(() => {
-    if (confirmingPayment && app?.payment_status === "paid") {
-      setConfirmingPayment(false);
-      toast.success("Payment received. Thank you!");
-    }
-  }, [confirmingPayment, app?.payment_status]);
 
   /* ── ?pay=1 — ensure the reference, then scroll to the payment panel ──── */
   useEffect(() => {
@@ -414,12 +369,8 @@ export default function ApplicationView() {
                           {app.payment_method ? ` · via ${paymentMethodLabel(app.payment_method)}` : ""}
                           {app.payment_receipt ? ` · Receipt ${app.payment_receipt}` : ""}
                         </p>
-                      ) : confirmingPayment ? (
-                        <p className="mt-0.5 flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Confirming your payment…
-                        </p>
                       ) : (
-                        <p className="mt-0.5 text-xs text-muted-foreground">Pay online or by manual transfer to the school account.</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">Pay by manual transfer to the school account.</p>
                       )}
                     </div>
                   </div>
@@ -441,7 +392,7 @@ export default function ApplicationView() {
                     <p className="mt-0.5 font-mono text-xl font-extrabold tracking-wider text-primary">{liveRef}</p>
                     {!feePaid && (
                       <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                        Pay the processing fee online, or by manual transfer to the school account shown on your
+                        Pay the processing fee by manual transfer to the school account shown on your
                         challan quoting reference <b>{liveRef}</b>
                         {app.fee_deadline ? <> on or before <b>{formatDeadline(app.fee_deadline)}</b></> : null}.
                       </p>
@@ -453,8 +404,8 @@ export default function ApplicationView() {
                   </p>
                 )}
 
-                {/* Online + manual payment (GHSS OnlinePayPanel) */}
-                {!feePaid && !confirmingPayment && (
+                {/* Manual payment panel */}
+                {!feePaid && (
                   <div id="pay-fee" className="mt-4 scroll-mt-24">
                     <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" aria-label="Loading payment panel" />}>
                       <OnlinePayPanel
