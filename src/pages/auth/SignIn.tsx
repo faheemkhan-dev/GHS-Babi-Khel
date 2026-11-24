@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Mail, Lock, GraduationCap, ArrowRight, Loader2, Clock, XCircle, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { supabase, signOutSafely } from "@/lib/supabase";
 import toast from "react-hot-toast";
 import { useSchoolSettings, safeMediaUrl } from "@/hooks/useSchoolSettings";
+import TurnstileWidget, { type TurnstileHandle } from "@/components/shared/TurnstileWidget";
+import { turnstileEnabled } from "@/lib/turnstile";
 
 // Hard timeout wrapper — rejects if promise doesn't settle in time
 function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
@@ -23,19 +25,30 @@ const SignIn = () => {
   const [logoFailed, setLogoFailed]   = useState(false);
   const [showPw, setShowPw]           = useState(false);
   const [pendingStatus, setPendingStatus] = useState<"pending" | "rejected" | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
   const navigate = useNavigate();
 
   const { data: settings } = useSchoolSettings();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (turnstileEnabled && !captchaToken) {
+      toast.error("Please wait for the security check to finish.");
+      return;
+    }
     setLoading(true);
     setPendingStatus(null);
 
     try {
       // ── 1. Authenticate with hard 10s timeout ─────────────────────────────
       const { data: authData, error: authError } = await withTimeout(
-        supabase.auth.signInWithPassword({ email, password }),
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+          // Verified by Supabase (Authentication → Attack Protection → CAPTCHA).
+          options: turnstileEnabled && captchaToken ? { captchaToken } : undefined,
+        }),
         10000
       );
 
@@ -47,10 +60,13 @@ const SignIn = () => {
         // a slightly friendlier version of that same generic message
         // rather than guessing which case it is.
         toast.error(
-          authError?.message?.includes("Invalid login credentials")
-            ? "No account found with this email/password, or you haven't signed up yet."
-            : (authError?.message || "Login failed.")
+          /captcha/i.test(authError?.message || "")
+            ? "Security check failed. Please try again."
+            : authError?.message?.includes("Invalid login credentials")
+              ? "No account found with this email/password, or you haven't signed up yet."
+              : (authError?.message || "Login failed.")
         );
+        captchaRef.current?.reset(); // tokens are single-use
         setLoading(false);
         return;
       }
@@ -266,9 +282,11 @@ const SignIn = () => {
                 </div>
               </div>
 
+              <TurnstileWidget ref={captchaRef} action="signin" onToken={setCaptchaToken} />
+
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (turnstileEnabled && !captchaToken)}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,hsl(43_89%_38%),hsl(40_90%_46%))] text-[14px] font-semibold text-white shadow-[0_8px_18px_-10px_hsl(43_89%_38%/0.8)] transition-[filter,transform] hover:brightness-110 active:scale-[0.99] disabled:opacity-60"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
