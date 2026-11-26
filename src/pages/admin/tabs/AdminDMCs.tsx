@@ -33,11 +33,9 @@ const ensureJsPDF = async () => {
 };
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileDown, Loader2, Users, User, ShieldAlert } from "lucide-react";
+import { ArrowLeft, FileDown, Loader2, ShieldAlert, FileText } from "lucide-react";
 import toast from "react-hot-toast";
 import { useSchoolSettings } from "@/hooks/useSchoolSettings";
 import { examTypeLabel, examTypeLabelInText } from "@/utils/examTypeLabel";
@@ -79,6 +77,8 @@ interface SchoolInfo {
 }
 
 interface AdminDMCsProps {
+  /** Back to Manage Results (renders the arrow inside the header). */
+  onBack?: () => void;
   cls: string;
   examType: string;
   year: number;
@@ -770,7 +770,7 @@ async function generateDMCPDF(
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
-function AdminDMCs({ cls, examType, year }: AdminDMCsProps) {
+function AdminDMCs({ cls, examType, year, onBack }: AdminDMCsProps) {
   const [selectedStudentId, setSelectedStudentId] = useState<string>("all");
   const [scope, setScope] = useState<"class" | "school">("class");
   // The class to use when scope is "class" — defaults to whatever class tab
@@ -1062,279 +1062,202 @@ function AdminDMCs({ cls, examType, year }: AdminDMCsProps) {
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
+  const termText = scope === "class" ? examTypeLabel(classExamType) : (term === 0 ? "1st Term" : "2nd Term");
+  const scopeText = scope === "class" ? `Class ${selectedClass}` : "Classes 6–10";
+  const label = "mb-1.5 block text-[9.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground";
+  const seg = (active: boolean) =>
+    `h-8 min-w-0 whitespace-nowrap rounded-[3px] px-3 text-[11.5px] font-medium tracking-wide transition-colors ${
+      active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-background hover:text-foreground"
+    }`;
+  const segWrap = "grid h-9 grid-cols-2 items-center gap-0.5 rounded-[4px] border border-border/60 bg-muted/40 p-0.5";
+
   return (
-    <div className="space-y-4 pb-20 md:pb-0">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card p-3.5 shadow-sm sm:p-4">
-        <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-2xl" />
-        <div aria-hidden className="pointer-events-none absolute -left-12 -bottom-12 h-28 w-28 rounded-full bg-[hsl(43_89%_58%)]/10 blur-2xl" />
-        <div className="relative flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-md shadow-primary/20">
-            <FileDown className="h-[18px] w-[18px]" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-heading font-bold leading-tight tracking-tight text-foreground sm:text-xl">DMC Generation</h2>
-            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground sm:text-sm">
-              {scope === "class" ? `Class ${selectedClass} · ${examTypeLabel(classExamType)}` : `Classes 6–10 · ${term === 0 ? "1st Term" : "2nd Term"}`} · {year}
-            </p>
-          </div>
-          {rankedResults.length > 0 && (
-            <Badge variant="secondary" className="h-6 shrink-0 gap-1 rounded-full px-2.5 text-[11px] font-semibold">
-              <Users className="w-3.5 h-3.5" />
-              {rankedResults.length} student{rankedResults.length !== 1 ? "s" : ""}
-            </Badge>
+    <div className="space-y-3 pb-20 md:pb-0">
+      {/* ── Single header (back · title · context · count) ── */}
+      <div className="overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm">
+        <div aria-hidden className="h-[2px] bg-gradient-to-r from-primary via-gold to-primary" />
+        <div className="flex items-center gap-3 p-3.5">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back to Manage Results"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] border border-border/70 text-foreground transition-colors hover:bg-muted"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
           )}
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[15px] font-heading font-semibold leading-tight tracking-tight text-foreground">DMC Generation</h2>
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{scopeText} · {termText} · {year}</p>
+          </div>
+          <div className="shrink-0 rounded-[3px] border border-primary/25 bg-primary/5 px-2.5 py-1 text-center">
+            <p className="text-[15px] font-semibold leading-none tabular-nums text-primary">{rankedResults.length}</p>
+            <p className="mt-0.5 text-[8.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Students</p>
+          </div>
         </div>
       </div>
 
-      {/* Controls */}
-      <Card className="rounded-2xl border-border/60 shadow-sm">
-        <CardContent className="p-4 sm:p-5 space-y-4">
-          {/* Scope: single class vs whole school */}
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1.5">
-              Scope
-            </label>
-            <div>
-              <div className="grid h-10 grid-cols-2 items-center gap-1 rounded-full border border-border/60 bg-muted/50 p-1">
-                <button
-                  type="button"
-                  onClick={() => { setScope("class"); setSelectedStudentId("all"); }}
-                  className={`h-8 min-w-0 shrink-0 whitespace-nowrap rounded-full px-4 text-xs font-semibold transition-all ${
-                    scope === "class"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:bg-background hover:text-foreground"
-                  }`}
-                >
-                  By Class
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setScope("school"); setSelectedStudentId("all"); }}
-                  className={`h-8 min-w-0 shrink-0 whitespace-nowrap rounded-full px-4 text-xs font-semibold transition-all ${
-                    scope === "school"
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:bg-background hover:text-foreground"
-                  }`}
-                >
-                  Whole School
-                </button>
-              </div>
-            </div>
-
-            {/* Term selector — replaces the old fixed examType label.
-                Classes 6-8 use "1st/2nd Semester"; 9-10 use "Annual-I/II".
-                This picks the right label automatically per class/group. */}
-            <div className="mt-3">
-              <label className="block text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1.5">
-                Term
-              </label>
-              <div>
-                <div className="grid h-10 grid-cols-2 items-center gap-1 rounded-full border border-border/60 bg-muted/50 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setTerm(0)}
-                    className={`h-8 min-w-0 shrink-0 whitespace-nowrap rounded-full px-4 text-xs font-semibold transition-all ${
-                      term === 0
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-background hover:text-foreground"
-                    }`}
-                  >
-                    {scope === "class" ? examTypeLabel(termLabelPair[0]) : "1st Term"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTerm(1)}
-                    className={`h-8 min-w-0 shrink-0 whitespace-nowrap rounded-full px-4 text-xs font-semibold transition-all ${
-                      term === 1
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-background hover:text-foreground"
-                    }`}
-                  >
-                    {scope === "class" ? examTypeLabel(termLabelPair[1]) : "2nd Term"}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Class picker — only shown/relevant when scope is "By Class".
-                This lets the admin pick ANY class here, instead of being
-                stuck with whatever class tab happened to be open in Manage
-                Results when they clicked into DMCs. */}
-            {scope === "class" && (
-              <div className="mt-3">
-                <label className="block text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1.5">
-                  Which Class
-                </label>
-                <Select value={selectedClass} onValueChange={(v) => { setSelectedClass(v); setSelectedStudentId("all"); }}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose class..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ALL_CLASSES.map(c => (
-                      <SelectItem key={c} value={c}>Class {c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {scope === "school" && (
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Classes 6–10: {term === 0 ? "1st Semester" : "2nd Semester"}
-              </p>
-            )}
-            {scope === "school" && classesMissing.length > 0 && (
-              <p className="mt-1 text-[11px] font-medium text-orange-600 dark:text-orange-400">
-                No results yet: Class {classesMissing.join(", ")}
-              </p>
-            )}
+      {/* ── Controls ── */}
+      <div className="space-y-3.5 rounded-lg border border-border/60 bg-card p-3.5 shadow-sm">
+        <div>
+          <span className={label}>Scope</span>
+          <div className={segWrap}>
+            <button type="button" onClick={() => { setScope("class"); setSelectedStudentId("all"); }} className={seg(scope === "class")}>By Class</button>
+            <button type="button" onClick={() => { setScope("school"); setSelectedStudentId("all"); }} className={seg(scope === "school")}>Whole School</button>
           </div>
+        </div>
 
-          {/* Student selector */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1 min-w-0">
-              <label className="block text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1.5">
-                Select Student
-              </label>
-              <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose student..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Students (Batch)</SelectItem>
-                  {rankedResults.map(r => (
-                    <SelectItem key={r.student_id} value={r.student_id}>
-                      {scope === "school" ? `Class ${r.class} — ` : ""}{r.students?.full_name || "Unknown"} &middot; Roll: {r.students?.roll_number || "—"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        {/* Term — 6-8 use 1st/2nd Semester, 9-10 use Annual-I/II (resolved automatically) */}
+        <div>
+          <span className={label}>Term</span>
+          <div className={segWrap}>
+            <button type="button" onClick={() => setTerm(0)} className={seg(term === 0)}>
+              {scope === "class" ? examTypeLabel(termLabelPair[0]) : "1st Term"}
+            </button>
+            <button type="button" onClick={() => setTerm(1)} className={seg(term === 1)}>
+              {scope === "class" ? examTypeLabel(termLabelPair[1]) : "2nd Term"}
+            </button>
           </div>
-
-          {/* Action buttons */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* Single-DMC button only appears once a specific student is
-                picked — previously it defaulted to "Generate First
-                Student's DMC" when "All Students" was selected, which was
-                confusing since it silently generated a DMC for whichever
-                student happened to be first in the ranked list. */}
-            {selectedStudentId !== "all" && (
-              <Button
-                onClick={handleGenerateSingle}
-                disabled={generating || rankedResults.length === 0}
-                className="h-9 min-w-0 flex-1 gap-1.5 whitespace-nowrap rounded-full px-4 text-xs font-semibold shadow-none bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <User className="w-4 h-4" />}
-                Generate DMC
-              </Button>
-            )}
-
-            <Button
-              onClick={handleGenerateBatch}
-              disabled={generating || rankedResults.length === 0}
-              variant="outline"
-              className="h-9 min-w-0 flex-1 gap-1.5 whitespace-nowrap rounded-full px-4 text-xs font-semibold shadow-none border-border/60 hover:bg-primary/5"
-            >
-              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-              {scope === "school"
-                ? `Generate Whole School PDF (${rankedResults.length})`
-                : `Generate All PDF (${rankedResults.length})`}
-            </Button>
-          </div>
-
-          {/* Progress bar */}
-          {generating && (
-            <div className="space-y-2">
-              <Progress value={progress} className="h-2.5" />
-              <p className="text-xs text-muted-foreground text-center animate-pulse">
-                {progressLabel} &middot; {progress}%
-              </p>
-            </div>
+          {scope === "school" && classesMissing.length > 0 && (
+            <p className="mt-2 border-l-2 border-amber-500 bg-amber-500/5 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+              No results yet: Class {classesMissing.join(", ")}
+            </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Loading state */}
+        {scope === "class" && (
+          <div>
+            <span className={label}>Class</span>
+            <Select value={selectedClass} onValueChange={(v) => { setSelectedClass(v); setSelectedStudentId("all"); }}>
+              <SelectTrigger className="h-9 w-full rounded-[4px] border-border/70 text-[12.5px] shadow-none">
+                <SelectValue placeholder="Choose class..." />
+              </SelectTrigger>
+              <SelectContent>
+                {ALL_CLASSES.map(c => (
+                  <SelectItem key={c} value={c}>Class {c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div>
+          <span className={label}>Student</span>
+          <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
+            <SelectTrigger className="h-9 w-full rounded-[4px] border-border/70 text-[12.5px] shadow-none">
+              <SelectValue placeholder="Choose student..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Students (Batch)</SelectItem>
+              {rankedResults.map(r => (
+                <SelectItem key={r.student_id} value={r.student_id}>
+                  {scope === "school" ? `Class ${r.class} — ` : ""}{r.students?.full_name || "Unknown"} &middot; Roll: {r.students?.roll_number || "—"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Actions */}
+        <div className="grid gap-2 border-t border-border/60 pt-3.5 sm:grid-cols-2">
+          {selectedStudentId !== "all" && (
+            <Button
+              onClick={handleGenerateSingle}
+              disabled={generating || rankedResults.length === 0}
+              className="h-9 gap-2 rounded-[3px] bg-primary px-4 text-[12px] font-medium tracking-wide text-primary-foreground shadow-none hover:bg-primary/90"
+            >
+              {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+              Generate DMC
+            </Button>
+          )}
+          <Button
+            onClick={handleGenerateBatch}
+            disabled={generating || rankedResults.length === 0}
+            variant={selectedStudentId !== "all" ? "outline" : "default"}
+            className={`h-9 gap-2 rounded-[3px] px-4 text-[12px] font-medium tracking-wide shadow-none ${
+              selectedStudentId !== "all"
+                ? "border-border/70 hover:bg-muted"
+                : "bg-primary text-primary-foreground hover:bg-primary/90 sm:col-span-2"
+            }`}
+          >
+            {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+            {scope === "school"
+              ? `Download Whole School PDF (${rankedResults.length})`
+              : `Download All PDF (${rankedResults.length})`}
+          </Button>
+        </div>
+
+        {generating && (
+          <div className="space-y-1.5">
+            <Progress value={progress} className="h-1.5 rounded-none" />
+            <p className="animate-pulse text-center text-[11px] text-muted-foreground">
+              {progressLabel} &middot; {progress}%
+            </p>
+          </div>
+        )}
+      </div>
+
       {isLoading && (
         <div className="space-y-2">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-11 w-full rounded-lg" />)}
         </div>
       )}
 
-      {/* Error state */}
       {fetchError && (
-        <Card className="rounded-2xl border-destructive/30 bg-destructive/5 shadow-sm">
-          <CardContent className="p-5 text-center">
-            <ShieldAlert className="w-10 h-10 text-destructive/50 mx-auto mb-2" />
-            <p className="font-semibold text-foreground">Could not load results</p>
-            <p className="text-sm text-muted-foreground mt-1">{(fetchError as any)?.message || "Database error — please check your connection and try again."}</p>
-          </CardContent>
-        </Card>
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-5 text-center shadow-sm">
+          <ShieldAlert className="mx-auto mb-2 h-8 w-8 text-destructive/50" />
+          <p className="text-[13px] font-semibold text-foreground">Could not load results</p>
+          <p className="mt-1 text-[11.5px] text-muted-foreground">{(fetchError as any)?.message || "Database error — please check your connection and try again."}</p>
+        </div>
       )}
 
-      {/* Student preview list */}
+      {/* ── Student list ── */}
       {!isLoading && rankedResults.length > 0 && (
-        <Card className="rounded-2xl border-border/60 shadow-sm">
-          <CardContent className="p-0">
-            <div className="px-4 py-3 border-b border-border/60 bg-primary/5">
-              <p className="truncate text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                {scope === "school" ? "All students in school" : "Students in this class"} &middot; {scope === "class" ? examTypeLabel(classExamType) : (term === 0 ? "1st Term" : "2nd Term")} {year}
-              </p>
-            </div>
-            <div className="max-h-80 overflow-y-auto">
-              {rankedResults.map((r, idx) => {
-                const gradeColor = r.is_pass
-                  ? "border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
-                  : "border border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300";
-                return (
-                  <div
-                    key={r.id}
-                    className="flex items-center gap-3 px-4 py-2.5 border-b border-border/50 last:border-0 hover:bg-primary/5 transition-colors"
-                  >
-                    <span className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">
-                      {r.dmcSerial ?? idx + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {r.students?.full_name || "Unknown"}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground truncate">
-                        {scope === "school" && `Class ${r.class} \u00B7 `}
-                        Roll: {r.students?.roll_number || "—"}
-                        {r.students?.father_name && ` \u00B7 Father: ${r.students.father_name}`}
-                        {r.exam_roll_no && ` \u00B7 Exam Roll: ${r.exam_roll_no}`}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0 flex items-center gap-2">
-                      <span className="text-sm font-bold text-primary">{r.percentage}%</span>
-                      <Badge className={`text-[10px] px-1.5 py-0.5 ${gradeColor}`}>
-                        {r.is_pass ? "Pass" : "Fail"}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-3.5 py-2">
+            <p className="truncate text-[9.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              {scope === "school" ? "All students" : "Class " + selectedClass} · {termText} · {year}
+            </p>
+            <p className="shrink-0 pl-2 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Result</p>
+          </div>
+          <div className="max-h-96 overflow-y-auto">
+            {rankedResults.map((r, idx) => (
+              <div
+                key={r.id}
+                className="flex items-center gap-3 border-b border-border/50 px-3.5 py-2.5 transition-colors last:border-0 hover:bg-muted/30"
+              >
+                <span className="flex h-6 min-w-[24px] shrink-0 items-center justify-center rounded-[3px] bg-muted px-1 text-[10.5px] font-semibold tabular-nums text-muted-foreground">
+                  {r.dmcSerial ?? idx + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-semibold text-foreground">{r.students?.full_name || "Unknown"}</p>
+                  <p className="truncate text-[10.5px] text-muted-foreground">
+                    {scope === "school" && `Class ${r.class} \u00B7 `}
+                    Roll {r.students?.roll_number || "—"}
+                    {r.exam_roll_no && ` \u00B7 Exam ${r.exam_roll_no}`}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-0.5">
+                  <span className="text-[12.5px] font-semibold tabular-nums text-foreground">{r.percentage}%</span>
+                  <span className={`text-[10px] font-semibold uppercase tracking-wider ${r.is_pass ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                    {r.is_pass ? "Pass" : "Fail"}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* Empty state */}
       {!isLoading && rankedResults.length === 0 && (
-        <Card className="rounded-2xl border-border/60 shadow-sm">
-          <CardContent className="p-10 text-center">
-            <FileDown className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-            <h3 className="font-semibold text-foreground">No Results Found</h3>
-            <p className="text-sm text-muted-foreground mt-2 max-w-sm mx-auto">
-              No results are available for {scope === "school" ? "any class in the school" : `Class ${selectedClass}`} &middot; {scope === "class" ? examTypeLabel(classExamType) : (term === 0 ? "1st Term" : "2nd Term")} &middot; {year}.
-              Please add results in the Manage Results tab first.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-lg border border-dashed border-border bg-card/50 px-5 py-9 text-center">
+          <span className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-[4px] bg-muted text-muted-foreground/60"><FileDown className="h-5 w-5" /></span>
+          <p className="text-[13px] font-semibold text-foreground">No results found</p>
+          <p className="mx-auto mt-1 max-w-xs text-[11.5px] leading-relaxed text-muted-foreground">
+            Nothing available for {scope === "school" ? "any class in the school" : `Class ${selectedClass}`} · {termText} · {year}. Add results in Manage Results first.
+          </p>
+        </div>
       )}
     </div>
   );
