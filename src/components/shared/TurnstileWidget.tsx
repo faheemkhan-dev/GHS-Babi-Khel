@@ -1,17 +1,16 @@
 // src/components/shared/TurnstileWidget.tsx
-// Slim, mobile-friendly Cloudflare Turnstile.
-//   • appearance "interaction-only": the check runs invisibly and the box only
-//     appears if Cloudflare actually needs the visitor to interact — so the
-//     form stays thin and uncluttered for real people
-//   • size "flexible": fills the container width (min 300px on phones is the
-//     Cloudflare limit; it shrinks gracefully inside narrow cards)
-//   • a one-line status pill (checking / verified / retry) replaces the bulky box
+// Visible, mobile-friendly Cloudflare Turnstile.
+//   • appearance "always": the real Turnstile box is ALWAYS shown (the old
+//     "interaction-only" mode hid it behind a bare "Protected" label)
+//   • size "flexible": the thin 65px-high rectangle that stretches to the full
+//     width of its container (Cloudflare minimum 300px) — ideal on phones
+//   • the box reserves its height up-front, so the form never jumps
 //   • token expiry / errors are handled: the parent is told the token is gone
 //     and a fresh one is requested automatically
 // Renders nothing when no site key is configured.
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { CheckCircle2, Loader2, ShieldCheck, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { TURNSTILE_SITE_KEY, turnstileEnabled } from "@/lib/turnstile";
 
 declare global {
@@ -90,7 +89,7 @@ const TurnstileWidget = forwardRef<TurnstileHandle, Props>(function TurnstileWid
           action,
           theme: "auto",
           size: "flexible",
-          appearance: "interaction-only",
+          appearance: "always",
           retry: "auto",
           "refresh-expired": "auto",
           callback: (token: string) => { setStatus("ok"); onTokenRef.current(token); },
@@ -111,14 +110,12 @@ const TurnstileWidget = forwardRef<TurnstileHandle, Props>(function TurnstileWid
 
   return (
     <div className={className}>
-      {/* Cloudflare mounts here; it stays 0-height unless interaction is required. */}
-      <div ref={box} className="w-full [&>div]:!w-full [&_iframe]:!w-full" />
-      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px]" role="status" aria-live="polite">
-        {status === "ok" ? (
-          <span className="inline-flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Verified — you're not a robot
-          </span>
-        ) : status === "error" ? (
+      {/* The Turnstile rectangle mounts here (65px tall, full width). */}
+      <div className="min-h-[65px] w-full overflow-hidden rounded-md">
+        <div ref={box} className="w-full [&>div]:!w-full [&_iframe]:!w-full" />
+      </div>
+      {status === "error" && (
+        <div className="mt-1.5 text-[11px]" role="status" aria-live="polite">
           <button
             type="button"
             onClick={reset}
@@ -126,14 +123,8 @@ const TurnstileWidget = forwardRef<TurnstileHandle, Props>(function TurnstileWid
           >
             <RefreshCw className="h-3.5 w-3.5" /> Security check failed — tap to retry
           </button>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-            {status === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-            Security check…
-          </span>
-        )}
-        <span className="text-[10px] text-muted-foreground/60">Protected by Cloudflare</span>
-      </div>
+        </div>
+      )}
     </div>
   );
 });
