@@ -11,7 +11,8 @@
 //     background + `bg-primary` family) so it visually blends with the
 //     banner instead of looking like a separate white pill.
 //   • No border (borderless so it disappears into the banner)
-//   • Rounded TOP corners only — the bottom edge sits flush on the banner's
+//   • Rectangle with small 3px corners (was a pill)
+//   • (legacy note) Rounded TOP corners only — the bottom edge sits flush on the banner's
 //     edge line, so square bottom corners make it merge seamlessly into the
 //     edge (rounded bottom corners would leak white slivers of the page
 //     background through the corner radius).
@@ -34,7 +35,7 @@ export default function ReportCardButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-full bg-primary-dark text-white pl-2.5 pr-3 h-8 text-xs font-semibold border border-gold/50 shadow-md hover:border-gold active:scale-[0.97] transition-all"
+        className="inline-flex items-center gap-1.5 rounded-[3px] bg-primary-dark text-white pl-2.5 pr-3 h-8 text-xs font-semibold border border-gold/50 shadow-md hover:border-gold active:scale-[0.97] transition-all"
       >
         <FileText className="w-3.5 h-3.5 text-gold" />
         Report Card
