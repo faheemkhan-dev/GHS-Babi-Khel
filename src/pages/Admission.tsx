@@ -953,7 +953,7 @@ const Admission = () => {
 
                         {/* Security verification */}
                         {turnstileEnabled ? (
-                          <div className="mt-3 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5">
+                          <div className="mt-3">
                             <TurnstileWidget ref={tsRef} action="admission" onToken={setTsToken} />
                           </div>
                         ) : (
@@ -1120,8 +1120,6 @@ const Admission = () => {
                     whatsappNumber={settings?.contact_whatsapp ?? null}
                     schoolPhone={school?.phone ?? null}
                     onReference={(ref) => setPaymentRef(ref)}
-                    onDownloadChallan={() => downloadSuccessPdf("challan")}
-                    challanBusy={pdfBusy === "challan"}
                   />
                 </Suspense>
               )}
