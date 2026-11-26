@@ -4,7 +4,7 @@
 //
 //   hero             light premium hero · Session / Days Left / Last Date tiles ·
 //                    Apply Online (or My Application) + Track Application
-//   closed notice    only Apply / eligibility / downloads lock — Track stays open
+//   closed notice    only Apply Online, Merit Lists and Classes & Seats lock — everything else stays open
 //   how to apply     7-step gold-rail card
 //   track            inline Track Application card (trackSlot, injected by the page)
 //   (children)       Merit Lists, then Classes & Seats — injected by the page
@@ -113,6 +113,29 @@ function HelpRowInner({ icon: Icon, label, value }: { icon: typeof Phone; label:
       </span>
       <ArrowRight className="h-4 w-4 shrink-0 text-gold-strong" />
     </>
+  );
+}
+
+/** Shown instead of a section while admissions are switched off in the admin dashboard. */
+function LockedPanel({ id, kicker, title, text, onLocked }: {
+  id: string; kicker?: string; title: string; text: string; onLocked: () => void;
+}) {
+  return (
+    <section id={id} className="scroll-mt-24">
+      <SectionTitle kicker={kicker}>{title}</SectionTitle>
+      <button
+        type="button"
+        onClick={onLocked}
+        aria-disabled="true"
+        className="mx-auto flex w-full max-w-lg touch-manipulation flex-col items-center gap-2 rounded-2xl border border-gold/30 bg-card px-5 py-8 text-center opacity-80 shadow-card"
+      >
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <Lock className="h-5 w-5" />
+        </span>
+        <span className="text-[14px] font-bold text-foreground">Locked</span>
+        <span className="max-w-xs text-xs leading-relaxed text-muted-foreground">{text}</span>
+      </button>
+    </section>
   );
 }
 
@@ -266,8 +289,8 @@ function AdmissionHome({
             <div className="min-w-0">
               <p className="text-sm font-bold text-red-700 dark:text-red-400">Admissions are currently closed</p>
               <p className="mt-1 text-xs leading-relaxed text-red-700/80 dark:text-red-400/80">
-                {closedNote} Applying, the eligibility check and downloads unlock when admissions reopen.
-                You can still <b>track your application</b> and view published merit lists.
+                {closedNote} Apply Online, Merit Lists and Classes &amp; Seats are locked until admissions reopen.
+                You can still <b>track your application</b>, check your eligibility and use the downloads.
               </p>
             </div>
           </div>
@@ -308,18 +331,30 @@ function AdmissionHome({
         {trackSlot && <div className="mt-10">{trackSlot}</div>}
 
         {/* ── Merit Lists, then Classes & Seats (injected by the page) ── */}
-        {children && <div className="mt-12 space-y-12">{children}</div>}
+        {isOpen ? (
+          children && <div className="mt-12 space-y-12">{children}</div>
+        ) : (
+          <div className="mt-12 space-y-12">
+            <LockedPanel
+              id="merit-lists" title="Admission Merit Lists" onLocked={onLocked}
+              text="Merit lists are locked while admissions are closed. They unlock when admissions reopen."
+            />
+            <LockedPanel
+              id="classes-seats" kicker="Admission" title="Classes & Seats" onLocked={onLocked}
+              text="Class and seat details are locked while admissions are closed. They unlock when admissions reopen."
+            />
+          </div>
+        )}
 
         {/* ── ELIGIBILITY — slim premium banner (checker loaded on demand) ── */}
         <section className="mt-12" style={lazySection}>
-          <div className={`relative overflow-hidden rounded-2xl border border-gold/40 bg-card shadow-card ${isOpen ? "" : "opacity-60"}`}>
+          <div className="relative overflow-hidden rounded-2xl border border-gold/40 bg-card shadow-card">
             <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-gold via-gold-strong to-gold" />
             <button
               type="button"
-              onClick={() => (isOpen ? setShowElig((v) => !v) : onLocked())}
+              onClick={() => setShowElig((v) => !v)}
               aria-expanded={showElig}
-              aria-disabled={!isOpen}
-              className={`flex w-full touch-manipulation items-center gap-3 py-3 pl-5 pr-3 text-left ${isOpen ? "active:bg-muted/40" : "cursor-not-allowed"}`}
+              className="flex w-full touch-manipulation items-center gap-3 py-3 pl-5 pr-3 text-left active:bg-muted/40"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/85 text-gold ring-2 ring-gold/30">
                 <BadgeCheck className="h-5 w-5" />
@@ -331,16 +366,14 @@ function AdmissionHome({
                 <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">Quick class &amp; age check · under a minute</span>
               </span>
               <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-gold/50 bg-gold/10 pl-3 pr-2 text-[11px] font-bold text-primary">
-                {isOpen ? (showElig ? "Close" : "Start") : "Locked"}
-                {isOpen
-                  ? <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-150 ${showElig ? "rotate-180" : ""}`} />
-                  : <Lock className="h-3 w-3" />}
+                {showElig ? "Close" : "Start"}
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-150 ${showElig ? "rotate-180" : ""}`} />
               </span>
             </button>
-            {isOpen && showElig && (
+            {showElig && (
               <div className="border-t border-border/60 bg-muted/20 p-3">
                 <Suspense fallback={<div className="h-56 rounded-xl bg-muted" aria-label="Loading eligibility checker" />}>
-                  <EligibilityChecker onApply={(cls, type) => onApply(cls, type)} />
+                  <EligibilityChecker onApply={(cls, type) => (isOpen ? onApply(cls, type) : onLocked())} />
                 </Suspense>
               </div>
             )}
@@ -389,16 +422,16 @@ function AdmissionHome({
 
         {/* ── DOWNLOADS — slim premium list ──────────────────────────────── */}
         <section className="mt-12" style={lazySection}>
-          <SectionTitle kicker="Resources" hint={isOpen ? "Printable forms and guides" : "Unlock when admissions reopen"}>Downloads</SectionTitle>
+          <SectionTitle kicker="Resources" hint="Printable forms and guides">Downloads</SectionTitle>
 
-          <div className={`mx-auto max-w-lg overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card ${isOpen ? "" : "opacity-60"}`}>
+          <div className="mx-auto max-w-lg overflow-hidden rounded-2xl border border-gold/30 bg-card shadow-card">
             <div aria-hidden className="h-[3px] bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
             <ul className="divide-y divide-border/60">
               <li>
                 <button
                   type="button"
                   disabled={!!downloading}
-                  onClick={guard(onDownloadBlank)}
+                  onClick={onDownloadBlank}
                   className="flex w-full touch-manipulation items-center gap-2.5 bg-gold/5 px-3 py-2.5 text-left active:bg-gold/10 disabled:opacity-60"
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gold/50 bg-card text-primary">
@@ -409,7 +442,7 @@ function AdmissionHome({
                     <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">Blank form — print, fill by hand and submit at the office</span>
                   </span>
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gold/40 text-primary">
-                    {isOpen ? <FileDown className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                    <FileDown className="h-3.5 w-3.5" />
                   </span>
                 </button>
               </li>
@@ -418,7 +451,7 @@ function AdmissionHome({
                   <button
                     type="button"
                     disabled={!!downloading}
-                    onClick={guard(() => onDownloadItem(d.key))}
+                    onClick={() => onDownloadItem(d.key)}
                     className="flex w-full touch-manipulation items-center gap-2.5 px-3 py-2.5 text-left active:bg-muted/50 disabled:opacity-60"
                   >
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/30 text-primary">
@@ -429,26 +462,22 @@ function AdmissionHome({
                       <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{d.desc}</span>
                     </span>
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground">
-                      {isOpen
-                        ? <FileDown className={`h-3.5 w-3.5 ${hasLibFile(d.key) ? "text-green-600" : ""}`} />
-                        : <Lock className="h-3.5 w-3.5" />}
+                      <FileDown className={`h-3.5 w-3.5 ${hasLibFile(d.key) ? "text-green-600" : ""}`} />
                     </span>
                   </button>
                 </li>
               ))}
             </ul>
-            {isOpen && (
-              <div className="border-t border-border/60 bg-muted/20 p-2.5">
-                <button
-                  type="button"
-                  disabled={!!downloading}
-                  onClick={onDownloadAll}
-                  className="inline-flex h-8 w-full touch-manipulation items-center justify-center gap-1.5 rounded-full border border-gold/60 bg-card px-4 text-[12px] font-semibold text-primary active:bg-gold/15 disabled:opacity-50"
-                >
-                  <FileDown className="h-3.5 w-3.5" /> Download all
-                </button>
-              </div>
-            )}
+            <div className="border-t border-border/60 bg-muted/20 p-2.5">
+              <button
+                type="button"
+                disabled={!!downloading}
+                onClick={onDownloadAll}
+                className="inline-flex h-8 w-full touch-manipulation items-center justify-center gap-1.5 rounded-full border border-gold/60 bg-card px-4 text-[12px] font-semibold text-primary active:bg-gold/15 disabled:opacity-50"
+              >
+                <FileDown className="h-3.5 w-3.5" /> Download all
+              </button>
+            </div>
           </div>
         </section>
 
