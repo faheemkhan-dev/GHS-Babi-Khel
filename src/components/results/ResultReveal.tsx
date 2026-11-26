@@ -522,7 +522,7 @@ export const CelebrationCanvas = ({ mode }: { mode: CelebrationMode }) => {
     if (!ctx) return;
 
     const w = window.innerWidth, h = window.innerHeight;
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     canvas.style.width = `${w}px`;
@@ -537,47 +537,63 @@ export const CelebrationCanvas = ({ mode }: { mode: CelebrationMode }) => {
       ? ["#FFD591", "#F0A70C", "#FFF3DC", "#E3B341", "#C2410C", "#FFFFFF", "#34D399"]
       : ["#8ED8C9", "#C4CFD4", "#E9EEF0", "#2F6B4F"];
 
-    // ── particle count: bigger than before, scaled to the device ──
-    let N = gold ? (small ? 190 : 280) : 18;
-    if (gold && lowEnd) N = Math.round(N * 0.7);
+    // ── particle count: a real celebration, scaled to the device ──
+    let N = gold ? (small ? 340 : 520) : 18;
+    if (gold && lowEnd) N = Math.round(N * 0.65);
 
     const X = new Float32Array(N), Y = new Float32Array(N);
     const VX = new Float32Array(N), VY = new Float32Array(N);
     const SZ = new Float32Array(N), ROT = new Float32Array(N), VR = new Float32Array(N);
     const TILT = new Float32Array(N), VT = new Float32Array(N);
     const DELAY = new Float32Array(N);
-    const COL = new Uint8Array(N), ROUND = new Uint8Array(N), DEAD = new Uint8Array(N);
+    // SHAPE: 0 = flake, 1 = dot, 2 = thin streamer
+    const COL = new Uint8Array(N), SHAPE = new Uint8Array(N), DEAD = new Uint8Array(N);
 
     const spd = Math.max(0.9, Math.min(1.5, w / 480)); // wider screen → throw further
     for (let i = 0; i < N; i++) {
       const r = i / N;
       COL[i] = i % colors.length;
-      ROUND[i] = Math.random() < 0.3 ? 1 : 0;
+      const q = Math.random();
+      SHAPE[i] = q < 0.25 ? 1 : q < 0.4 ? 2 : 0;
       ROT[i] = Math.random() * Math.PI;
       TILT[i] = Math.random() * Math.PI;
       VT[i] = 0.08 + Math.random() * 0.14;
       if (gold) {
-        SZ[i] = 4 + Math.random() * 5.5;
+        SZ[i] = SHAPE[i] === 2 ? 9 + Math.random() * 7 : 4 + Math.random() * 5.5;
         VR[i] = (Math.random() - 0.5) * 0.3;
-        if (r < 0.4) {
-          // centre pop
-          const a = Math.random() * Math.PI * 2, sp = (4.5 + Math.random() * 8) * spd;
+        if (r < 0.28) {
+          // wave 1 — centre pop
+          const a = Math.random() * Math.PI * 2, sp = (4.5 + Math.random() * 9) * spd;
           X[i] = w / 2 + (Math.random() - 0.5) * 60; Y[i] = h * 0.4 + (Math.random() - 0.5) * 40;
           VX[i] = Math.cos(a) * sp; VY[i] = Math.sin(a) * sp - 5.5;
           DELAY[i] = Math.random() * 160;
-        } else if (r < 0.7) {
-          // left + right cannons from the lower corners, firing up & inward
+        } else if (r < 0.55) {
+          // wave 1 — left + right cannons from the lower corners, firing up & inward
           const left = i % 2 === 0;
           const a = ((left ? -62 : -118) + (Math.random() - 0.5) * 34) * Math.PI / 180;
-          const sp = (11 + Math.random() * 8) * spd;
+          const sp = (11 + Math.random() * 9) * spd;
           X[i] = left ? -6 : w + 6; Y[i] = h * 0.78;
           VX[i] = Math.cos(a) * sp; VY[i] = Math.sin(a) * sp;
-          DELAY[i] = 140 + Math.random() * 200;
+          DELAY[i] = 140 + Math.random() * 220;
+        } else if (r < 0.72) {
+          // wave 2 — second, higher double-cannon salvo
+          const left = i % 2 === 0;
+          const a = ((left ? -52 : -128) + (Math.random() - 0.5) * 40) * Math.PI / 180;
+          const sp = (12 + Math.random() * 9) * spd;
+          X[i] = left ? -6 : w + 6; Y[i] = h * 0.62;
+          VX[i] = Math.cos(a) * sp; VY[i] = Math.sin(a) * sp;
+          DELAY[i] = 900 + Math.random() * 260;
+        } else if (r < 0.80) {
+          // wave 2 — finale pop slightly higher on the screen
+          const a = Math.random() * Math.PI * 2, sp = (4 + Math.random() * 8) * spd;
+          X[i] = w / 2 + (Math.random() - 0.5) * 120; Y[i] = h * 0.3;
+          VX[i] = Math.cos(a) * sp; VY[i] = Math.sin(a) * sp - 4;
+          DELAY[i] = 1250 + Math.random() * 150;
         } else {
-          // light shower from the top
+          // long shower from the top
           X[i] = Math.random() * w; Y[i] = -12 - Math.random() * 60;
-          VX[i] = (Math.random() - 0.5) * 1.6; VY[i] = 1.6 + Math.random() * 2.2;
-          DELAY[i] = 350 + Math.random() * 1100;
+          VX[i] = (Math.random() - 0.5) * 1.8; VY[i] = 1.6 + Math.random() * 2.4;
+          DELAY[i] = 350 + Math.random() * 1900;
         }
       } else {
         // calm respectful drift — sparkles falling like slow snow
@@ -592,15 +608,27 @@ export const CelebrationCanvas = ({ mode }: { mode: CelebrationMode }) => {
     // draw order grouped by colour → one fillStyle change per colour per frame
     const order = Array.from({ length: N }, (_, i) => i).sort((a, b) => COL[a] - COL[b]);
 
-    const LIFE = gold ? 3300 : 3000;
-    const FADE = 600;
+    const LIFE = gold ? 4200 : 3000;
+    const FADE = 700;
     const GRAV = 0.19;
     let raf = 0;
     let last = performance.now();
     const t0 = last;
 
+    // Adaptive guard: if the phone struggles (slow frames), permanently drop
+    // every other particle once — the show stays full, the CPU load halves.
+    let frames = 0, slowSum = 0, trimmed = false;
+
     const tick = (t: number) => {
       const el = t - t0;
+      if (!trimmed && gold) {
+        frames++;
+        slowSum += t - last;
+        if (frames === 24) {
+          if (slowSum / 24 > 24) for (let j = 0; j < N; j += 2) DEAD[j] = 1;
+          trimmed = true;
+        }
+      }
       // normalised frame step (1 = one 60 Hz frame); clamped so a hitch can't teleport particles
       const f = Math.min(2.2, (t - last) / 16.667);
       last = t;
@@ -637,11 +665,16 @@ export const CelebrationCanvas = ({ mode }: { mode: CelebrationMode }) => {
         if (COL[i] !== curCol) { ctx.fillStyle = colors[COL[i]]; curCol = COL[i]; }
 
         const c = Math.cos(ROT[i]), sn = Math.sin(ROT[i]);
-        if (ROUND[i]) {
+        if (SHAPE[i] === 1) {
           ctx.setTransform(dpr, 0, 0, dpr, X[i] * dpr, Y[i] * dpr);
           ctx.beginPath();
           ctx.arc(0, 0, SZ[i] * 0.5, 0, 6.2832);
           ctx.fill();
+        } else if (SHAPE[i] === 2) {
+          // thin streamer ribbon — flutters as it turns
+          const flip = Math.cos(TILT[i]);
+          ctx.setTransform(c * dpr, sn * dpr, -sn * flip * dpr, c * flip * dpr, X[i] * dpr, Y[i] * dpr);
+          ctx.fillRect(-SZ[i] * 0.5, -1.1, SZ[i], 2.2);
         } else {
           // paper-flutter: the flake flips as it spins (cheap cos() squash)
           const flip = Math.cos(TILT[i]);
@@ -650,7 +683,7 @@ export const CelebrationCanvas = ({ mode }: { mode: CelebrationMode }) => {
         }
       }
 
-      if (alive && el < LIFE + 1800) {
+      if (alive && el < LIFE + 2400) {
         raf = requestAnimationFrame(tick);
       } else {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
