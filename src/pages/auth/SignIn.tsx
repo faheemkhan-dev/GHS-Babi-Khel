@@ -282,7 +282,7 @@ const SignIn = () => {
                 </div>
               </div>
 
-              <TurnstileWidget ref={captchaRef} action="signin" onToken={setCaptchaToken} />
+              <TurnstileWidget ref={captchaRef} action="signin" onToken={setCaptchaToken} className="w-full" />
 
               <button
                 type="submit"
