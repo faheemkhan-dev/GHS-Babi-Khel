@@ -22,7 +22,6 @@ import { useAuth } from "@/hooks/useAuth";
 import ThemeSwitcher from "@/components/shared/ThemeSwitcher";
 import ThemeToggleButton from "@/components/shared/ThemeToggleButton";
 import HexagonLogoFrame from "@/components/shared/HexagonLogoFrame";
-import NewsTicker from "@/components/layout/NewsTicker";
 import NavSearchDropdown from "@/components/layout/NavSearchDropdown";
 import { openCommandPalette } from "@/components/shared/CommandPalette";
 import { intentPrefetchHandlers } from "@/lib/routePrefetch";
@@ -1118,17 +1117,6 @@ const Navbar = () => {
       } ${navHidden ? "-translate-y-full" : "translate-y-0"}`}
       style={{ transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1), background-color 300ms, box-shadow 300ms, border-color 300ms" }}
     >
-      {/* Green headline ticker — right → left, at the very TOP, above the
-          school name (and above the results / roll-slip countdown strips) */}
-      <NewsTicker />
-
-      {/* Golden results strip — above the school name (mobile / tablet) */}
-      <ResultsTopStrip />
-
-      {/* Red Roll No. Slip countdown strip — also ABOVE the school name
-          (mobile / tablet; desktop uses the chip) — tap opens /roll-no-slip */}
-      <RollSlipCountdown variant="strip" />
-
       {/* ── Top bar ── */}
       <div ref={topBarRef} className="container mx-auto flex items-center justify-between gap-3 2xl:gap-6 h-16 px-4 lg:px-6">
 
