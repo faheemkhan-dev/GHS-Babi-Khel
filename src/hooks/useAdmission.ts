@@ -28,6 +28,11 @@ export interface AdmissionSettings {
   processing_fee: number | null;
   payment_accounts: import("@/lib/admissionPayment").AdmissionPaymentAccount[] | null;
   contact_whatsapp: string | null;
+  // Board schedule (migration 22)
+  bisep_note: string | null;
+  class9_last_date: string | null;
+  board_fee_amount: number | null;
+  board_fee_due_date: string | null;
 }
 
 export interface Admission {
@@ -43,6 +48,15 @@ export interface Admission {
   payment_status: AdmissionPaymentStatus; payment_reference: string | null;
   payment_method: string | null; payment_receipt: string | null;
   processing_fee: number; fee_deadline: string | null; paid_at: string | null;
+  // Board-compliance fields (migration 22)
+  previous_board: string | null; board_enrollment_no: string | null;
+  board_roll_no: string | null; previous_result: string | null;
+  slc_no: string | null; slc_date: string | null; migration_cert_no: string | null;
+  previously_enrolled: boolean | null;
+  admission_date: string | null; bisep_enrollment_no: string | null;
+  bisep_enrolled_at: string | null;
+  board_fee_status: "n_a" | "pending" | "paid" | null;
+  board_fee_paid_at: string | null;
   created_at: string; updated_at: string;
 }
 
@@ -74,7 +88,7 @@ export interface AdmissionDocumentPayload {
   file_name: string | null;
 }
 
-const ADMISSION_FIELDS = "id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, father_cnic, occupation, payment_status, payment_reference, payment_method, payment_receipt, processing_fee, fee_deadline, paid_at, created_at, updated_at";
+const ADMISSION_FIELDS = "id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, father_cnic, occupation, previous_board, board_enrollment_no, board_roll_no, previous_result, slc_no, slc_date, migration_cert_no, previously_enrolled, admission_date, bisep_enrollment_no, bisep_enrolled_at, board_fee_status, board_fee_paid_at, payment_status, payment_reference, payment_method, payment_receipt, processing_fee, fee_deadline, paid_at, created_at, updated_at";
 const ADMISSION_DOCUMENT_FIELDS = "id, admission_id, doc_type, file_path, file_name, uploaded_at";
 
 function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
@@ -108,7 +122,7 @@ export function useAdmissionSettings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("admission_settings")
-        .select("id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at, processing_fee, payment_accounts, contact_whatsapp")
+        .select("id, is_open, session_year, open_date, last_date, banner_message, notes, updated_at, processing_fee, payment_accounts, contact_whatsapp, bisep_note, class9_last_date, board_fee_amount, board_fee_due_date")
         .eq("id", 1)
         .maybeSingle();
       if (error) throw error;
@@ -169,6 +183,8 @@ export function useTrackAdmission(query: string) {
       //   • returns full rows ONLY for exact case-insensitive matches,
       //   • can never be used to list applications (no wildcards).
       const { data, error } = await supabase.rpc("track_admission", {
+        // digits-only normalization happens server-side too, but send a
+        // trimmed query so trailing spaces never break the exact match
         p_query: query.trim(),
       });
       if (error) throw error;
@@ -445,6 +461,7 @@ export function useAdminAdmissionMeritList(id: string | null) {
           admission_last_date: list.admission_last_date,
           instructions: list.instructions, published_at: list.published_at,
           is_published: list.is_published,
+          show_not_listed: (list as any).show_not_listed ?? true,
         },
         entries: all.map((e: any) => ({
           id: e.id, position: e.position, reference_no: e.reference_no,
@@ -459,7 +476,7 @@ export function useAdminAdmissionMeritList(id: string | null) {
   });
 }
 
-/** One-click auto merit (preview = dry run). */
+/** One-click auto merit (preview = dry run). p_type: all | fresh | migration. */
 export function useAdmissionMeritAuto() {
   const qc = useQueryClient();
   return useMutation({
@@ -471,6 +488,7 @@ export function useAdmissionMeritAuto() {
       publish?: boolean;
       dry_run?: boolean;
       class?: string | null;
+      type?: "all" | "fresh" | "migration";
     }) => {
       const { data, error } = await supabase.rpc("admission_merit_auto", {
         p_list_no: args.list_no,
@@ -480,6 +498,7 @@ export function useAdmissionMeritAuto() {
         p_publish: args.publish ?? false,
         p_dry_run: args.dry_run ?? false,
         p_class: args.class ?? null,
+        p_type: args.type ?? "all",
       });
       if (error) throw new Error(error.message);
       const row = Array.isArray(data) ? data[0] : data;
@@ -558,19 +577,116 @@ export function useAdmissionMeritRemark() {
   });
 }
 
-/** Admin classes & seats (includes closed classes). */
+// ═══════════════════════════════════════════════════════════════════════════
+// Admin workflow RPCs (migration 22) — verify documents, reject with a
+// reason, admit with the admission number/date + BISEP enrollment, record the
+// board enrollment fee, advance the migration tracker, and control the
+// "Not Merit Listed" visibility of a published list.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function invalidateAdmission(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["admin-admissions"] });
+  qc.invalidateQueries({ queryKey: ["admin-admissions-all"] });
+  qc.invalidateQueries({ queryKey: ["admission-portal-state"] });
+  qc.invalidateQueries({ queryKey: ["track-admission"] });
+}
+
+async function callAdminRpc(fn: string, args: Record<string, unknown>): Promise<any> {
+  const { data, error } = await supabase.rpc(fn as any, args as any);
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.ok) throw new Error(row?.error || "The action failed.");
+  return row;
+}
+
+/** Verify the applicant's documents (status → documents_verified). */
+export function useAdmissionVerifyDocuments() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string | null }) =>
+      callAdminRpc("admission_admin_verify_documents", { p_admission_id: id, p_note: note ?? null }),
+    onSuccess: () => invalidateAdmission(qc),
+  });
+}
+
+/** Reject with a reason (status → rejected, reason stored + shown to the applicant). */
+export function useAdmissionReject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      callAdminRpc("admission_admin_reject", { p_admission_id: id, p_reason: reason }),
+    onSuccess: () => invalidateAdmission(qc),
+  });
+}
+
+/** Confirm admission: admission number (required), admission date, BISEP enrollment no. */
+export function useAdmissionAdmit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      id: string;
+      admissionNo: string;
+      admissionDate?: string | null;
+      bisepEnrollmentNo?: string | null;
+    }) =>
+      callAdminRpc("admission_admin_admit", {
+        p_admission_id: args.id,
+        p_admission_no: args.admissionNo.trim(),
+        p_admission_date: args.admissionDate || null,
+        p_bisep_enrollment_no: args.bisepEnrollmentNo?.trim() || null,
+      }),
+    onSuccess: () => invalidateAdmission(qc),
+  });
+}
+
+/** Record the BISEP 9th-enrollment fee (pending / paid / n_a). */
+export function useAdmissionSetBoardFee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "n_a" | "pending" | "paid" }) =>
+      callAdminRpc("admission_admin_set_board_fee", { p_admission_id: id, p_status: status }),
+    onSuccess: () => invalidateAdmission(qc),
+  });
+}
+
+/** Advance the applicant's migration tracker (step 1–6). */
+export function useAdmissionSetMigrationStep() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, step }: { id: string; step: number }) =>
+      callAdminRpc("admission_admin_set_migration_step", { p_admission_id: id, p_step: step }),
+    onSuccess: () => invalidateAdmission(qc),
+  });
+}
+
+/** Show / hide "Not Merit Listed" names on a published merit list. */
+export function useAdmissionMeritShowNotListed() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, show }: { id: string; show: boolean }) =>
+      callAdminRpc("admission_merit_set_show_not_listed", { p_id: id, p_show: show }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-admission-merit-lists"] });
+      qc.invalidateQueries({ queryKey: ["admin-admission-merit-view"] });
+      qc.invalidateQueries({ queryKey: ["admission-merit-list"] });
+      qc.invalidateQueries({ queryKey: ["admission-merit-lists-public"] });
+    },
+  });
+}
+
+/** Admin classes & seats (includes closed classes + per-class last date). */
 export function useAdminAdmissionClasses() {
   return useQuery({
     queryKey: ["admin-admission-classes"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("admission_class_seats")
-        .select("class, seats, is_open, display_order, updated_at")
+        .select("class, seats, is_open, display_order, last_date, updated_at")
         .order("display_order", { ascending: true });
       if (error) throw error;
       return (data ?? []) as Array<{
         class: string; seats: number; is_open: boolean;
-        display_order: number; updated_at: string;
+        display_order: number; last_date: string | null; updated_at: string;
       }>;
     },
   });
@@ -579,11 +695,16 @@ export function useAdminAdmissionClasses() {
 export function useSetAdmissionClassSeats() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { class: string; seats?: number | null; is_open?: boolean | null }) => {
+    mutationFn: async (args: {
+      class: string; seats?: number | null; is_open?: boolean | null;
+      last_date?: string | null; clear_last_date?: boolean;
+    }) => {
       const { data, error } = await supabase.rpc("admission_admin_set_class_seats", {
         p_class: args.class,
         p_seats: args.seats ?? null,
         p_is_open: args.is_open ?? null,
+        // sentinel date "clear" → the RPC stores NULL (use the global last date)
+        p_last_date: args.clear_last_date ? "1900-01-01" : (args.last_date ?? null),
       });
       if (error) throw new Error(error.message);
       const row = Array.isArray(data) ? data[0] : data;

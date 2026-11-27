@@ -84,11 +84,11 @@ export default function AdmissionPortal() {
           </p>
           <div className="mt-6 flex flex-col gap-2.5">
             <Button onClick={() => navigate("/admission", { state: { view: "track" } })}
-              className="h-11 gap-2 rounded-full font-bold">
+              className="h-10 gap-2 rounded-md font-bold">
               <Search className="h-4 w-4" /> Track Application
             </Button>
             <Button variant="outline" onClick={() => navigate("/admission")}
-              className="h-11 rounded-full font-bold">
+              className="h-10 rounded-md font-bold">
               Back to Admission
             </Button>
           </div>
@@ -117,7 +117,7 @@ export default function AdmissionPortal() {
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={exit}
-            className="h-9 shrink-0 gap-1.5 rounded-full px-4 text-xs font-bold">
+            className="h-9 shrink-0 gap-1.5 rounded-md px-4 text-xs font-bold">
             <LogOut className="h-3.5 w-3.5" /> Exit
           </Button>
         </div>
@@ -141,11 +141,11 @@ export default function AdmissionPortal() {
                 </p>
               </div>
               <div className="flex flex-wrap justify-center gap-2">
-                <Button onClick={() => query.refetch()} className="h-9 gap-1.5 rounded-full px-4 text-xs font-bold">
+                <Button onClick={() => query.refetch()} className="h-9 gap-1.5 rounded-md px-4 text-xs font-bold">
                   <RefreshCw className="h-3.5 w-3.5" /> Try Again
                 </Button>
                 <Button variant="outline" onClick={() => navigate("/admission")}
-                  className="h-9 rounded-full px-4 text-xs font-bold">
+                  className="h-9 rounded-md px-4 text-xs font-bold">
                   Back to Admission
                 </Button>
               </div>
@@ -166,10 +166,10 @@ export default function AdmissionPortal() {
               </div>
               <div className="flex flex-wrap justify-center gap-2">
                 <Button onClick={() => { clearAdmissionSession(); navigate("/admission", { state: { view: "track" } }); }}
-                  className="h-9 gap-1.5 rounded-full px-4 text-xs font-bold">
+                  className="h-9 gap-1.5 rounded-md px-4 text-xs font-bold">
                   <Search className="h-3.5 w-3.5" /> Track Application
                 </Button>
-                <Button variant="outline" onClick={exit} className="h-9 rounded-full px-4 text-xs font-bold">
+                <Button variant="outline" onClick={exit} className="h-9 rounded-md px-4 text-xs font-bold">
                   Back to Admission
                 </Button>
               </div>
@@ -226,19 +226,19 @@ export default function AdmissionPortal() {
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   {hasFee && !feePaid ? (
-                    <Button asChild className="h-11 gap-2 rounded-full font-bold">
+                    <Button asChild className="h-10 gap-2 rounded-md font-bold">
                       <Link to={`/admission/application/${app.id}?pay=1`}>
                         <Wallet className="h-4 w-4" /> View &amp; Pay Fee
                       </Link>
                     </Button>
                   ) : (
-                    <Button asChild className="h-11 gap-2 rounded-full font-bold">
+                    <Button asChild className="h-10 gap-2 rounded-md font-bold">
                       <Link to={`/admission/application/${app.id}`}>
                         <ClipboardList className="h-4 w-4" /> View Application
                       </Link>
                     </Button>
                   )}
-                  <Button asChild variant="outline" className="h-11 gap-2 rounded-full font-bold">
+                  <Button asChild variant="outline" className="h-10 gap-2 rounded-md font-bold">
                     <Link to="/admission" onClick={(e) => { e.preventDefault(); navigate("/admission", { state: { view: "track" } }); }}>
                       <Search className="h-4 w-4" /> Track Application
                     </Link>

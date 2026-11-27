@@ -161,7 +161,7 @@ function FeeDialog({ app, onClose }: { app: Admission; onClose: () => void }) {
                       key={value}
                       type="button"
                       onClick={() => setMethod(value)}
-                      className={`rounded-full border px-2 py-2 text-[11px] font-bold transition-colors ${
+                      className={`rounded-md border px-2 py-2 text-[11px] font-bold transition-colors ${
                         method === value
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-border/60 bg-card text-muted-foreground hover:border-primary/40"
@@ -185,18 +185,18 @@ function FeeDialog({ app, onClose }: { app: Admission; onClose: () => void }) {
                 <Button
                   onClick={() => run("paid")}
                   disabled={paymentMut.isPending}
-                  className="h-11 w-full gap-1.5 rounded-full bg-green-600 text-xs font-bold text-white shadow-none hover:bg-green-700"
+                  className="h-10 w-full gap-1.5 rounded-md bg-green-700 text-xs font-bold text-white shadow-none hover:bg-green-800"
                 >
                   {paymentMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   Mark Fee Paid (Rs {app.processing_fee})
                 </Button>
                 {app.payment_status === "rejected" ? (
                   <Button variant="ghost" onClick={() => run("pending")} disabled={paymentMut.isPending}
-                    className="h-9 w-full rounded-full text-xs font-semibold">Reset to Fee Pending</Button>
+                    className="h-9 w-full rounded-md text-xs font-semibold">Reset to Fee Pending</Button>
                 ) : (
                   app.payment_status === "pending" && app.payment_reference && (
                     <Button variant="outline" onClick={() => run("rejected")} disabled={paymentMut.isPending}
-                      className="h-9 w-full rounded-full border-destructive/40 text-xs font-semibold text-destructive hover:bg-destructive/10">
+                      className="h-9 w-full rounded-md border-destructive/40 text-xs font-semibold text-destructive hover:bg-destructive/10">
                       Reject Payment
                     </Button>
                   )
@@ -246,7 +246,7 @@ function DeleteAllDialog({ count, open, onOpenChange, onBackup, backingUp }: {
           </DialogDescription>
         </DialogHeader>
         <Button variant="outline" onClick={onBackup} disabled={backingUp}
-          className="h-9 w-full gap-1.5 rounded-full border-green-600/50 text-xs font-bold text-green-700 hover:bg-green-600/10 hover:text-green-800 dark:text-green-400">
+          className="h-9 w-full gap-1.5 rounded-md border-green-600/50 text-xs font-bold text-green-700 hover:bg-green-600/10 hover:text-green-800 dark:text-green-400">
           {backingUp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
           Download Excel backup first
         </Button>
@@ -257,9 +257,9 @@ function DeleteAllDialog({ count, open, onOpenChange, onBackup, backingUp }: {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => { onOpenChange(false); setConfirmText(""); }}
-            className="h-10 flex-1 rounded-full text-xs font-bold">Cancel</Button>
+            className="h-9 flex-1 rounded-md text-xs font-bold">Cancel</Button>
           <Button variant="destructive" disabled={confirmText !== "DELETE ALL" || resetMut.isPending} onClick={doReset}
-            className="h-10 flex-1 rounded-full text-xs font-bold">
+            className="h-9 flex-1 rounded-md text-xs font-bold">
             {resetMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete All"}
           </Button>
         </div>
@@ -278,6 +278,10 @@ function SettingsBody({ settings, onDone }: { settings: AdmissionSettings; onDon
     processing_fee: String(settings.processing_fee ?? 100),
     open_date: settings.open_date ?? "",
     last_date: settings.last_date ?? "",
+    class9_last_date: (settings as any).class9_last_date ?? "",
+    board_fee_amount: String((settings as any).board_fee_amount ?? 1300),
+    board_fee_due_date: (settings as any).board_fee_due_date ?? "",
+    bisep_note: (settings as any).bisep_note ?? "",
     banner_message: settings.banner_message ?? "",
     contact_whatsapp: settings.contact_whatsapp ?? "",
   });
@@ -317,6 +321,10 @@ function SettingsBody({ settings, onDone }: { settings: AdmissionSettings; onDon
           processing_fee: Math.round(feeNum),
           open_date: form.open_date || null,
           last_date: form.last_date || null,
+          class9_last_date: form.class9_last_date || null,
+          board_fee_amount: Math.max(0, Math.round(Number(form.board_fee_amount) || 0)),
+          board_fee_due_date: form.board_fee_due_date || null,
+          bisep_note: form.bisep_note.trim() || null,
           banner_message: form.banner_message.trim() || null,
           contact_whatsapp: wa || null,
           payment_accounts: accounts,
@@ -357,7 +365,7 @@ function SettingsBody({ settings, onDone }: { settings: AdmissionSettings; onDon
           <Label className="text-xs font-bold">School Payment Accounts <span className="font-normal text-muted-foreground">(printed on the fee challan)</span></Label>
           <Button size="sm" variant="outline"
             onClick={() => setAccounts((a) => [...a, { type: "bank", bank_name: "", account_title: "", account_number: "", iban: "" }])}
-            className="h-8 gap-1 rounded-full px-3 text-[11px] font-bold shadow-none">
+            className="h-8 gap-1 rounded-md px-3 text-[11px] font-bold shadow-none">
             <Plus className="h-3.5 w-3.5" /> Add
           </Button>
         </div>
@@ -420,23 +428,54 @@ function SettingsBody({ settings, onDone }: { settings: AdmissionSettings; onDon
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="mb-1 block text-xs font-semibold">Session Year</Label>
-          <Input value={form.session_year} onChange={(e) => setForm((f) => ({ ...f, session_year: e.target.value }))} placeholder="2026" className="h-10 rounded-xl text-sm" />
+          <Input value={form.session_year} onChange={(e) => setForm((f) => ({ ...f, session_year: e.target.value }))} placeholder="2026" className="h-10 rounded-md text-sm" />
         </div>
         <div>
           <Label className="mb-1 block text-xs font-semibold">Processing Fee (Rs)</Label>
-          <Input type="number" min={0} value={form.processing_fee} onChange={(e) => setForm((f) => ({ ...f, processing_fee: e.target.value }))} placeholder="100" className="h-10 rounded-xl text-sm" />
+          <Input type="number" min={0} value={form.processing_fee} onChange={(e) => setForm((f) => ({ ...f, processing_fee: e.target.value }))} placeholder="100" className="h-10 rounded-md text-sm" />
         </div>
         <div>
           <Label className="mb-1 block text-xs font-semibold">Start Date</Label>
-          <Input type="date" value={form.open_date} onChange={(e) => setForm((f) => ({ ...f, open_date: e.target.value }))} className="h-10 rounded-xl text-sm" />
+          <Input type="date" value={form.open_date} onChange={(e) => setForm((f) => ({ ...f, open_date: e.target.value }))} className="h-10 rounded-md text-sm" />
         </div>
         <div>
           <Label className="mb-1 block text-xs font-semibold">Last Date</Label>
-          <Input type="date" value={form.last_date} onChange={(e) => setForm((f) => ({ ...f, last_date: e.target.value }))} className="h-10 rounded-xl text-sm" />
+          <Input type="date" value={form.last_date} onChange={(e) => setForm((f) => ({ ...f, last_date: e.target.value }))} className="h-10 rounded-md text-sm" />
         </div>
         <p className="col-span-2 -mt-1 text-[10.5px] leading-snug text-muted-foreground">
           Admission stays open until the last date; the fee deadline is its 23:59. Set the fee to 0 to switch the processing fee off entirely.
         </p>
+      </div>
+
+      {/* BISE Peshawar schedule (class 9) */}
+      <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/[0.04] p-3">
+        <p className="text-xs font-bold text-primary">BISE Peshawar — Class 9 enrollment</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="mb-1 block text-xs font-semibold">Class 9 — last date</Label>
+            <Input type="date" value={form.class9_last_date} onChange={(e) => setForm((f) => ({ ...f, class9_last_date: e.target.value }))} className="h-10 rounded-md text-sm" />
+            <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+              Closes Class 9 earlier than the global last date — the board's enrollment window ends first.
+            </p>
+          </div>
+          <div>
+            <Label className="mb-1 block text-xs font-semibold">Board Fee (Rs)</Label>
+            <Input type="number" min={0} value={form.board_fee_amount} onChange={(e) => setForm((f) => ({ ...f, board_fee_amount: e.target.value }))} placeholder="1300" className="h-10 rounded-md text-sm" />
+            <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+              9th enrollment fee shown to applicants (2026 schedule: Rs 1,300 normal).
+            </p>
+          </div>
+          <div className="col-span-2">
+            <Label className="mb-1 block text-xs font-semibold">Board Fee due date</Label>
+            <Input type="date" value={form.board_fee_due_date} onChange={(e) => setForm((f) => ({ ...f, board_fee_due_date: e.target.value }))} className="h-10 rounded-md text-sm" />
+          </div>
+          <div className="col-span-2">
+            <Label className="mb-1 block text-xs font-semibold">BISE Peshawar note (public)</Label>
+            <Input value={form.bisep_note} onChange={(e) => setForm((f) => ({ ...f, bisep_note: e.target.value }))}
+              placeholder="Class 9 enrollment closes 30 Sep 2026 (BISE Peshawar). Late fees apply after that."
+              className="h-10 rounded-md text-sm" />
+          </div>
+        </div>
       </div>
 
       <div>
@@ -451,7 +490,7 @@ function SettingsBody({ settings, onDone }: { settings: AdmissionSettings; onDon
         <p className="mt-1 text-[10.5px] text-muted-foreground">Applicants send their manual-payment screenshot here. Leave empty to use the school phone.</p>
       </div>
 
-      <Button onClick={save} disabled={saving} className="h-11 w-full gap-2 rounded-full text-xs font-bold shadow-none">
+      <Button onClick={save} disabled={saving} className="h-10 w-full gap-2 rounded-md text-xs font-bold shadow-none">
         {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : <><CheckCircle2 className="h-4 w-4" /> Save Settings</>}
       </Button>
     </div>
@@ -518,14 +557,14 @@ function ApplicationsList({ apps, onView, onFee, onDelete }: {
                 <td className="whitespace-nowrap px-3 py-3 align-middle text-muted-foreground">{format(new Date(app.created_at), "dd MMM yy")}</td>
                 <td className="px-3 py-3 align-middle">
                   <div className="flex items-center justify-center gap-1.5">
-                    <Button size="sm" onClick={() => onView(app)} className="h-8 gap-1.5 rounded-full px-3 text-[11.5px] font-semibold shadow-none">
+                    <Button size="sm" onClick={() => onView(app)} className="h-8 gap-1.5 rounded-md px-3 text-[11.5px] font-semibold shadow-none">
                       <Eye className="h-3.5 w-3.5" /> View
                     </Button>
-                    <Button size="sm" variant={app.payment_status === "paid" ? "outline" : "secondary"} onClick={() => onFee(app)} className="h-8 gap-1.5 rounded-full px-3 text-[11.5px] font-semibold shadow-none">
+                    <Button size="sm" variant={app.payment_status === "paid" ? "outline" : "secondary"} onClick={() => onFee(app)} className="h-8 gap-1.5 rounded-md px-3 text-[11.5px] font-semibold shadow-none">
                       <Wallet className="h-3.5 w-3.5" /> Fee
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => onDelete(app)} aria-label={`Delete ${app.full_name}`}
-                      className="h-8 gap-1.5 rounded-full border-red-300/70 px-3 text-[11.5px] font-semibold text-red-600 shadow-none hover:bg-red-500/10 hover:text-red-700">
+                      className="h-8 gap-1.5 rounded-md border-red-300/70 px-3 text-[11.5px] font-semibold text-red-600 shadow-none hover:bg-red-500/10 hover:text-red-700">
                       <Trash2 className="h-3.5 w-3.5" /> Delete
                     </Button>
                   </div>
@@ -555,14 +594,14 @@ function ApplicationsList({ apps, onView, onFee, onDelete }: {
               </div>
               <p className="mt-1.5 text-[10.5px] text-muted-foreground">Applied {format(new Date(app.created_at), "dd MMM yyyy")}</p>
               <div className="mt-3 grid w-full max-w-[300px] grid-cols-3 gap-1.5 border-t border-border/60 pt-3">
-                <Button size="sm" onClick={() => onView(app)} className="h-8 gap-1 rounded-full px-2 text-[11.5px] font-semibold shadow-none">
+                <Button size="sm" onClick={() => onView(app)} className="h-8 gap-1 rounded-md px-2 text-[11.5px] font-semibold shadow-none">
                   <Eye className="h-3.5 w-3.5" /> View
                 </Button>
-                <Button size="sm" variant={app.payment_status === "paid" ? "outline" : "secondary"} onClick={() => onFee(app)} className="h-8 gap-1 rounded-full px-2 text-[11.5px] font-semibold shadow-none">
+                <Button size="sm" variant={app.payment_status === "paid" ? "outline" : "secondary"} onClick={() => onFee(app)} className="h-8 gap-1 rounded-md px-2 text-[11.5px] font-semibold shadow-none">
                   <Wallet className="h-3.5 w-3.5" /> Fee
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => onDelete(app)}
-                  className="h-8 gap-1 rounded-full border-red-300/70 px-2 text-[11.5px] font-semibold text-red-600 shadow-none hover:bg-red-500/10">
+                  className="h-8 gap-1 rounded-md border-red-300/70 px-2 text-[11.5px] font-semibold text-red-600 shadow-none hover:bg-red-500/10">
                   <Trash2 className="h-3.5 w-3.5" /> Delete
                 </Button>
               </div>
@@ -583,7 +622,7 @@ function SubTabs({ subTab, onTab }: { subTab: SubTab; onTab: (t: SubTab) => void
       key={id}
       type="button"
       onClick={() => onTab(id)}
-      className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-full border px-3.5 text-[12px] font-semibold transition-colors ${cls} ${
+      className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-3.5 text-[12px] font-semibold transition-colors ${cls} ${
         subTab === id
           ? "border-primary bg-primary text-white shadow-sm shadow-primary/25"
           : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-primary"
@@ -681,7 +720,7 @@ const AdminAdmissions = () => {
       const { exportApplicationsExcel } = await import("@/lib/admissionExcel");
       const { data: rows, error } = await supabase
         .from("admissions")
-        .select("id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, payment_status, payment_reference, payment_method, payment_receipt, processing_fee, fee_deadline, paid_at, father_cnic, occupation, created_at, updated_at")
+        .select("id, reference_no, full_name, father_name, date_of_birth, b_form_no, contact_number, whatsapp_number, home_address, gender, applying_class, admission_type, previous_school, previous_class, previous_marks, year_of_passing, status, admin_note, rejection_reason, admission_roll_no, migration_step, previous_board, board_enrollment_no, board_roll_no, previous_result, slc_no, slc_date, migration_cert_no, previously_enrolled, admission_date, bisep_enrollment_no, bisep_enrolled_at, board_fee_status, board_fee_paid_at, payment_status, payment_reference, payment_method, payment_receipt, processing_fee, fee_deadline, paid_at, father_cnic, occupation, created_at, updated_at")
         .order("created_at", { ascending: false })
         .limit(5000);
       if (error) throw error;
@@ -763,28 +802,28 @@ const AdminAdmissions = () => {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
             placeholder="Search ID, name or CNIC"
-            className="h-9 rounded-full pl-9 text-[12.5px]"
+            className="h-9 rounded-md pl-9 text-[12.5px]"
           />
         </div>
         <div className="flex flex-nowrap items-center justify-center gap-2">
           <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}
-            className="h-8 gap-1 whitespace-nowrap rounded-full px-3 text-[11.5px] font-semibold shadow-none">
+            className="h-8 gap-1 whitespace-nowrap rounded-md px-3 text-[11.5px] font-semibold shadow-none">
             <Settings2 className="h-3.5 w-3.5" /> Settings
           </Button>
           {stats.total > 0 && !search.trim() && (
             <Button size="sm" variant="outline" onClick={() => setDeleteAllOpen(true)}
-              className="h-8 gap-1 whitespace-nowrap rounded-full border-red-300/70 px-3 text-[11.5px] font-semibold text-red-600 shadow-none hover:bg-red-500/10 hover:text-red-700">
+              className="h-8 gap-1 whitespace-nowrap rounded-md border-red-300/70 px-3 text-[11.5px] font-semibold text-red-600 shadow-none hover:bg-red-500/10 hover:text-red-700">
               <Trash2 className="h-3.5 w-3.5" /> Delete All
             </Button>
           )}
         </div>
         <div className="flex flex-nowrap items-center justify-center gap-2">
           <Button size="sm" onClick={exportExcel} disabled={exporting || !stats.total}
-            className="h-8 gap-1 whitespace-nowrap rounded-full bg-green-700 px-3 text-[11.5px] font-semibold text-white shadow-none hover:bg-green-800">
+            className="h-8 gap-1 whitespace-nowrap rounded-md bg-green-700 px-3 text-[11.5px] font-semibold text-white shadow-none hover:bg-green-800">
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Export Excel
           </Button>
           <Button size="sm" onClick={() => setWalkinOpen(true)}
-            className="h-8 gap-1 whitespace-nowrap rounded-full px-3 text-[11.5px] font-semibold shadow-none">
+            className="h-8 gap-1 whitespace-nowrap rounded-md px-3 text-[11.5px] font-semibold shadow-none">
             <UserPlus className="h-3.5 w-3.5" /> Add Walk-in / Import
           </Button>
         </div>
@@ -800,7 +839,7 @@ const AdminAdmissions = () => {
           <div className="py-14 text-center">
             <AlertTriangle className="mx-auto mb-2 h-8 w-8 text-red-400" />
             <p className="text-sm font-semibold">Couldn’t load the applications</p>
-            <Button size="sm" variant="outline" onClick={() => refetch()} className="mt-3 h-8 gap-1.5 rounded-full px-4 text-xs font-bold">
+            <Button size="sm" variant="outline" onClick={() => refetch()} className="mt-3 h-8 gap-1.5 rounded-md px-4 text-xs font-bold">
               <RefreshCw className="h-3.5 w-3.5" /> Try again
             </Button>
           </div>
@@ -822,10 +861,10 @@ const AdminAdmissions = () => {
             </p>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}
-                className="h-8 w-8 rounded-full p-0 shadow-none" aria-label="Previous page"><ChevronLeft className="h-3.5 w-3.5" /></Button>
+                className="h-8 w-8 rounded-md p-0 shadow-none" aria-label="Previous page"><ChevronLeft className="h-3.5 w-3.5" /></Button>
               <span className="text-xs font-semibold tabular-nums">{safePage + 1} / {pages}</span>
               <Button size="sm" variant="outline" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)}
-                className="h-8 w-8 rounded-full p-0 shadow-none" aria-label="Next page"><ChevronRight className="h-3.5 w-3.5" /></Button>
+                className="h-8 w-8 rounded-md p-0 shadow-none" aria-label="Next page"><ChevronRight className="h-3.5 w-3.5" /></Button>
             </div>
           </div>
         )}
@@ -843,6 +882,7 @@ const AdminAdmissions = () => {
             app={all.find((a) => a.id === selected.id) ?? selected}
             onClose={() => setSelected(null)}
             onOpenFee={(a) => setFeeApp(a)}
+            onChanged={() => refetch()}
           />
         </Suspense>
       )}
@@ -864,9 +904,9 @@ const AdminAdmissions = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-9 flex-1 rounded-full px-4 text-xs font-semibold shadow-none sm:flex-none">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="h-9 flex-1 rounded-md px-4 text-xs font-semibold shadow-none sm:flex-none">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleteMut.isPending}
-              className="h-9 flex-1 rounded-full bg-red-600 px-4 text-xs font-semibold shadow-none hover:bg-red-700 sm:flex-none">
+              className="h-9 flex-1 rounded-md bg-red-600 px-4 text-xs font-semibold shadow-none hover:bg-red-700 sm:flex-none">
               {deleteMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>

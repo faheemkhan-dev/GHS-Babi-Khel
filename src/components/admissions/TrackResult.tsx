@@ -198,7 +198,7 @@ export default function TrackResult({ result }: { result: any }) {
                 type="button"
                 onClick={() => setShowPay((v) => !v)}
                 aria-expanded={showPay}
-                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-primary px-3 text-[11px] font-bold text-primary-foreground active:opacity-80"
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-primary px-3 text-[11px] font-bold text-primary-foreground active:opacity-80"
               >
                 Pay fee <ChevronDown className={`h-3 w-3 transition-transform ${showPay ? "rotate-180" : ""}`} />
               </button>

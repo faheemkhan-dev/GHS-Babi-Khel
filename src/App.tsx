@@ -98,6 +98,7 @@ const Admission        = lazyWithRetry(() => import("./pages/Admission"));
 // Applicant Dashboard + Application View (GHSS-Ghallanai portal flow)
 const AdmissionPortal  = lazyWithRetry(() => import("./pages/admission/AdmissionPortal"));
 const ApplicationView  = lazyWithRetry(() => import("./pages/admission/ApplicationView"));
+const AdmissionVerify  = lazyWithRetry(() => import("./pages/admission/AdmissionVerify"));
 const Search           = lazyWithRetry(() => import("./pages/Search"));
 const NoticeDetail     = lazyWithRetry(() => import("./pages/NoticeDetail"));
 const Contact          = lazyWithRetry(() => import("./pages/Contact"));
@@ -258,6 +259,7 @@ const App = () => (
                 <Route path="/admission"               element={<Admission />} />
                 <Route path="/admission/portal"          element={<AdmissionPortal />} />
                 <Route path="/admission/application/:id" element={<ApplicationView />} />
+                <Route path="/admission/verify"          element={<AdmissionVerify />} />
                 <Route path="/faq"                    element={<FAQ />} />
                 <Route path="*"                        element={<NotFound />} />
               </Routes>

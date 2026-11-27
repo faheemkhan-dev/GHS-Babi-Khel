@@ -42,20 +42,12 @@ import {
   type AdmissionPaymentAccount,
 } from "@/lib/admissionPayment";
 import { supabasePublic } from "@/lib/supabase";
+import { MIGRATION_STEPS } from "@/lib/admissionRules";
 
 const OnlinePayPanel = lazy(() => import("@/components/admissions/OnlinePayPanel"));
 const FeeChallan = lazy(() => import("@/components/admissions/FeeChallan"));
 const InterviewSlotBooking = lazy(() => import("@/components/admissions/InterviewSlotBooking"));
 const AdmitCard = lazy(() => import("@/components/admissions/AdmitCard"));
-
-const MIGRATION_STEPS = [
-  "Student submits online eligibility application to our school",
-  "Merit list is published — merit-listed students submit documents (incl. School Leaving Certificate)",
-  "Current school initiates migration on the BISEP portal (school-to-school)",
-  "Our school accepts the migration on the BISEP portal",
-  "Any BISEP fee/challan (if applicable) is paid",
-  "School admission & enrollment confirmed",
-];
 
 function fmtSlotTime(time: string): string {
   const [h, m] = time.split(":").map(Number);
@@ -147,10 +139,10 @@ export default function ApplicationView() {
           </p>
           <div className="mt-6 flex flex-col gap-2.5">
             <Button onClick={() => navigate("/admission", { state: { view: "track", query: returnRef } })}
-              className="h-11 gap-2 rounded-full font-bold">
+              className="h-10 gap-2 rounded-md font-bold">
               <RefreshCw className="h-4 w-4" /> {returnRef ? "Track This Application" : "Track Application"}
             </Button>
-            <Button variant="outline" onClick={() => navigate("/admission")} className="h-11 rounded-full font-bold">
+            <Button variant="outline" onClick={() => navigate("/admission")} className="h-10 rounded-md font-bold">
               Back to Admission
             </Button>
           </div>
@@ -170,10 +162,10 @@ export default function ApplicationView() {
           <h1 className="text-xl font-bold">Application not found or session expired</h1>
           <p className="mt-2 text-sm text-muted-foreground">This link does not match the application saved on this device.</p>
           <div className="mt-6 flex flex-col gap-2.5">
-            <Button onClick={() => navigate(`/admission/application/${app.id}`)} className="h-11 gap-2 rounded-full font-bold">
+            <Button onClick={() => navigate(`/admission/application/${app.id}`)} className="h-10 gap-2 rounded-md font-bold">
               Open My Application
             </Button>
-            <Button variant="outline" onClick={() => navigate("/admission/portal")} className="h-11 rounded-full font-bold">
+            <Button variant="outline" onClick={() => navigate("/admission/portal")} className="h-10 rounded-md font-bold">
               Back to Dashboard
             </Button>
           </div>
@@ -211,10 +203,10 @@ export default function ApplicationView() {
           </p>
           <div className="mt-6 flex flex-col gap-2.5">
             <Button onClick={() => { clearAdmissionSession(); navigate("/admission", { state: { view: "track" } }); }}
-              className="h-11 gap-2 rounded-full font-bold">
+              className="h-10 gap-2 rounded-md font-bold">
               Track Application
             </Button>
-            <Button variant="outline" onClick={() => navigate("/admission")} className="h-11 rounded-full font-bold">
+            <Button variant="outline" onClick={() => navigate("/admission")} className="h-10 rounded-md font-bold">
               Back to Admission
             </Button>
           </div>
@@ -272,6 +264,13 @@ export default function ApplicationView() {
         previousClass: maybe(app.previous_class),
         previousMarks: maybe(app.previous_marks),
         yearOfPassing: maybe(app.year_of_passing),
+        previousBoard: maybe(app.previous_board),
+        boardEnrollmentNo: maybe(app.board_enrollment_no),
+        boardRollNo: maybe(app.board_roll_no),
+        previousResult: maybe(app.previous_result),
+        slcNo: maybe(app.slc_no),
+        slcDate: maybe(app.slc_date),
+        migrationCertNo: maybe(app.migration_cert_no),
       });
     } catch (e: any) {
       toast.error(`Could not build the PDF: ${e?.message || "try again"}`);
@@ -321,12 +320,12 @@ export default function ApplicationView() {
         {hasFee && (
           <div className="mt-4 grid grid-cols-2 gap-2.5">
             <Button variant="outline" onClick={() => downloadChallanPdf(true)} disabled={!!pdfBusy}
-              className="h-11 gap-2 rounded-full text-xs font-bold">
+              className="h-10 gap-2 rounded-md text-xs font-bold">
               {pdfBusy === "challan" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
               {liveRef ? "Fee Challan" : "Generate + Fee Challan"}
             </Button>
             <Button variant="outline" onClick={downloadApplicationPdf} disabled={!!pdfBusy}
-              className="h-11 gap-2 rounded-full text-xs font-bold">
+              className="h-10 gap-2 rounded-md text-xs font-bold">
               {pdfBusy === "application" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
               Application PDF
             </Button>
@@ -335,7 +334,7 @@ export default function ApplicationView() {
         {!hasFee && (
           <div className="mt-4">
             <Button variant="outline" onClick={downloadApplicationPdf} disabled={!!pdfBusy}
-              className="h-11 w-full gap-2 rounded-full text-xs font-bold">
+              className="h-10 w-full gap-2 rounded-md text-xs font-bold">
               {pdfBusy === "application" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
               Application PDF
             </Button>
@@ -469,6 +468,8 @@ export default function ApplicationView() {
               { label: "Applying for Class", value: `Class ${app.applying_class}` },
               { label: "Admission Type", value: app.admission_type === "migration" ? "Migration / Transfer" : "Fresh Admission" },
               { label: "Admission No.", value: maybe(app.admission_roll_no) ?? "Given at admission" },
+              { label: "Admission Date", value: app.admission_date ? formatFeeDate(app.admission_date) : null },
+              { label: "BISEP Enrollment No.", value: maybe(app.bisep_enrollment_no) ?? (app.applying_class === "9" ? "Issued after board enrollment" : null) },
               { label: "Applied On", value: formatFeeDate(app.created_at) },
             ]}
           />
@@ -494,7 +495,7 @@ export default function ApplicationView() {
               <button
                 type="button"
                 onClick={() => setShowPii((v) => !v)}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/70 px-3 text-[11px] font-bold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border/70 px-3 text-[11px] font-bold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
               >
                 {showPii ? <><EyeOff className="h-3.5 w-3.5" /> Hide B-Form &amp; mobile</> : <><Eye className="h-3.5 w-3.5" /> Show B-Form &amp; mobile</>}
               </button>
@@ -506,6 +507,14 @@ export default function ApplicationView() {
                 { label: "Previous Class", value: maybe(app.previous_class) },
                 { label: "Previous Marks / Grade", value: maybe(app.previous_marks) },
                 { label: "Year of Passing", value: maybe(app.year_of_passing) },
+                ...(maybe(app.previous_board) ? [{ label: "Previous Board", value: app.previous_board }] : []),
+                ...(maybe(app.board_enrollment_no) ? [{ label: "Board Enrollment No.", value: <span className="font-mono">{app.board_enrollment_no}</span> }] : []),
+                ...(maybe(app.board_roll_no) ? [{ label: "9th Roll No.", value: <span className="font-mono">{app.board_roll_no}</span> }] : []),
+                ...(maybe(app.previous_result) ? [{ label: "9th Result", value: app.previous_result }] : []),
+                ...(maybe(app.slc_no) ? [{ label: "SLC No.", value: <span className="font-mono">{app.slc_no}</span> }] : []),
+                ...(app.slc_date ? [{ label: "SLC Date", value: formatFeeDate(app.slc_date) }] : []),
+                ...(maybe(app.migration_cert_no) ? [{ label: "Migration Cert. No.", value: <span className="font-mono">{app.migration_cert_no}</span> }] : []),
+                ...(app.previously_enrolled ? [{ label: "Enrolled with a board before", value: "Yes" }] : []),
               ]}
             />
           </div>
@@ -536,18 +545,22 @@ export default function ApplicationView() {
             </p>
           </div>
 
-          {/* ── Migration progress (GHS flow) ─────────────────────────────── */}
+          {/* ── Migration progress (BISEP: the RECEIVING school applies) ─── */}
           {isMigration && (
             <Card>
               <CardContent className="p-5">
-                <p className="mb-4 flex items-center gap-2 text-sm font-bold">
+                <p className="mb-1 flex items-center gap-2 text-sm font-bold">
                   <RefreshCw className="h-4 w-4 text-primary" /> Migration Progress
+                </p>
+                <p className="mb-4 text-[11px] leading-snug text-muted-foreground">
+                  School-to-school migration on the BISE Peshawar portal is completed by the schools —
+                  our school (the receiving school) applies online. Track each step here.
                 </p>
                 <div className="overflow-x-auto pb-2">
                   <div className="flex min-w-[600px] items-start gap-1">
                     {MIGRATION_STEPS.map((s, i) => {
-                      const done = i + 1 < currentMigStep;
-                      const current = i + 1 === currentMigStep;
+                      const done = i + 1 < currentMigStep || (i === MIGRATION_STEPS.length - 1 && app.status === "admitted");
+                      const current = i + 1 === currentMigStep && app.status !== "admitted";
                       return (
                         <div key={i} className="flex-1 text-center">
                           <div className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold transition-all ${
@@ -581,6 +594,39 @@ export default function ApplicationView() {
                 }}
               />
             </Suspense>
+          )}
+
+          {/* ── BISE Peshawar enrollment fee (admitted Class 9) ──────────── */}
+          {app.status === "admitted" && app.applying_class === "9" && (
+            <Card className="rounded-2xl border-border/70">
+              <CardContent className="p-4">
+                <p className="flex items-start gap-2 text-sm font-semibold leading-relaxed">
+                  <Landmark className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  BISE Peshawar Enrollment (Class 9)
+                </p>
+                <div className="mt-2.5">
+                  <AdmissionReviewTable
+                    title="Board Enrollment"
+                    rows={[
+                      { label: "BISEP Enrollment No.", value: maybe(app.bisep_enrollment_no) ?? "The school will share it after online enrollment" },
+                      {
+                        label: "Board Fee Status",
+                        value: app.board_fee_status === "paid"
+                          ? <span className="font-semibold text-green-600">Paid{app.board_fee_paid_at ? ` · ${formatFeeDate(app.board_fee_paid_at)}` : ""}</span>
+                          : app.board_fee_status === "pending"
+                            ? <span className="font-semibold text-amber-600">To be deposited with the board</span>
+                            : "—",
+                      },
+                    ]}
+                  />
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  {app.board_fee_status === "paid"
+                    ? "The 9th-class enrollment fee has been deposited with BISE Peshawar. The Enrollment Card is issued after the board confirms."
+                    : "The 9th-class enrollment fee (Rs 1,300 normal, 2026 schedule) is deposited by the school with BISE Peshawar. The office will contact you — do not pay any board fee to anyone outside the school office."}
+                </p>
+              </CardContent>
+            </Card>
           )}
 
           {/* ── Admission-fee challan voucher (GHS flow) ──────────────────── */}

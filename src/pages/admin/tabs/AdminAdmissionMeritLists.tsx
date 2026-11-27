@@ -1,20 +1,19 @@
 // src/pages/admin/tabs/AdminAdmissionMeritLists.tsx — the ADMIN Merit Lists
-// console (GHSS Ghallanai AdminMeritLists, ported to the GHS Babi Khel
-// High School model: lists are per CLASS, ranking = previous class marks).
+// console. Lists are per CLASS and per TYPE (fresh / migration), ranked on
+// previous class marks:
 //
-//   • One-Click Merit List hero card → Auto Merit dialog (Preview / Generate)
-//   • Lists table: every draft + published list per class, with real
-//     listed / not-listed counts, publish / unpublish, delete (drafts only)
-//   • View dialog = exactly what the public sees + inline editable remarks
-//
-// All data goes through the hooks in src/hooks/useAdmission.ts (RPCs from
-// Supabase/Migration/20_admission_payment_merit.sql).
+//   • Auto Merit dialog: class (or all), type (all/fresh/migration), list no.,
+//     dates, instructions, publish switch → Preview (dry run) / Generate.
+//   • Lists table: published/draft per class, publish / unpublish, delete
+//     (drafts), show/hide "Not Merit Listed" names (privacy), PDF download.
+//   • View dialog: exactly what the public sees + inline editable remarks.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { useMemo, useState } from "react";
 import {
   Trophy, Zap, ScanSearch, Eye, Globe, GlobeLock, Trash2, Loader2,
   CalendarDays, CalendarCheck2, Save, AlertTriangle, ListChecks,
+  FileDown, EyeOff, Eye as EyeIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,13 +22,15 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import toast from "react-hot-toast";
 import {
   useAdminAdmissionMeritLists, useAdminAdmissionMeritList,
   useAdmissionMeritAuto, useAdmissionMeritPublish, useAdmissionMeritDelete,
-  useAdmissionMeritRemark,
+  useAdmissionMeritRemark, useAdmissionMeritShowNotListed,
 } from "@/hooks/useAdmission";
+import { downloadMeritListPdf } from "@/lib/admissionMeritPdf";
 
 interface ClassResult {
   class: string;
@@ -56,6 +57,7 @@ interface MeritListRow {
   is_published: boolean;
   published_at: string | null;
   created_at: string;
+  show_not_listed?: boolean;
   listed_count: number;
   not_listed_count: number;
 }
@@ -71,7 +73,7 @@ function fmtDate(v: string | null | undefined): string {
   }
 }
 
-/* ══ Auto Merit dialog — One-Click Merit List (Preview / Generate All) ══════ */
+/* ══ Auto Merit dialog — class + type scoped generation ════════════════════ */
 function AutoMeritDialog({ open, onClose, presetListNo }: { open: boolean; onClose: () => void; presetListNo: number }) {
   const meritMut = useAdmissionMeritAuto();
   const [listNo, setListNo] = useState(String(Math.max(1, presetListNo)));
@@ -79,15 +81,19 @@ function AutoMeritDialog({ open, onClose, presetListNo }: { open: boolean; onClo
   const [lastDate, setLastDate] = useState("");
   const [instructions, setInstructions] = useState("");
   const [publish, setPublish] = useState(false);
+  const [cls, setCls] = useState("all");
+  const [type, setType] = useState<"all" | "fresh" | "migration">("all");
   const [preview, setPreview] = useState<ClassResult[] | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
   const n = Math.max(1, Math.floor(Number(listNo) || 0));
+  const scopeLabel = cls === "all" ? "ALL classes" : `Class ${cls}`;
+  const typeLabel = type === "all" ? "" : type === "fresh" ? " (Fresh)" : " (Migration)";
 
   const run = async (dryRun: boolean) => {
     if (!dryRun) {
       const ok = window.confirm(
-        `Create merit list #${n} for ALL classes now?\n\nEvery fee-paid applicant is ranked by previous class marks and the top ones up to each class's seats become Merit Listed. Old lists of this number are replaced.`,
+        `Create merit list #${n} for ${scopeLabel}${typeLabel} now?\n\nEvery fee-paid applicant is ranked by previous class marks and the top ones up to each class's seats become Merit Listed. Old lists of this number are replaced.`,
       );
       if (!ok) return;
     }
@@ -100,7 +106,8 @@ function AutoMeritDialog({ open, onClose, presetListNo }: { open: boolean; onClo
         instructions: instructions || null,
         publish,
         dry_run: dryRun,
-        class: null,
+        class: cls === "all" ? null : cls,
+        type,
       });
       if (dryRun) {
         setPreview((res?.lists ?? []) as ClassResult[]);
@@ -128,7 +135,7 @@ function AutoMeritDialog({ open, onClose, presetListNo }: { open: boolean; onClo
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold-strong">
               <Zap className="h-4 w-4" />
             </span>
-            One-Click Merit List
+            Merit List Generator
           </DialogTitle>
         </DialogHeader>
 
@@ -137,15 +144,39 @@ function AutoMeritDialog({ open, onClose, presetListNo }: { open: boolean; onClo
             <div>
               <Label className="text-xs font-bold mb-1 block">List No.</Label>
               <Input type="number" min={1} max={50} value={listNo}
-                onChange={(e) => setListNo(e.target.value)} className="h-9 text-sm" />
+                onChange={(e) => setListNo(e.target.value)} className="h-9 rounded-md text-sm" />
             </div>
             <div>
+              <Label className="text-xs font-bold mb-1 block">Class</Label>
+              <Select value={cls} onValueChange={setCls}>
+                <SelectTrigger className="h-9 rounded-md text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All classes</SelectItem>
+                  {["6", "7", "8", "9", "10"].map((c) => <SelectItem key={c} value={c}>Class {c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-bold mb-1 block">Type</Label>
+              <Select value={type} onValueChange={(v) => setType(v as "all" | "fresh" | "migration")}>
+                <SelectTrigger className="h-9 rounded-md text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="fresh">Fresh</SelectItem>
+                  <SelectItem value="migration">Migration</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
               <Label className="text-xs font-bold mb-1 block">Start Date</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 text-sm" />
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 rounded-md text-sm" />
             </div>
             <div>
               <Label className="text-xs font-bold mb-1 block">Last Date</Label>
-              <Input type="date" value={lastDate} onChange={(e) => setLastDate(e.target.value)} className="h-9 text-sm" />
+              <Input type="date" value={lastDate} onChange={(e) => setLastDate(e.target.value)} className="h-9 rounded-md text-sm" />
             </div>
           </div>
 
@@ -160,7 +191,7 @@ function AutoMeritDialog({ open, onClose, presetListNo }: { open: boolean; onClo
             <div className="min-w-0">
               <p className="text-xs font-bold text-foreground">Publish immediately.</p>
               <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                Lists go public right away, with Merit Listed and Not Merit Listed students. Leave off to check them as drafts first.
+                Lists go public right away. Leave off to check them as drafts first.
               </p>
             </div>
             <Switch checked={publish} onCheckedChange={setPublish} />
@@ -195,7 +226,7 @@ function AutoMeritDialog({ open, onClose, presetListNo }: { open: boolean; onClo
                     </p>
                   )}
                   {c.unpaid > 0 && (
-                    <p className="mt-1 text-[10px] text-muted-foreground">
+                    <p className="mt-1.5 text-[10px] text-muted-foreground">
                       {c.unpaid} application(s) with unpaid fee are not included.
                     </p>
                   )}
@@ -211,14 +242,14 @@ function AutoMeritDialog({ open, onClose, presetListNo }: { open: boolean; onClo
 
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => run(true)} disabled={previewing || meritMut.isPending}
-              className="h-10 flex-1 gap-1.5 rounded-full text-xs font-bold">
+              className="h-9 flex-1 gap-1.5 rounded-md text-xs font-bold">
               {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
               Preview
             </Button>
             <Button onClick={() => run(false)} disabled={previewing || meritMut.isPending}
-              className="h-10 flex-1 gap-1.5 rounded-full text-xs font-bold">
+              className="h-9 flex-1 gap-1.5 rounded-md text-xs font-bold">
               {meritMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-              Generate All
+              Generate{cls === "all" ? " All" : ` Class ${cls}`}
             </Button>
           </div>
 
@@ -233,12 +264,14 @@ function AutoMeritDialog({ open, onClose, presetListNo }: { open: boolean; onClo
   );
 }
 
-/* ══ View list dialog — what the public sees + inline editable remarks ═════ */
+/* ══ View list dialog — public view + editable remarks + PDF ═══════════════ */
 function ViewListDialog({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { data, isLoading } = useAdminAdmissionMeritList(id);
   const remarkMut = useAdmissionMeritRemark();
+  const showMut = useAdmissionMeritShowNotListed();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const saveRemark = async (entryId: string) => {
     const value = (drafts[entryId] ?? "").trim();
@@ -250,6 +283,40 @@ function ViewListDialog({ id, onClose }: { id: string | null; onClose: () => voi
       toast.error(e?.message || "Could not save the remark.");
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const downloadPdf = async () => {
+    if (!data?.ok) return;
+    setPdfBusy(true);
+    try {
+      await downloadMeritListPdf({
+        list: data.list,
+        entries: data.entries,
+        listedCount: data.listed_count,
+        notListedCount: data.not_listed_count,
+      });
+    } catch (e: any) {
+      toast.error(e?.message || "Could not build the PDF.");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const toggleNotListed = async () => {
+    if (!data?.ok) return;
+    const next = !data.list.show_not_listed;
+    const ok = window.confirm(
+      next
+        ? "Show the names of Not Merit Listed students on the public list?"
+        : "HIDE the names of Not Merit Listed students from the public list? (their count stays visible)",
+    );
+    if (!ok) return;
+    try {
+      await showMut.mutateAsync({ id: data.list.id, show: next });
+      toast.success(next ? "Not-listed names are visible." : "Not-listed names are hidden.");
+    } catch (e: any) {
+      toast.error(e?.message || "Could not update the visibility.");
     }
   };
 
@@ -293,22 +360,34 @@ function ViewListDialog({ id, onClose }: { id: string | null; onClose: () => voi
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+              <div className="flex flex-wrap items-center justify-center gap-1.5 text-[11px]">
                 <span className="rounded-full border border-green-200 bg-green-50 px-2.5 py-1 font-bold text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
                   {data.listed_count} Merit Listed
                 </span>
                 {data.not_listed_count > 0 && (
                   <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 font-bold text-red-600 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
-                    {data.not_listed_count} Not Merit Listed
+                    {data.not_listed_count} Not Merit Listed{!data.list.show_not_listed ? " (names hidden)" : ""}
                   </span>
                 )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" onClick={downloadPdf} disabled={pdfBusy}
+                  className="h-8 gap-1.5 rounded-md text-[11.5px] font-bold">
+                  {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                  Download PDF
+                </Button>
+                <Button variant="outline" size="sm" onClick={toggleNotListed} disabled={showMut.isPending}
+                  className="h-8 gap-1.5 rounded-md text-[11.5px] font-bold">
+                  {data.list.show_not_listed ? <><EyeOff className="h-3.5 w-3.5" /> Hide Not-Listed Names</> : <><EyeIcon className="h-3.5 w-3.5" /> Show Not-Listed Names</>}
+                </Button>
               </div>
 
               <p className="text-[11px] leading-snug text-muted-foreground">
                 Remarks are editable (e.g. &ldquo;2 Session(s) Missed&rdquo;), they appear on the public merit list.
               </p>
 
-              {/* Mobile: cards with centered remark inputs */}
+              {/* Mobile: cards */}
               <div className="space-y-2 md:hidden">
                 {data.entries.map((e) => (
                   <div key={e.id}
@@ -330,9 +409,9 @@ function ViewListDialog({ id, onClose }: { id: string | null; onClose: () => voi
                         value={drafts[e.id] ?? e.remarks ?? ""}
                         onChange={(ev) => setDrafts((d) => ({ ...d, [e.id]: ev.target.value }))}
                         placeholder="Remark"
-                        className="h-8 flex-1 rounded-lg text-xs" />
+                        className="h-8 flex-1 rounded-md text-xs" />
                       <Button size="sm" variant="outline" onClick={() => saveRemark(e.id)} disabled={savingId === e.id}
-                        className="h-8 w-9 rounded-lg p-0">
+                        className="h-8 w-9 rounded-md p-0">
                         {savingId === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                       </Button>
                     </div>
@@ -340,7 +419,7 @@ function ViewListDialog({ id, onClose }: { id: string | null; onClose: () => voi
                 ))}
               </div>
 
-              {/* Desktop: table with inline remark inputs */}
+              {/* Desktop: table */}
               <div className="hidden md:block overflow-x-auto rounded-xl border border-border/60">
                 <table className="w-full text-sm">
                   <thead>
@@ -368,9 +447,9 @@ function ViewListDialog({ id, onClose }: { id: string | null; onClose: () => voi
                                 value={drafts[e.id] ?? e.remarks ?? ""}
                                 onChange={(ev) => setDrafts((d) => ({ ...d, [e.id]: ev.target.value }))}
                                 placeholder="—"
-                                className="h-8 w-36 rounded-lg text-xs" />
+                                className="h-8 w-36 rounded-md text-xs" />
                               <Button size="sm" variant="outline" onClick={() => saveRemark(e.id)} disabled={savingId === e.id}
-                                className="h-8 w-9 rounded-lg p-0">
+                                className="h-8 w-9 rounded-md p-0">
                                 {savingId === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                               </Button>
                             </div>
@@ -412,7 +491,7 @@ function ViewListDialog({ id, onClose }: { id: string | null; onClose: () => voi
   );
 }
 
-/* ══ MAIN — One-Click hero + lists table ═══════════════════════════════════ */
+/* ══ MAIN — generator hero + lists table ═══════════════════════════════════ */
 export default function AdminAdmissionMeritLists() {
   const { data: rows, isLoading } = useAdminAdmissionMeritLists();
   const publishMut = useAdmissionMeritPublish();
@@ -456,22 +535,22 @@ export default function AdminAdmissionMeritLists() {
 
   return (
     <div className="space-y-4">
-      {/* ── One-Click Merit List hero (GHSS) ─────────────────────────────── */}
+      {/* ── Generator hero ────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-gold/40 bg-gradient-to-br from-primary/[0.06] via-card to-gold/[0.08] p-4 sm:p-5">
         <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:text-left">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gold/15 text-gold-strong ring-2 ring-gold/25">
             <Zap className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-bold text-foreground">One-Click Merit List</h3>
+            <h3 className="text-sm font-bold text-foreground">Merit List Generator</h3>
             <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-              Ranks every fee-paid applicant (online + walk-in) of all classes by marks and selects the top
-              ones up to the seats fixed in Classes &amp; Seats.
+              Ranks fee-paid applicants by previous class marks, up to each class's seats. Generate for all
+              classes or one class, for all applicants or Fresh / Migration separately.
             </p>
           </div>
           <Button onClick={() => setAutoOpen(true)}
-            className="h-10 shrink-0 gap-1.5 whitespace-nowrap rounded-full px-5 text-xs font-bold">
-            <Zap className="h-4 w-4" /> Auto Merit List (All Classes)
+            className="h-9 shrink-0 gap-1.5 whitespace-nowrap rounded-md px-5 text-xs font-bold">
+            <Zap className="h-4 w-4" /> Generate Merit List
           </Button>
         </div>
       </div>
@@ -488,7 +567,7 @@ export default function AdminAdmissionMeritLists() {
               <Trophy className="mx-auto mb-2 h-8 w-8 text-gold-strong/60" />
               <p className="text-sm font-semibold text-foreground">No merit list generated yet.</p>
               <p className="mx-auto mt-1 max-w-md px-4 text-xs leading-relaxed text-muted-foreground">
-                Click <b>Auto Merit List (All Classes)</b>. Every fee-paid applicant (online + walk-in) is
+                Click <b>Generate Merit List</b>. Every fee-paid applicant (online + walk-in) is
                 ranked by previous class marks and the seats of each class decide who is Merit Listed.
               </p>
             </div>
@@ -496,7 +575,7 @@ export default function AdminAdmissionMeritLists() {
             <>
               {/* Desktop */}
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[760px] text-sm">
+                <table className="w-full min-w-[820px] text-sm">
                   <thead>
                     <tr className="bg-muted/60">
                       {["Class", "List #", "Listed / Not", "Dates", "Status", "Actions"].map((h, i) => (
@@ -509,7 +588,10 @@ export default function AdminAdmissionMeritLists() {
                   <tbody className="divide-y divide-border/50">
                     {(rows as MeritListRow[]).map((r) => (
                       <tr key={r.id} className="text-center transition-colors hover:bg-primary/5">
-                        <td className="px-4 py-3 font-bold">Class {r.class}</td>
+                        <td className="px-4 py-3 font-bold">
+                          Class {r.class}
+                          {(r.title || "").includes("Migration") && <span className="ml-1 text-[10px] font-bold text-primary">Migration</span>}
+                        </td>
                         <td className="px-4 py-3 tabular-nums">#{r.list_no}</td>
                         <td className="px-4 py-3">
                           <span className="font-bold text-green-700 dark:text-green-400">{r.listed_count}</span>
@@ -536,17 +618,17 @@ export default function AdminAdmissionMeritLists() {
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             <Button size="sm" variant="outline" onClick={() => setViewId(r.id)}
-                              className="h-8 gap-1.5 rounded-full px-3 text-[11.5px] font-semibold">
+                              className="h-8 gap-1.5 rounded-md px-3 text-[11.5px] font-semibold">
                               <Eye className="h-3.5 w-3.5" /> View
                             </Button>
                             <Button size="sm" variant="outline" onClick={() => togglePublish(r)} disabled={publishMut.isPending}
-                              className="h-8 gap-1.5 rounded-full px-3 text-[11.5px] font-semibold">
+                              className="h-8 gap-1.5 rounded-md px-3 text-[11.5px] font-semibold">
                               {r.is_published ? <GlobeLock className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
                               {r.is_published ? "Unpublish" : "Publish"}
                             </Button>
                             {!r.is_published && (
                               <Button size="sm" variant="outline" onClick={() => removeDraft(r)} disabled={deleteMut.isPending}
-                                className="h-8 gap-1.5 rounded-full border-red-300/70 px-3 text-[11.5px] font-semibold text-red-600 hover:bg-red-500/10 hover:text-red-700">
+                                className="h-8 gap-1.5 rounded-md border-red-300/70 px-3 text-[11.5px] font-semibold text-red-600 hover:bg-red-500/10 hover:text-red-700">
                                 <Trash2 className="h-3.5 w-3.5" /> Delete
                               </Button>
                             )}
@@ -563,11 +645,14 @@ export default function AdminAdmissionMeritLists() {
                 {(rows as MeritListRow[]).map((r) => (
                   <li key={r.id} className="rounded-2xl border border-border/60 bg-card p-3 text-center shadow-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-bold">Class {r.class}</p>
+                      <p className="text-sm font-bold">
+                        Class {r.class}
+                        {(r.title || "").includes("Migration") && <span className="ml-1 text-[10px] font-bold text-primary">Migration</span>}
+                      </p>
                       <span className="text-xs font-semibold text-muted-foreground">List #{r.list_no}</span>
                     </div>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      {r.listed_count} listed · {r.not_listed_count} not listed
+                      {r.listed_count} listed · {r.not_listed_count} not listed{r.show_not_listed === false ? " (names hidden)" : ""}
                     </p>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
                       {fmtDate(r.admission_start_date)} → {fmtDate(r.admission_last_date)}
@@ -583,20 +668,20 @@ export default function AdminAdmissionMeritLists() {
                         </span>
                       )}
                     </div>
-                    <div className="mt-3 grid grid-cols-3 gap-1.5">
+                    <div className="mt-3 grid grid-cols-2 gap-1.5">
                       <Button size="sm" variant="outline" onClick={() => setViewId(r.id)}
-                        className="h-8 gap-1 rounded-full px-2 text-[11px] font-semibold">
+                        className="h-8 gap-1 rounded-md px-2 text-[11px] font-semibold">
                         <Eye className="h-3.5 w-3.5" /> View
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => togglePublish(r)} disabled={publishMut.isPending}
-                        className="h-8 gap-1 rounded-full px-2 text-[11px] font-semibold">
+                        className="h-8 gap-1 rounded-md px-2 text-[11px] font-semibold">
                         {r.is_published ? <GlobeLock className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
                         {r.is_published ? "Unpublish" : "Publish"}
                       </Button>
                       {!r.is_published && (
                         <Button size="sm" variant="outline" onClick={() => removeDraft(r)} disabled={deleteMut.isPending}
-                          className="h-8 gap-1 rounded-full border-red-300/70 px-2 text-[11px] font-semibold text-red-600">
-                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                          className="col-span-2 h-8 gap-1 rounded-md border-red-300/70 px-2 text-[11px] font-semibold text-red-600">
+                          <Trash2 className="h-3.5 w-3.5" /> Delete draft
                         </Button>
                       )}
                     </div>

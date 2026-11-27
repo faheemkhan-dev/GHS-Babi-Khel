@@ -1,20 +1,38 @@
 // src/pages/admin/tabs/AdminAdmissionView.tsx — Admin "Application View".
-// Details-only record view (opened by View in Admin → Admissions):
-//   header  avatar · name · father · reference (tap to copy) · stage / fee badges
-//   facts   Class · Type · Applied · Marks
-//   details Application / Applicant / Academic / Processing-fee tables
-// Fee actions live on the card's own Fee button (no duplicate here);
-// Documents / Status / Timeline tabs were intentionally removed.
+// Opened by View in Admin → Admissions. Details + the complete action set:
+//
+//   header    avatar · name · father · reference (tap to copy) · stage / fee badges
+//   facts     Class · Type · Applied · Marks
+//   details   Application / Applicant / Academic (+ board & migration) / fee tables
+//   actions   Verify Documents · Admit (admission no + date + BISEP enrollment
+//             no.) · Reject (reason) · Migration step (1–6) · Board fee —
+//             every action goes through its migration-22 RPC, so the timeline
+//             row is written and the applicant's tracker updates.
+//   history   status timeline (what the applicant sees in their portal)
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Copy, Check, CalendarDays, GraduationCap, Percent, Repeat2, X, type LucideIcon } from "lucide-react";
+import {
+  Copy, Check, CalendarDays, GraduationCap, Percent, Repeat2, X, BadgeCheck,
+  Ban, ShieldCheck, Loader2, RefreshCw, Landmark, ClipboardCheck,
+  type LucideIcon,
+} from "lucide-react";
 import toast from "react-hot-toast";
-import { type Admission, type AdmissionStatus } from "@/hooks/useAdmission";
+import { supabase } from "@/lib/supabase";
+import {
+  type Admission, useAdmissionVerifyDocuments, useAdmissionReject, useAdmissionAdmit,
+  useAdmissionSetBoardFee, useAdmissionSetMigrationStep,
+} from "@/hooks/useAdmission";
 import { paymentMethodLabel, formatDeadline, formatFeeDate } from "@/lib/admissionPayment";
 import { STATUS_CONFIG, initials } from "@/lib/admissionAdminStatus";
+import { MIGRATION_STEPS } from "@/lib/admissionRules";
 import AdmissionReviewTable from "@/components/admissions/AdmissionReviewTable";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const maybe = (v: string | null | undefined): string | null => (v && String(v).trim() ? String(v).trim() : null);
@@ -22,7 +40,7 @@ const pretty = (v: string | null | undefined): string | null =>
   v ? v.charAt(0).toUpperCase() + v.slice(1) : null;
 
 /** A pill that reads the application's status (workflow) only. */
-function StageBadge({ status }: { status: AdmissionStatus }) {
+function StageBadge({ status }: { status: Admission["status"] }) {
   return (
     <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-[2px] text-[10px] font-semibold ${STATUS_CONFIG[status].badge}`}>
       {STATUS_CONFIG[status].label}
@@ -47,7 +65,7 @@ function FeeBadge({ app }: { app: Admission }) {
   );
 }
 
-function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: ReactNode }) {
+function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: React.ReactNode }) {
   return (
     <div className="min-w-0 rounded-lg border border-border/60 bg-card px-1.5 py-2 text-center">
       <p className="flex items-center justify-center gap-1 text-[8.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
@@ -58,19 +76,80 @@ function Fact({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
   );
 }
 
+/** Slim rectangle action button (thin, mobile-friendly). */
+function ActButton({ icon: Icon, label, onClick, tone = "primary", disabled, busy }: {
+  icon: LucideIcon; label: string; onClick: () => void;
+  tone?: "primary" | "outline" | "danger" | "green"; disabled?: boolean; busy?: boolean;
+}) {
+  const cls =
+    tone === "primary" ? "bg-primary text-primary-foreground hover:bg-primary/90"
+    : tone === "green" ? "bg-green-700 text-white hover:bg-green-800"
+    : tone === "danger" ? "border-red-300/70 text-red-600 hover:bg-red-500/10"
+    : "border-border bg-card text-foreground hover:bg-muted/50";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || busy}
+      className={`inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md px-3 text-[11.5px] font-bold transition-colors disabled:opacity-50 ${cls}`}
+    >
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Icon className="h-3.5 w-3.5" />} {label}
+    </button>
+  );
+}
+
 export default function AdminAdmissionView({
-  app, onClose,
+  app, onClose, onOpenFee, onChanged,
 }: {
   app: Admission;
   onClose: () => void;
-  /** Kept for compatibility with the parent — the Fee action lives on the card. */
+  /** Kept for compatibility — the Fee action lives on the card. */
   onOpenFee?: (a: Admission) => void;
+  /** Fires after any successful action so the parent list can refetch. */
+  onChanged?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [action, setAction] = useState<"admit" | "reject" | null>(null);
+
+  // Action forms
+  const [admissionNo, setAdmissionNo] = useState(app.admission_roll_no ?? "");
+  const [admissionDate, setAdmissionDate] = useState(
+    app.admission_date ?? format(new Date(), "yyyy-MM-dd"),
+  );
+  const [bisepNo, setBisepNo] = useState(app.bisep_enrollment_no ?? "");
+  const [rejectReason, setRejectReason] = useState("");
+
+  const verifyMut = useAdmissionVerifyDocuments();
+  const rejectMut = useAdmissionReject();
+  const admitMut = useAdmissionAdmit();
+  const boardFeeMut = useAdmissionSetBoardFee();
+  const migStepMut = useAdmissionSetMigrationStep();
+
+  // Status timeline (read live)
+  const timelineQ = useQuery({
+    queryKey: ["admin-admission-timeline", app.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("admission_status_timeline")
+        .select("id, from_status, to_status, note, actor, created_at")
+        .eq("admission_id", app.id)
+        .order("created_at", { ascending: true })
+        .limit(40);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string; from_status: string | null; to_status: string; note: string | null;
+        actor: string; created_at: string;
+      }>;
+    },
+  });
 
   const isMigration = app.admission_type === "migration";
   const feePaid = app.payment_status === "paid";
   const feeOn = Number(app.processing_fee ?? 0) > 0;
+  const isBoardClass = ["9", "10"].includes(app.applying_class);
+  const isRejected = app.status === "rejected";
+  const isAdmitted = ["admitted", "admit_card_issued"].includes(app.status);
+  const currentMigStep = app.migration_step ?? 1;
 
   const copyRef = async () => {
     try {
@@ -82,6 +161,59 @@ export default function AdminAdmissionView({
     }
   };
 
+  const runVerify = async () => {
+    try {
+      await verifyMut.mutateAsync({ id: app.id });
+      toast.success("Documents marked verified — the applicant can see it in their tracker.");
+      onChanged?.();
+    } catch (e: any) { toast.error(e?.message || "Could not verify documents."); }
+  };
+
+  const runAdmit = async () => {
+    if (!admissionNo.trim()) { toast.error("Enter the admission number."); return; }
+    try {
+      await admitMut.mutateAsync({
+        id: app.id,
+        admissionNo,
+        admissionDate: admissionDate || null,
+        bisepEnrollmentNo: bisepNo,
+      });
+      toast.success(
+        app.applying_class === "9" && !isMigration
+          ? `Admitted. Enroll ${app.full_name} with BISE Peshawar and record the enrollment no. in Board Fee below.`
+          : "Admitted.",
+      );
+      setAction(null);
+      onChanged?.();
+    } catch (e: any) { toast.error(e?.message || "Could not admit."); }
+  };
+
+  const runReject = async () => {
+    if (!rejectReason.trim()) { toast.error("Enter the reason — it is shown to the applicant."); return; }
+    try {
+      await rejectMut.mutateAsync({ id: app.id, reason: rejectReason });
+      toast.success("Application rejected.");
+      setAction(null);
+      onChanged?.();
+    } catch (e: any) { toast.error(e?.message || "Could not reject."); }
+  };
+
+  const runBoardFee = async (status: "n_a" | "pending" | "paid") => {
+    try {
+      await boardFeeMut.mutateAsync({ id: app.id, status });
+      toast.success(status === "paid" ? "BISE Peshawar enrollment fee marked deposited." : "Board fee status updated.");
+      onChanged?.();
+    } catch (e: any) { toast.error(e?.message || "Could not update the board fee."); }
+  };
+
+  const runMigStep = async (step: number) => {
+    try {
+      await migStepMut.mutateAsync({ id: app.id, step });
+      toast.success(`Migration progress set to step ${step} of 6.`);
+      onChanged?.();
+    } catch (e: any) { toast.error(e?.message || "Could not update the migration step."); }
+  };
+
   const marksLabel = maybe(app.previous_marks) ?? "N/A";
 
   return (
@@ -89,7 +221,7 @@ export default function AdminAdmissionView({
       <DialogContent className="flex max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-xl flex-col gap-0 overflow-hidden rounded-2xl p-0 [&>button]:hidden">
         <DialogHeader className="sr-only">
           <DialogTitle>Application — {app.full_name}</DialogTitle>
-          <DialogDescription>Details of application {app.reference_no}</DialogDescription>
+          <DialogDescription>Details and actions for application {app.reference_no}</DialogDescription>
         </DialogHeader>
 
         {/* ══ Header band ═════════════════════════════════════════════ */}
@@ -135,9 +267,74 @@ export default function AdminAdmissionView({
           </div>
         </div>
 
-        {/* ══ Details ═════════════════════════════════════════════════ */}
+        {/* ══ Details + actions ═══════════════════════════════════════ */}
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3.5 sm:px-4">
           <div className="space-y-3">
+
+            {/* ── ACTIONS — the admin can finally complete an admission ── */}
+            {!isRejected && (
+              <div className="rounded-2xl border border-primary/25 bg-primary/[0.03] p-3">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  <ClipboardCheck className="h-3.5 w-3.5 text-primary" /> Actions
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <ActButton
+                    icon={ShieldCheck} label="Verify Documents" tone="outline"
+                    onClick={runVerify} busy={verifyMut.isPending}
+                    disabled={app.status === "documents_verified" || isAdmitted}
+                  />
+                  <ActButton
+                    icon={BadgeCheck} label="Admit" tone="green"
+                    onClick={() => setAction("admit")}
+                    disabled={isAdmitted}
+                  />
+                  {isBoardClass && app.status === "admitted" && (
+                    <ActButton
+                      icon={Landmark}
+                      label={app.board_fee_status === "paid" ? "Board Fee: Paid" : "Board Fee Deposited"}
+                      tone="outline"
+                      onClick={() => runBoardFee(app.board_fee_status === "paid" ? "pending" : "paid")}
+                      busy={boardFeeMut.isPending}
+                      disabled={app.board_fee_status === "n_a" && app.applying_class !== "9"}
+                    />
+                  )}
+                  <ActButton
+                    icon={Ban} label="Reject" tone="danger"
+                    onClick={() => setAction("reject")}
+                  />
+                </div>
+                {app.status === "pending" && !feePaid && feeOn && (
+                  <p className="mt-2 text-[10.5px] leading-snug text-muted-foreground">
+                    The processing fee is still pending — record it with the Fee button on the card first;
+                    only fee-paid applicants enter the merit list.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── Migration step control ── */}
+            {isMigration && !isRejected && (
+              <div className="rounded-2xl border border-primary/25 bg-card p-3">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-bold">
+                  <RefreshCw className="h-3.5 w-3.5 text-primary" /> Migration Progress (BISE Peshawar)
+                </p>
+                <p className="mb-2 text-[10.5px] leading-snug text-muted-foreground">
+                  Our school is the receiving school — it applies for the migration on the board portal.
+                  Move the tracker as each step completes; the applicant sees it live.
+                </p>
+                <Select value={String(currentMigStep)} onValueChange={v => runMigStep(Number(v))}>
+                  <SelectTrigger className="h-9 rounded-md text-xs" aria-label="Migration step">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MIGRATION_STEPS.map((s, i) => (
+                      <SelectItem key={i} value={String(i + 1)}>{i + 1}. {s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <AdmissionReviewTable
               compact
               title="Application"
@@ -146,6 +343,7 @@ export default function AdminAdmissionView({
                 { label: "Admission Type", value: isMigration ? "Migration / Transfer" : "Fresh Admission" },
                 { label: "Reference No.", value: <span className="font-mono">{app.reference_no}</span> },
                 { label: "Admission No.", value: maybe(app.admission_roll_no) ?? "Not assigned" },
+                { label: "Admission Date", value: app.admission_date ? formatFeeDate(app.admission_date) : null },
                 { label: "Applied On", value: formatFeeDate(app.created_at) },
                 { label: "Last Updated", value: formatFeeDate(app.updated_at) },
               ]}
@@ -174,11 +372,19 @@ export default function AdminAdmissionView({
                 { label: "Previous Class", value: maybe(app.previous_class) },
                 { label: "Marks / Grade", value: maybe(app.previous_marks) },
                 { label: "Year of Passing", value: maybe(app.year_of_passing) },
+                ...(maybe(app.previous_board) ? [{ label: "Previous Board", value: app.previous_board }] : []),
+                ...(maybe(app.board_enrollment_no) ? [{ label: "Board Enrollment No.", value: <span className="font-mono">{app.board_enrollment_no}</span> }] : []),
+                ...(app.previously_enrolled ? [{ label: "Enrolled with a board before", value: "Yes" }] : []),
+                ...(maybe(app.board_roll_no) ? [{ label: "9th Roll No.", value: <span className="font-mono">{app.board_roll_no}</span> }] : []),
+                ...(maybe(app.previous_result) ? [{ label: "9th Result", value: app.previous_result }] : []),
+                ...(maybe(app.slc_no) ? [{ label: "SLC No.", value: <span className="font-mono">{app.slc_no}</span> }] : []),
+                ...(app.slc_date ? [{ label: "SLC Date", value: formatFeeDate(app.slc_date) }] : []),
+                ...(maybe(app.migration_cert_no) ? [{ label: "Migration Cert. No.", value: <span className="font-mono">{app.migration_cert_no}</span> }] : []),
               ]}
             />
             {feeOn && (
               <AdmissionReviewTable
-              compact
+                compact
                 title="Processing Fee"
                 rows={[
                   { label: "Amount", value: `Rs ${Number(app.processing_fee).toLocaleString("en-PK")}` },
@@ -187,6 +393,18 @@ export default function AdminAdmissionView({
                   { label: "Paid Via", value: app.payment_method ? paymentMethodLabel(app.payment_method) : null },
                   { label: "Receipt No.", value: maybe(app.payment_receipt) },
                   { label: feePaid ? "Paid On" : "Fee Deadline", value: feePaid ? (app.paid_at ? formatDeadline(app.paid_at) : null) : (app.fee_deadline ? formatDeadline(app.fee_deadline) : null) },
+                ]}
+              />
+            )}
+            {app.applying_class === "9" && (
+              <AdmissionReviewTable
+                compact
+                title="BISE Peshawar Enrollment (Class 9)"
+                rows={[
+                  { label: "BISEP Enrollment No.", value: maybe(app.bisep_enrollment_no) ?? "Not enrolled yet" },
+                  { label: "Enrolled On", value: app.bisep_enrolled_at ? formatFeeDate(app.bisep_enrolled_at) : null },
+                  { label: "Board Fee Status", value: app.board_fee_status === "paid" ? "Paid" : app.board_fee_status === "pending" ? "Pending" : "N/A" },
+                  { label: "Board Fee Paid On", value: app.board_fee_paid_at ? formatFeeDate(app.board_fee_paid_at) : null },
                 ]}
               />
             )}
@@ -206,8 +424,123 @@ export default function AdminAdmissionView({
                 )}
               </div>
             )}
+
+            {/* ── Status timeline (what the applicant sees) ── */}
+            <div className="rounded-2xl border border-border/60 bg-card p-3">
+              <p className="mb-2 text-xs font-bold">History (applicant's timeline)</p>
+              {timelineQ.isLoading ? (
+                <p className="py-2 text-center text-[11px] text-muted-foreground">Loading…</p>
+              ) : (timelineQ.data ?? []).length === 0 ? (
+                <p className="py-2 text-center text-[11px] text-muted-foreground">No status changes yet.</p>
+              ) : (
+                <ol className="space-y-1.5">
+                  {(timelineQ.data ?? []).map((t) => (
+                    <li key={t.id} className="flex items-start gap-2 text-[11px] leading-snug">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold">
+                          {STATUS_CONFIG[t.to_status as keyof typeof STATUS_CONFIG]?.label ?? t.to_status}
+                          {t.from_status && t.from_status !== t.to_status && (
+                            <span className="font-normal text-muted-foreground">
+                              {" "}← {STATUS_CONFIG[t.from_status as keyof typeof STATUS_CONFIG]?.label ?? t.from_status}
+                            </span>
+                          )}
+                        </p>
+                        {t.note && <p className="text-muted-foreground">{t.note}</p>}
+                        <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                          {format(new Date(t.created_at), "dd MMM yyyy, h:mm a")} · {t.actor}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* ══ Admit / Reject dialog ═════════════════════════════════════ */}
+        {action === "admit" && (
+          <Dialog open onOpenChange={(o) => { if (!o) setAction(null); }}>
+            <DialogContent className="w-[calc(100%-1.5rem)] max-w-sm rounded-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-left text-base">
+                  <BadgeCheck className="h-4 w-4 text-green-600" /> Confirm Admission
+                </DialogTitle>
+                <DialogDescription className="text-left text-xs leading-relaxed">
+                  {app.full_name} · Class {app.applying_class} · {app.reference_no}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label className="mb-1 block text-xs font-bold">Admission No. <span className="text-red-500">*</span></Label>
+                  <Input value={admissionNo} onChange={(e) => setAdmissionNo(e.target.value)}
+                    placeholder="e.g. 2026-118" className="h-9 rounded-md text-sm" />
+                  <p className="mt-1 text-[10px] text-muted-foreground">Written into the school's admission register.</p>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs font-bold">Admission Date</Label>
+                  <Input type="date" value={admissionDate} onChange={(e) => setAdmissionDate(e.target.value)}
+                    className="h-9 rounded-md text-sm" />
+                </div>
+                {app.applying_class === "9" && !isMigration && (
+                  <div>
+                    <Label className="mb-1 block text-xs font-bold">BISE Peshawar Enrollment No. (optional now)</Label>
+                    <Input value={bisepNo} onChange={(e) => setBisepNo(e.target.value)}
+                      placeholder="Fill after portal enrollment" className="h-9 rounded-md text-sm" />
+                    <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                      The school enrolls the student on portal.bisep.edu.pk after admission (Rs 1,300 by 30 Sep 2026).
+                      You can record the number later with the Board Fee button.
+                    </p>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setAction(null)}
+                    className="h-9 flex-1 rounded-md text-xs font-bold">Cancel</Button>
+                  <Button onClick={runAdmit} disabled={admitMut.isPending}
+                    className="h-9 flex-1 rounded-md bg-green-700 text-xs font-bold text-white hover:bg-green-800">
+                    {admitMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Confirm Admission"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {action === "reject" && (
+          <Dialog open onOpenChange={(o) => { if (!o) setAction(null); }}>
+            <DialogContent className="w-[calc(100%-1.5rem)] max-w-sm rounded-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-left text-base text-red-600">
+                  <Ban className="h-4 w-4" /> Reject Application
+                </DialogTitle>
+                <DialogDescription className="text-left text-xs leading-relaxed">
+                  {app.full_name} · {app.reference_no}. The reason below is shown to the applicant in their tracker.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label className="mb-1 block text-xs font-bold">Reason <span className="text-red-500">*</span></Label>
+                  <textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    rows={3}
+                    placeholder="e.g. B-Form number does not match the document produced at the office."
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setAction(null)}
+                    className="h-9 flex-1 rounded-md text-xs font-bold">Cancel</Button>
+                  <Button variant="destructive" onClick={runReject} disabled={rejectMut.isPending}
+                    className="h-9 flex-1 rounded-md text-xs font-bold">
+                    {rejectMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Reject"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </DialogContent>
     </Dialog>
   );

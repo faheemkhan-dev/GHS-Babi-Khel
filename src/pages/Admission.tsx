@@ -25,6 +25,7 @@ import {
   setAdmissionSession, hasAdmissionSession, ADMISSION_SESSION_EVENT,
 } from "@/lib/admissionSession";
 import { ensurePaymentReference, formatDeadline } from "@/lib/admissionPayment";
+import { checkAgeForClass, migrationAllowedForClass, digitsOnly, MARKS_RE, MIGRATION_CLASSES } from "@/lib/admissionRules";
 import TurnstileWidget, { type TurnstileHandle } from "@/components/shared/TurnstileWidget";
 import { turnstileEnabled, verifyTurnstile } from "@/lib/turnstile";
 const TrackResult = lazy(() => import("@/components/admissions/TrackResult"));
@@ -212,6 +213,10 @@ const Admission = () => {
     applying_class: "", admission_type: "fresh" as AdmissionType,
     previous_school: "", previous_class: "", previous_marks: "", year_of_passing: "",
     father_cnic: "", occupation: "",
+    // Board-compliance fields (migration 22): asked for class 9/10
+    previous_board: "", board_enrollment_no: "", board_roll_no: "", previous_result: "",
+    slc_no: "", slc_date: "", migration_cert_no: "",
+    previously_enrolled: "" as "" | "yes" | "no",
   };
 
   const [form, setForm] = useState(() => {
@@ -317,11 +322,13 @@ const Admission = () => {
     applyingClass: form.applying_class,
     admissionType: form.admission_type || "fresh",
     processingFee: Number(settings?.processing_fee ?? 0),
-    deadline: null,
+    // real deadline from the payment reference (settings.last_date 23:59);
+    // the PDFs print a readable fallback only when it is not available yet
+    deadline: payBefore ?? settings?.last_date ?? null,
     paymentAccounts: (settings?.payment_accounts ?? []) as any[],
     sessionYear: settings?.session_year ?? null,
     appliedOn: new Date().toISOString(),
-  }), [referenceNo, form, settings]);
+  }), [referenceNo, form, settings, payBefore]);
 
   const downloadSuccessPdf = useCallback(async (kind: "challan" | "application") => {
     if (!referenceNo) return;
@@ -399,6 +406,13 @@ const Admission = () => {
         return raw.replace(/[^0-9A-Za-z+\-/%.\s]/g, "").slice(0, 12);
       case "previous_class":
         return raw.slice(0, 8);
+      case "previous_result":
+        return raw.replace(/[^0-9A-Za-z+\-/%.\s]/g, "").slice(0, 12);
+      case "board_enrollment_no":
+      case "board_roll_no":
+      case "slc_no":
+      case "migration_cert_no":
+        return raw.replace(/[^0-9A-Za-z\/-]/g, "").slice(0, 24);
       case "home_address":
         return raw.slice(0, 100);
       case "previous_school":
@@ -419,6 +433,11 @@ const Admission = () => {
     father_name:     { maxLength: 50 },
     previous_marks:  { maxLength: 12 },
     previous_class:  { maxLength: 8 },
+    previous_result: { maxLength: 12 },
+    board_enrollment_no: { maxLength: 24, autoComplete: "off" },
+    board_roll_no:   { maxLength: 24, autoComplete: "off" },
+    slc_no:          { maxLength: 24, autoComplete: "off" },
+    migration_cert_no: { maxLength: 24, autoComplete: "off" },
     home_address:    { maxLength: 100 },
     previous_school: { maxLength: 80 },
     occupation:      { maxLength: 40 },
@@ -443,8 +462,10 @@ const Admission = () => {
   const NAME_RE = /^[A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF\s.'-]{2,49}$/; // letters (incl. Urdu/Arabic script), spaces, . ' - only
   const ADDRESS_RE = /^[A-Za-z\u0600-\u06FF0-9][A-Za-z\u0600-\u06FF0-9\s,.'-]{2,99}$/;
   const SCHOOL_RE = /^[A-Za-z\u0600-\u06FF0-9][A-Za-z\u0600-\u06FF0-9\s,.'&-]{2,79}$/;
-  const CLASS_RE = /^(Class\s*)?(6|7|8|9|10)$/i;
-  const MARKS_RE = /^(\d{1,4}\s*\/\s*\d{2,4}|\d{1,3}(\.\d{1,2})?\s*%?|[A-F][+-]?)$/i; // e.g. 450/600, 82, 82%, A+
+  // Previous class: one class BELOW the applied class, or "5" for class 6
+  // (the OLD rule ^(6|7|8|9|10)$ made a class-6 applicant's truthful answer
+  // "5" impossible to enter).
+  const CLASS_RE = /^(Class\s*)?([1-9]|10)$/i;
   const currentYear = new Date().getFullYear();
 
   const fieldError = (id: string, raw: string, isMigrationCtx: boolean = isMigration): string | null => {
@@ -458,24 +479,28 @@ const Admission = () => {
         if (!/[A-Za-z\u0600-\u06FF]/.test(v)) return "Please enter a valid name";
         return null;
       }
+      case "date_of_birth": {
+        // MANDATORY now — the school must verify the BISEP class-9 age rule.
+        if (!v) return "Date of birth is required";
+        return null;
+      }
       case "b_form_no": {
         if (!v) return "This field is required";
-        const digits = v.replace(/\D/g, "");
-        if (digits.length !== 13) return "Must be exactly 13 digits";
+        if (digitsOnly(v).length !== 13) return "Must be exactly 13 digits";
         return null;
       }
       case "contact_number": {
         if (!v) return "This field is required";
-        const digits = v.replace(/\D/g, "");
-        if (digits.length !== 11) return "Mobile number must be exactly 11 digits";
-        if (!digits.startsWith("03")) return "Mobile number must start with 03";
+        const d = digitsOnly(v);
+        if (d.length !== 11) return "Mobile number must be exactly 11 digits";
+        if (!d.startsWith("03")) return "Mobile number must start with 03";
         return null;
       }
       case "whatsapp_number": {
         if (!v) return null; // optional
-        const digits = v.replace(/\D/g, "");
-        if (digits.length !== 11) return "Mobile number must be exactly 11 digits";
-        if (!digits.startsWith("03")) return "Mobile number must start with 03";
+        const d = digitsOnly(v);
+        if (d.length !== 11) return "Mobile number must be exactly 11 digits";
+        if (!d.startsWith("03")) return "Mobile number must start with 03";
         return null;
       }
       case "home_address": {
@@ -486,8 +511,7 @@ const Admission = () => {
       }
       case "father_cnic": {
         if (!v) return "This field is required";
-        const digits = v.replace(/\D/g, "");
-        if (digits.length !== 13) return "Must be exactly 13 digits";
+        if (digitsOnly(v).length !== 13) return "Must be exactly 13 digits";
         return null;
       }
       case "occupation": {
@@ -507,6 +531,13 @@ const Admission = () => {
       case "previous_class": {
         if (!v) return "Required — enter your previous class";
         if (!CLASS_RE.test(v)) return "Enter a valid class, e.g. 8 or Class 8";
+        // must be BELOW the class applied for
+        if (form.applying_class) {
+          const prev = parseInt(v.replace(/\D/g, ""), 10);
+          if (!Number.isNaN(prev) && prev >= parseInt(form.applying_class, 10)) {
+            return `For Class ${form.applying_class} you should have passed Class ${Math.max(parseInt(form.applying_class, 10) - 1, 1)} or below`;
+          }
+        }
         return null;
       }
       case "previous_marks": {
@@ -521,12 +552,32 @@ const Admission = () => {
         if (y < currentYear - 20 || y > currentYear) return `Enter a year between ${currentYear - 20} and ${currentYear}`;
         return null;
       }
+      case "previous_board": {
+        // Required for class 9/10 (the board decides the migration route)
+        if (["9", "10"].includes(form.applying_class) && !v) return "Required — the board of your previous school";
+        if (v && v.length < 2) return "Enter the board name, e.g. BISE Peshawar";
+        return null;
+      }
+      case "board_enrollment_no":
+      case "board_roll_no":
+      case "previous_result":
+      case "slc_no":
+      case "migration_cert_no":
+        return null; // optional text
+      case "slc_date": {
+        if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return "Enter a valid date";
+        return null;
+      }
+      case "previously_enrolled": {
+        if (["9", "10"].includes(form.applying_class) && !v) return "Please answer — this decides the board process";
+        return null;
+      }
       default:
         return null;
     }
   };
 
-  const STEP1_FIELDS = ["full_name", "father_name", "b_form_no", "contact_number", "whatsapp_number", "home_address", "father_cnic"];
+  const STEP1_FIELDS = ["full_name", "father_name", "date_of_birth", "b_form_no", "contact_number", "whatsapp_number", "home_address", "father_cnic"];
   const STEP2_FIELDS = ["previous_school", "previous_class", "previous_marks", "year_of_passing"];
 
   const validateStep = (): boolean => {
@@ -539,6 +590,11 @@ const Admission = () => {
         if (err) errs[id] = err;
       }
       if (!form.gender) errs.gender = "Please select gender";
+      // Board age rule at submit time (the checker alone can be skipped)
+      if (form.date_of_birth && form.applying_class === "9") {
+        const ageCheck = checkAgeForClass(form.date_of_birth, "9");
+        if (ageCheck.level === "error") errs.date_of_birth = ageCheck.message;
+      }
       setFieldErrors(errs);
       if (Object.keys(errs).length > 0) return fail("Please fix the highlighted fields before continuing");
       return true;
@@ -549,6 +605,23 @@ const Admission = () => {
       for (const id of STEP2_FIELDS) {
         const err = fieldError(id, (form as any)[id] ?? "");
         if (err) errs[id] = err;
+      }
+      // Board fields asked for class 9/10
+      if (["9", "10"].includes(form.applying_class)) {
+        const boardErr = fieldError("previous_board", form.previous_board);
+        if (boardErr) errs.previous_board = boardErr;
+        const enrollErr = fieldError("previously_enrolled", form.previously_enrolled);
+        if (enrollErr) errs.previously_enrolled = enrollErr;
+      }
+      // Migration needs the SLC number
+      if (isMigration) {
+        const slcErr = fieldError("slc_no", form.slc_no);
+        if (slcErr) errs.slc_no = slcErr;
+      }
+      // Board age rule is also validated here in case the class was changed after step 1
+      if (form.date_of_birth && form.applying_class === "9") {
+        const ageCheck = checkAgeForClass(form.date_of_birth, "9");
+        if (ageCheck.level === "error") errs.applying_class = ageCheck.message;
       }
       setFieldErrors(errs);
       if (Object.keys(errs).length > 0) return fail("Please fix the highlighted fields before continuing");
@@ -581,6 +654,14 @@ const Admission = () => {
         tsRef.current?.reset(); // the token is single-use
         if (!v.ok) throw new Error(v.error || "Security check failed. Please try again.");
       }
+      // Board age rule, enforced at submit (the checker banner is optional)
+      if (form.applying_class === "9" && form.date_of_birth) {
+        const ageCheck = checkAgeForClass(form.date_of_birth, "9");
+        if (ageCheck.level === "error") {
+          toast.error(ageCheck.message, { duration: 7000 });
+          return;
+        }
+      }
       const { data: inserted, error: insErr } = await supabasePublic.from("admissions").insert({
         full_name: form.full_name.trim(),
         father_name: form.father_name.trim(),
@@ -598,9 +679,30 @@ const Admission = () => {
         year_of_passing: form.year_of_passing.trim() || null,
         father_cnic: form.father_cnic.trim() || null,
         occupation: form.occupation.trim() || null,
+        // Board-compliance fields (migration 22)
+        previous_board: form.previous_board.trim() || null,
+        board_enrollment_no: form.board_enrollment_no.trim() || null,
+        board_roll_no: form.board_roll_no.trim() || null,
+        previous_result: form.previous_result.trim() || null,
+        slc_no: form.slc_no.trim() || null,
+        slc_date: form.slc_date || null,
+        migration_cert_no: form.migration_cert_no.trim() || null,
+        previously_enrolled: form.previously_enrolled === "yes",
       }).select("id, reference_no").single();
 
-      if (insErr) throw new Error(`Submission failed: ${insErr.message}`);
+      if (insErr) {
+        // Duplicate B-Form within this session (unique index, migration 22) —
+        // explain it in plain words instead of a raw SQL error.
+        const msg = String(insErr.message || "");
+        if (msg.includes("admissions_bform_session_unique") || msg.includes("duplicate key")) {
+          throw new Error(
+            "An application with this B-Form number already exists for this session. " +
+            "Use Track Application with your B-Form or reference number to find it — " +
+            "one application per student per session.",
+          );
+        }
+        throw new Error(`Submission failed: ${msg}`);
+      }
       const refNo = inserted?.reference_no ?? "";
       const appId = inserted?.id ?? "";
 
@@ -626,8 +728,10 @@ const Admission = () => {
           })
           .catch(() => { /* the applicant can generate it from the challan button */ });
       }
-    } catch (err) {
-      toast.error(err?.message ?? "Submission failed. Please try again.");
+    } catch (err: any) {
+      // Friendly, actionable submit errors (never a raw SQL string)
+      const msg = err?.message ?? "Submission failed. Please try again.";
+      toast.error(msg.length > 240 ? msg.slice(0, 240) + "…" : msg, { duration: 7000 });
     } finally {
       setSubmitting(false);
     }
@@ -776,9 +880,18 @@ const Admission = () => {
                           ))}
                           <div className="grid grid-cols-2 gap-2.5">
                           <div>
-                            <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 block">Date of Birth</Label>
+                            <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
+                              Date of Birth <span className="text-red-500 ml-0.5">*</span>
+                              <FieldTooltip text="Required — the Class 9 age rule of BISE Peshawar is checked with it" />
+                            </Label>
                             <Input type="date" value={form.date_of_birth} onChange={set("date_of_birth")}
-                              className="h-9 rounded-lg border-border/80 bg-background px-3 text-[13px]" />
+                              aria-invalid={!!fieldErrors.date_of_birth}
+                              className={`h-9 rounded-lg border-border/80 bg-background px-3 text-[13px] ${fieldErrors.date_of_birth ? "border-red-500 focus-visible:ring-red-400" : ""}`} />
+                            {fieldErrors.date_of_birth && (
+                              <p className="text-[10px] text-red-600 mt-1 flex items-start gap-1">
+                                <XCircle className="w-2.5 h-2.5 shrink-0 mt-0.5" /> {fieldErrors.date_of_birth}
+                              </p>
+                            )}
                           </div>
                           <div>
                             <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 block">
@@ -882,6 +995,126 @@ const Admission = () => {
                               )}
                             </div>
                           ))}
+
+                          {/* ── Board information (Class 9/10 — BISE Peshawar rules) ── */}
+                          {["9", "10"].includes(form.applying_class) && (
+                            <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-3 space-y-3">
+                              <p className="flex items-center gap-1.5 text-[11.5px] font-bold text-primary">
+                                <Shield className="w-3.5 h-3.5" /> Board Information (Class {form.applying_class})
+                              </p>
+                              <div>
+                                <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
+                                  Previous Board <span className="text-red-500 ml-0.5">*</span>
+                                  <FieldTooltip text="The board your previous school is affiliated with, e.g. BISE Peshawar or BISE Mardan" />
+                                </Label>
+                                <Select value={form.previous_board} onValueChange={v => { setForm(f => ({ ...f, previous_board: v })); if (fieldErrors.previous_board) setFieldErrors(errs => { const n = { ...errs }; delete n.previous_board; return n; }); }}>
+                                  <SelectTrigger className={`h-9 rounded-lg border-border/80 px-3 text-[13px] ${fieldErrors.previous_board ? "border-red-500" : ""}`}><SelectValue placeholder="Select board" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="BISE Peshawar">BISE Peshawar</SelectItem>
+                                    <SelectItem value="BISE Mardan">BISE Mardan</SelectItem>
+                                    <SelectItem value="BISE Swat">BISE Swat</SelectItem>
+                                    <SelectItem value="BISE Kohat">BISE Kohat</SelectItem>
+                                    <SelectItem value="BISE Malakand">BISE Malakand</SelectItem>
+                                    <SelectItem value="BISE Bannu">BISE Bannu</SelectItem>
+                                    <SelectItem value="Other">Other board / not affiliated</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                {fieldErrors.previous_board && (
+                                  <p className="text-[10px] text-red-600 mt-1 flex items-center gap-1">
+                                    <XCircle className="w-2.5 h-2.5 shrink-0" /> {fieldErrors.previous_board}
+                                  </p>
+                                )}
+                              </div>
+                              <div>
+                                <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
+                                  Ever enrolled with any board for Class 9/10? <span className="text-red-500 ml-0.5">*</span>
+                                  <FieldTooltip text="BISE Peshawar: a student already enrolled with a board needs a migration certificate first" />
+                                </Label>
+                                <Select value={form.previously_enrolled} onValueChange={v => { setForm(f => ({ ...f, previously_enrolled: v as "" | "yes" | "no" })); if (fieldErrors.previously_enrolled) setFieldErrors(errs => { const n = { ...errs }; delete n.previously_enrolled; return n; }); }}>
+                                  <SelectTrigger className={`h-9 rounded-lg border-border/80 px-3 text-[13px] ${fieldErrors.previously_enrolled ? "border-red-500" : ""}`}><SelectValue placeholder="Select answer" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="no">No — never enrolled with a board</SelectItem>
+                                    <SelectItem value="yes">Yes — already enrolled with a board</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                {fieldErrors.previously_enrolled && (
+                                  <p className="text-[10px] text-red-600 mt-1 flex items-center gap-1">
+                                    <XCircle className="w-2.5 h-2.5 shrink-0" /> {fieldErrors.previously_enrolled}
+                                  </p>
+                                )}
+                                {form.previously_enrolled === "yes" && (
+                                  <p className="mt-1.5 text-[10.5px] leading-snug text-amber-700 dark:text-amber-400">
+                                    BISE Peshawar requires a Migration Certificate first. Our school (the receiving school) applies for the migration on the board portal after your documents are checked.
+                                  </p>
+                                )}
+                                {form.previously_enrolled === "no" && form.applying_class === "9" && (
+                                  <p className="mt-1.5 text-[10.5px] leading-snug text-muted-foreground">
+                                    Good — a fresh Class 9 student is enrolled with BISE Peshawar by our school after admission is confirmed (enrollment fee Rs 1,300 by 30 Sep 2026).
+                                  </p>
+                                )}
+                              </div>
+                              {form.applying_class === "10" && (
+                                <div className="grid grid-cols-2 gap-2.5">
+                                  <div>
+                                    <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
+                                      9th Roll No.
+                                      <FieldTooltip text="Your roll number of the 9th class exam (Class 10 applicants)" />
+                                    </Label>
+                                    <Input value={form.board_roll_no} onChange={set("board_roll_no")}
+                                      placeholder="e.g. 01802" inputMode="numeric" className="h-9 rounded-lg border-border/80 bg-background px-3 text-[13px]" />
+                                  </div>
+                                  <div>
+                                    <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
+                                      9th Result
+                                      <FieldTooltip text="Your 9th class result, e.g. 420/550 (Class 10 applicants)" />
+                                    </Label>
+                                    <Input value={form.previous_result} onChange={set("previous_result")}
+                                      placeholder="e.g. 420/550" className="h-9 rounded-lg border-border/80 bg-background px-3 text-[13px]" />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ── Migration details (Migration / Transfer) ── */}
+                          {isMigration && ["9", "10"].includes(form.applying_class) && (
+                            <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-3 space-y-3">
+                              <p className="flex items-center gap-1.5 text-[11.5px] font-bold text-primary">
+                                <GraduationCap className="w-3.5 h-3.5" /> Migration Details
+                              </p>
+                              <div className="grid grid-cols-2 gap-2.5">
+                                <div>
+                                  <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
+                                    SLC No.
+                                    <FieldTooltip text="School Leaving Certificate number from your previous school" />
+                                  </Label>
+                                  <Input value={form.slc_no} onChange={set("slc_no")}
+                                    placeholder="SLC number" className="h-9 rounded-lg border-border/80 bg-background px-3 text-[13px]" />
+                                </div>
+                                <div>
+                                  <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
+                                    SLC Date
+                                    <FieldTooltip text="Date the School Leaving Certificate was issued" />
+                                  </Label>
+                                  <Input type="date" value={form.slc_date} onChange={set("slc_date")}
+                                    className="h-9 rounded-lg border-border/80 bg-background px-3 text-[13px]" />
+                                </div>
+                              </div>
+                              {form.previous_board && form.previous_board !== "BISE Peshawar" && (
+                                <div>
+                                  <Label className="text-[11.5px] font-semibold text-foreground/80 mb-1 flex items-center">
+                                    Migration Certificate No. (other board)
+                                    <FieldTooltip text="From another board: the original Migration Certificate is required within a fortnight (BISE Peshawar rule)" />
+                                  </Label>
+                                  <Input value={form.migration_cert_no} onChange={set("migration_cert_no")}
+                                    placeholder="Migration certificate number" className="h-9 rounded-lg border-border/80 bg-background px-3 text-[13px]" />
+                                  <p className="mt-1 text-[10.5px] leading-snug text-amber-700 dark:text-amber-400">
+                                    Students from another board must bring the original Migration Certificate and the verified 9th result card within a fortnight (BISE Peshawar rule).
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
@@ -931,6 +1164,13 @@ const Admission = () => {
                               {form.previous_class && <div><span className="text-muted-foreground">Prev Class:</span> <span className="ml-1">{form.previous_class}</span></div>}
                               {form.previous_marks && <div><span className="text-muted-foreground">Marks:</span> <span className="ml-1">{form.previous_marks}</span></div>}
                               {form.year_of_passing && <div><span className="text-muted-foreground">Year:</span> <span className="ml-1">{form.year_of_passing}</span></div>}
+                              {form.previous_board && <div><span className="text-muted-foreground">Board:</span> <span className="ml-1">{form.previous_board}</span></div>}
+                              {form.previously_enrolled && <div><span className="text-muted-foreground">Enrolled before:</span> <span className="ml-1 capitalize">{form.previously_enrolled === "yes" ? "Yes" : "No"}</span></div>}
+                              {form.board_roll_no && <div><span className="text-muted-foreground">9th Roll No.:</span> <span className="ml-1">{form.board_roll_no}</span></div>}
+                              {form.previous_result && <div><span className="text-muted-foreground">9th Result:</span> <span className="ml-1">{form.previous_result}</span></div>}
+                              {form.slc_no && <div><span className="text-muted-foreground">SLC No.:</span> <span className="ml-1">{form.slc_no}</span></div>}
+                              {form.slc_date && <div><span className="text-muted-foreground">SLC Date:</span> <span className="ml-1">{form.slc_date}</span></div>}
+                              {form.migration_cert_no && <div className="col-span-2"><span className="text-muted-foreground">Migration Cert. No.:</span> <span className="ml-1">{form.migration_cert_no}</span></div>}
                             </div>
                           </div>
 
@@ -1001,18 +1241,18 @@ const Admission = () => {
                 <div className="flex gap-2.5 mt-3 pb-4 sm:pb-0">
                   {step > 1 && (
                     <Button variant="outline" onClick={() => setStep(s => s - 1)}
-                      className="flex-1 gap-2 rounded-full h-9 text-[13px]">
+                      className="flex-1 gap-2 rounded-md h-9 text-[13px]">
                       <ChevronLeft className="w-4 h-4" /> Previous
                     </Button>
                   )}
                   {step < 3 ? (
                     <Button onClick={() => { if (validateStep()) setStep(s => s + 1); }}
-                      className="flex-1 gap-2 rounded-full h-9 text-[13px]">
+                      className="flex-1 gap-2 rounded-md h-9 text-[13px]">
                       Next <ChevronRight className="w-4 h-4" />
                     </Button>
                   ) : (
                     <Button onClick={handleSubmit} disabled={submitting}
-                      className="flex-1 gap-2 rounded-full h-9 text-[13px]">
+                      className="flex-1 gap-2 rounded-md h-9 text-[13px]">
                       {submitting
                         ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
                         : <><Send className="w-4 h-4" /> Submit Application</>
@@ -1089,19 +1329,19 @@ const Admission = () => {
               {referenceNo && Number(settings?.processing_fee ?? 0) > 0 ? (
                 <div className="grid grid-cols-2 gap-2.5">
                   <Button variant="outline" onClick={() => downloadSuccessPdf("challan")} disabled={!!pdfBusy}
-                    className="h-11 gap-2 rounded-full text-xs font-bold">
+                    className="h-10 gap-2 rounded-md text-xs font-bold">
                     {pdfBusy === "challan" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
                     {paymentRef ? "Fee Challan" : "Generate + Fee Challan"}
                   </Button>
                   <Button variant="outline" onClick={() => downloadSuccessPdf("application")} disabled={!!pdfBusy}
-                    className="h-11 gap-2 rounded-full text-xs font-bold">
+                    className="h-10 gap-2 rounded-md text-xs font-bold">
                     {pdfBusy === "application" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                     Application PDF
                   </Button>
                 </div>
               ) : referenceNo ? (
                 <Button variant="outline" onClick={() => downloadSuccessPdf("application")} disabled={!!pdfBusy}
-                  className="h-11 w-full gap-2 rounded-full text-xs font-bold">
+                  className="h-10 w-full gap-2 rounded-md text-xs font-bold">
                   {pdfBusy === "application" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                   Application PDF
                 </Button>
@@ -1126,7 +1366,7 @@ const Admission = () => {
 
               {/* GHSS ghost button — the dashboard is one tap away */}
               <Button variant="ghost" onClick={() => navigate("/admission/portal")}
-                className="h-11 w-full gap-2 rounded-full text-xs font-bold text-muted-foreground hover:text-foreground">
+                className="h-10 w-full gap-2 rounded-md text-xs font-bold text-muted-foreground hover:text-foreground">
                 <LayoutDashboard className="h-4 w-4" /> Pay Later · Go to Dashboard
               </Button>
 
@@ -1139,12 +1379,12 @@ const Admission = () => {
 
               <div className="flex flex-col gap-3 pb-4">
                 <Button onClick={() => { setView("track"); setTrackQuery(referenceNo); setDoTrack(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                  className="h-11 gap-2 rounded-full font-bold">
+                  className="h-10 gap-2 rounded-md text-[13px] font-bold">
                   <Search className="w-4 h-4" /> Track This Application
                 </Button>
                 <Button variant="outline" onClick={() => { resetForm(); setView("home"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                  className="h-11 gap-2 rounded-full font-bold">
-                  Submit Another Application
+                  className="h-10 gap-2 rounded-md text-[13px] font-bold">
+                  Back to Admission
                 </Button>
               </div>
             </div>
@@ -1182,7 +1422,7 @@ const Admission = () => {
                 type="button"
                 onClick={() => setDoTrack(true)}
                 disabled={trackQuery.length < 5 || trackLoading}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-4 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {trackLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                 Track

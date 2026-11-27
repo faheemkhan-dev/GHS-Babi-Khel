@@ -101,6 +101,7 @@ function MeritListDialog({ row, onClose }: { row: PublicMeritListRow | null; onC
                   {data.not_listed_count > 0 && (
                     <span className="rounded-full border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-2.5 py-1 font-bold text-red-600 dark:text-red-300">
                       {data.not_listed_count} Not Merit Listed
+                      {data.list.show_not_listed === false ? " (names not published)" : ""}
                     </span>
                   )}
                 </div>
@@ -225,7 +226,7 @@ export default function AdmissionMeritLists() {
                 Published {fmtDate(r.published_at)}{r.admission_last_date ? ` · Join by ${fmtDate(r.admission_last_date)}` : ""}
               </p>
               <Button size="sm" onClick={() => setSelected(r)}
-                className="h-8 w-full gap-1.5 rounded-full px-3 text-xs font-bold">
+                className="h-8 w-full gap-1.5 rounded-md px-3 text-xs font-bold">
                 <ListChecks className="h-3.5 w-3.5" /> View Merit List
               </Button>
             </div>

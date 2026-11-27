@@ -93,6 +93,7 @@ export interface PublicMeritListDetail {
     admission_last_date: string | null;
     instructions: string | null;
     published_at: string | null;
+    show_not_listed?: boolean;
   };
   entries: PublicMeritEntry[];
   listed_count: number;

@@ -378,6 +378,30 @@ const ROUTES: RouteSEO[] = [
   },
   
   {
+    pattern: "/admission/portal",
+    title: "Applicant Dashboard — GHS Babi Khel Admission Portal",
+    description:
+      "Track your admission application at Government High School Babi Khel — fee status, documents, merit list and migration progress.",
+    keywords: "GHS Babi Khel applicant dashboard, admission tracking, application status",
+    breadcrumbs: () => [baseBreadcrumb, { name: "Admissions", path: "/admission" }, { name: "Applicant Dashboard", path: "/admission/portal" }],
+  },
+  {
+    pattern: "/admission/application/:id",
+    title: "My Application — GHS Babi Khel Admission Portal",
+    description:
+      "Your admission application details at Government High School Babi Khel — fee challan, documents, merit list and migration progress.",
+    keywords: "GHS Babi Khel application, admission application status",
+    breadcrumbs: () => [baseBreadcrumb, { name: "Admissions", path: "/admission" }, { name: "My Application", path: "/admission/portal" }],
+  },
+  {
+    pattern: "/admission/verify",
+    title: "Verify Application — GHS Babi Khel Admit Card",
+    description:
+      "Verify a GHS Babi Khel admission application or admit card by its reference number.",
+    keywords: "GHS Babi Khel verify, admit card verification, admission reference number",
+    breadcrumbs: () => [baseBreadcrumb, { name: "Admissions", path: "/admission" }, { name: "Verify", path: "/admission/verify" }],
+  },
+  {
     pattern: "/notices/:id",
     title: "School Notice — GHS Babi Khel",
     description: "Read the full school notice from Government High School Babi Khel.",

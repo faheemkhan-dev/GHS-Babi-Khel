@@ -1,7 +1,9 @@
 // src/pages/admin/tabs/AdminWalkinDialog.tsx — paper (walk-in) applications
-// entered by the office (ported from GHSS Ghallanai, High School columns):
+// entered by the office:
 //   • "Add One": quick form → admission_admin_add_walkin RPC; the fee can be
-//     marked received right away (only fee-paid students enter the merit list)
+//     marked received right away (only fee-paid students enter the merit list).
+//     DOB + gender are captured, and Migration is offered for Class 9/10 only
+//     (BISE Peshawar portal migration classes).
 //   • "Import Excel": download the template sheet, then upload the filled
 //     file → parsed client-side → admission_admin_import_walkins (per-row
 //     isolation server-side)
@@ -21,9 +23,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import toast from "react-hot-toast";
 import { useAddAdmissionWalkin, useImportAdmissionWalkins, type AdmissionType } from "@/hooks/useAdmission";
 import { downloadWalkinTemplate, parseWalkinImport } from "@/lib/admissionExcel";
+import { MIGRATION_CLASSES, checkAgeForClass } from "@/lib/admissionRules";
 
 const emptyForm = {
-  full_name: "", father_name: "", b_form_no: "", contact_number: "",
+  full_name: "", father_name: "", date_of_birth: "", gender: "",
+  b_form_no: "", contact_number: "",
   applying_class: "", admission_type: "fresh" as AdmissionType,
   previous_school: "", previous_class: "", previous_marks: "", year_of_passing: "",
   home_address: "",
@@ -45,8 +49,23 @@ export default function AdminWalkinDialog({ open, onClose }: { open: boolean; on
       toast.error("Name, father name, 13-digit B-Form, mobile and class are required.");
       return;
     }
+    if (!form.date_of_birth) {
+      toast.error("Date of birth is required (the Class 9 board age rule is checked with it).");
+      return;
+    }
+    if (form.applying_class === "9") {
+      const ageCheck = checkAgeForClass(form.date_of_birth, "9");
+      if (ageCheck.level === "error") {
+        toast.error(ageCheck.message, { duration: 7000 });
+        return;
+      }
+    }
     try {
-      const res = await addMut.mutateAsync({ ...form });
+      const res = await addMut.mutateAsync({
+        ...form,
+        gender: form.gender || null,
+        previously_enrolled: false,
+      });
       setLastRef(res.reference_no);
       toast.success(`Saved — Tracking ID ${res.reference_no}`, { icon: "🧾", duration: 6000 });
       // Keep marks + class + fee settings for the next student (fast re-entry).
@@ -101,6 +120,11 @@ export default function AdminWalkinDialog({ open, onClose }: { open: boolean; on
       }
       const rows = parsed.rows.map((r) => ({
         ...r,
+        // migration is a class 9/10-only route — anything else imports as fresh
+        admission_type:
+          r.admission_type === "migration" && !MIGRATION_CLASSES.includes(r.applying_class as any)
+            ? "fresh"
+            : r.admission_type,
         paid: r.paid || markUnpaidAsPaid,
         payment_method: r.paid || markUnpaidAsPaid ? r.payment_method : "cash",
       }));
@@ -133,10 +157,10 @@ export default function AdminWalkinDialog({ open, onClose }: { open: boolean; on
         </DialogHeader>
 
         {/* Mode pills */}
-        <div className="flex gap-1.5 p-1 bg-muted/50 rounded-full">
+        <div className="flex gap-1.5 p-1 bg-muted/50 rounded-md">
           {(["one", "import"] as const).map((m) => (
             <button key={m} onClick={() => setMode(m)}
-              className={`flex-1 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${mode === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${mode === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
               {m === "one" ? "Add One" : "Import Excel"}
             </button>
           ))}
@@ -172,8 +196,29 @@ export default function AdminWalkinDialog({ open, onClose }: { open: boolean; on
                   placeholder="03XX-XXXXXXX" className="h-9 text-sm" />
               </div>
               <div>
+                <Label className="text-xs font-semibold mb-1 block">Date of Birth *</Label>
+                <Input type="date" value={form.date_of_birth}
+                  onChange={(e) => setForm((f) => ({ ...f, date_of_birth: e.target.value }))}
+                  className="h-9 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold mb-1 block">Gender</Label>
+                <Select value={form.gender} onValueChange={(v) => setForm((f) => ({ ...f, gender: v }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label className="text-xs font-semibold mb-1 block">Class *</Label>
-                <Select value={form.applying_class} onValueChange={(v) => setForm((f) => ({ ...f, applying_class: v }))}>
+                <Select value={form.applying_class}
+                  onValueChange={(v) => setForm((f) => ({
+                    ...f, applying_class: v,
+                    // migration only exists for class 9/10
+                    admission_type: !MIGRATION_CLASSES.includes(v as any) ? "fresh" : f.admission_type,
+                  }))}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select class" /></SelectTrigger>
                   <SelectContent>
                     {["6", "7", "8", "9", "10"].map((c) => <SelectItem key={c} value={c}>Class {c}</SelectItem>)}
@@ -186,11 +231,19 @@ export default function AdminWalkinDialog({ open, onClose }: { open: boolean; on
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="fresh">Fresh Admission</SelectItem>
-                    <SelectItem value="migration">Migration / Transfer</SelectItem>
+                    {MIGRATION_CLASSES.includes(form.applying_class as any) && (
+                      <SelectItem value="migration">Migration / Transfer</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
             </div>
+            {form.applying_class === "9" && form.date_of_birth && (() => {
+              const c = checkAgeForClass(form.date_of_birth, "9");
+              return c.level !== "ok" ? (
+                <p className={`text-[11px] leading-snug ${c.level === "error" ? "text-red-600 font-semibold" : "text-amber-600"}`}>{c.message}</p>
+              ) : null;
+            })()}
 
             <button onClick={() => setMoreOpen((v) => !v)}
               className="text-[11px] text-primary hover:underline flex items-center gap-1">
@@ -259,14 +312,14 @@ export default function AdminWalkinDialog({ open, onClose }: { open: boolean; on
               )}
             </div>
 
-            <Button onClick={addOne} disabled={addMut.isPending} className="h-10 w-full gap-2 rounded-xl text-xs font-bold">
+            <Button onClick={addOne} disabled={addMut.isPending} className="h-10 w-full gap-2 rounded-md text-xs font-bold">
               {addMut.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : <><UserPlus className="w-4 h-4" /> Save Walk-in Application</>}
             </Button>
           </div>
         ) : (
           <div className="space-y-3">
             <Button variant="outline" onClick={() => downloadWalkinTemplate().catch((e) => toast.error(e?.message || "Template failed."))}
-              className="h-10 w-full gap-2 rounded-xl text-xs font-bold">
+              className="h-10 w-full gap-2 rounded-md text-xs font-bold">
               <FileSpreadsheet className="w-4 h-4" /> Download Template (.xlsx)
             </Button>
 
@@ -298,7 +351,7 @@ export default function AdminWalkinDialog({ open, onClose }: { open: boolean; on
                   const file = fileRef.current?.files?.[0];
                   if (file) doImport(file);
                 }} disabled={importMut.isPending}
-                  className="h-10 w-full gap-2 rounded-xl text-xs font-bold">
+                  className="h-10 w-full gap-2 rounded-md text-xs font-bold">
                   {importMut.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Importing…</> : <><Upload className="w-4 h-4" /> Import {parsedCount} Row(s)</>}
                 </Button>
               </>
@@ -319,7 +372,7 @@ export default function AdminWalkinDialog({ open, onClose }: { open: boolean; on
                     ))}
                   </div>
                 )}
-                <Button size="sm" variant="outline" onClick={resetImport} className="h-8 rounded-full px-3 text-[11px] font-bold">
+                <Button size="sm" variant="outline" onClick={resetImport} className="h-8 rounded-md px-3 text-[11px] font-bold">
                   Choose another file
                 </Button>
               </div>
