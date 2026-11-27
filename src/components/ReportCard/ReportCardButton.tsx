@@ -35,11 +35,11 @@ export default function ReportCardButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-[3px] bg-primary-dark text-white pl-2.5 pr-3 h-8 text-xs font-semibold border border-gold/50 shadow-md hover:border-gold active:scale-[0.97] transition-all"
+        className="inline-flex items-center gap-1 rounded-[3px] bg-primary-dark text-white pl-2 pr-2 h-6 text-[11px] font-semibold border border-gold/50 shadow-md hover:border-gold active:scale-[0.97] transition-all"
       >
-        <FileText className="w-3.5 h-3.5 text-gold" />
+        <FileText className="w-3 h-3 text-gold" />
         Report Card
-        <ChevronRight className="w-3 h-3 text-gold/80" />
+        <ChevronRight className="w-2.5 h-2.5 text-gold/80" />
       </button>
       <ReportCardModal open={open} onClose={() => setOpen(false)} />
     </>
