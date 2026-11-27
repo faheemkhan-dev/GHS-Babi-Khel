@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
@@ -78,6 +78,7 @@ let visBound = false;
 
 export function useTypingPresence() {
   const id = useRef(Symbol("typing")).current;
+  const [, force] = useState(0); // re-render this box after release()
 
   const count = useSyncExternalStore(
     (cb) => { listeners.add(cb); return () => { listeners.delete(cb); }; },
@@ -99,6 +100,19 @@ export function useTypingPresence() {
     }
   }, [id]);
 
+  /** Call on Reset: this visitor stops being counted (and the line disappears)
+   *  until they focus / type in the roll number field again. */
+  const release = useCallback(() => {
+    engaged.delete(id);
+    if (engaged.size === 0) {
+      // Tell everyone else we stopped typing, then free the connection.
+      try { void channel?.untrack(); } catch { /* ignore */ }
+      close();
+    }
+    emit();
+    force(n => n + 1);
+  }, [id]);
+
   // Leaving the page (unmount) releases this visitor.
   useEffect(() => () => {
     engaged.delete(id);
@@ -109,5 +123,5 @@ export function useTypingPresence() {
   // Optimistic: the visitor sees themselves counted instantly on focus,
   // before the first Presence sync arrives.
   const shown = isEngaged ? Math.max(count, 1) : count;
-  return { count: shown, engaged: isEngaged, engage };
+  return { count: shown, engaged: isEngaged, engage, release };
 }
