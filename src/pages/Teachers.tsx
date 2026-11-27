@@ -18,6 +18,21 @@ const TONES = [
 const initialsOf = (name: string) =>
   name.replace(/^(mr|mrs|ms|miss|dr|sir|madam)\.?\s+/i, "").split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
+// Standard subjects always offered in the filter bar.
+const DEFAULT_SUBJECTS = [
+  "English", "Urdu", "Pashto", "Arabic", "Persian", "Islamiyat", "Mathematics",
+  "Physics", "Chemistry", "Biology", "Computer Science", "General Science",
+  "Pakistan Studies", "Social Studies", "Geography", "History", "Drawing",
+  "Physical Education",
+];
+
+// A teacher may list several subjects ("Urdu, Islamiyat" / "Math & Physics").
+const subjectMatches = (teacherSubject: string | null | undefined, chip: string) =>
+  (teacherSubject || "")
+    .toLowerCase()
+    .split(/[,/&+|]|\band\b/)
+    .some((part) => part.trim() === chip.toLowerCase());
+
 const Teachers = () => {
   const { data: teachers = [], isLoading } = useTeachers();
   const { user } = useAuth();
@@ -32,15 +47,20 @@ const Teachers = () => {
     debounceRef.current = setTimeout(() => setDebouncedSearch(val), 250);
   };
 
-  const subjects = useMemo(
-    () => Array.from(new Set(teachers.map((t) => (t.subject || "").trim()).filter(Boolean))).sort(),
-    [teachers]
-  );
+  // Subject chips = the standard school subjects + any extra subject that
+  // appears in the staff data (merged, de-duplicated case-insensitively).
+  const subjects = useMemo(() => {
+    const seen = new Map<string, string>();
+    [...DEFAULT_SUBJECTS, ...teachers.map((t) => (t.subject || "").trim())]
+      .filter(Boolean)
+      .forEach((n) => { const k = n.toLowerCase(); if (!seen.has(k)) seen.set(k, n); });
+    return Array.from(seen.values());
+  }, [teachers]);
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     return teachers.filter((t) => {
-      if (subject !== "all" && (t.subject || "").trim() !== subject) return false;
+      if (subject !== "all" && !subjectMatches(t.subject, subject)) return false;
       if (!q) return true;
       return (
         t.full_name.toLowerCase().includes(q) ||
